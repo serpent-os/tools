@@ -9,8 +9,16 @@ pub fn list_command() -> Command {
         .about("List packages")
         .long_about("List packages according to a filter")
         .subcommand_required(true)
-        .subcommand(Command::new("installed").about("List all installed packages"))
-        .subcommand(Command::new("available").about("List all available packages"))
+        .subcommand(
+            Command::new("installed")
+                .about("List all installed packages")
+                .visible_alias("li"),
+        )
+        .subcommand(
+            Command::new("available")
+                .about("List all available packages")
+                .visible_alias("la"),
+        )
 }
 
 /// Handle listing by filter
