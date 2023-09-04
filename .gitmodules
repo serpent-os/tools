@@ -1,0 +1,3 @@
+[submodule "serpent-style"]
+	path = serpent-style
+	url = https://github.com/serpent-os/serpent-style.git
