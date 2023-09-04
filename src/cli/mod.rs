@@ -4,9 +4,13 @@
 
 use clap::{Arg, ArgAction, Command};
 
+mod install;
+mod remove;
 mod version;
 
 use crate::cli::version::*;
+
+use self::{install::install_command, remove::remove_command};
 
 /// Generate the CLI command structure
 fn cli_main() -> Command {
@@ -19,6 +23,8 @@ fn cli_main() -> Command {
                 .action(ArgAction::SetTrue),
         )
         .arg_required_else_help(true)
+        .subcommand(install_command())
+        .subcommand(remove_command())
         .subcommand(version_command())
 }
 
