@@ -17,6 +17,6 @@ fn cli_main() -> Command {
 fn main() {
     match cli_main().get_matches().subcommand() {
         Some(("version", _)) => println!("Gimme a break I only just started!"),
-        _ => println!("We should implement a real CLI, huh?"),
+        _ => unreachable!(),
     }
 }
