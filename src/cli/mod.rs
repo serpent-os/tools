@@ -5,12 +5,17 @@
 use clap::{Arg, ArgAction, Command};
 
 mod install;
+mod list;
 mod remove;
 mod version;
 
 use crate::cli::version::*;
 
-use self::{install::install_command, remove::remove_command};
+use self::{
+    install::install_command,
+    list::{list_command, list_command_handler},
+    remove::remove_command,
+};
 
 /// Generate the CLI command structure
 fn cli_main() -> Command {
@@ -23,6 +28,7 @@ fn cli_main() -> Command {
                 .action(ArgAction::SetTrue),
         )
         .arg_required_else_help(true)
+        .subcommand(list_command())
         .subcommand(install_command())
         .subcommand(remove_command())
         .subcommand(version_command())
@@ -37,6 +43,7 @@ pub fn process() {
     }
     match cli_main().get_matches().subcommand() {
         Some(("version", _)) => print_version(),
+        Some(("list", a)) => list_command_handler(a),
         _ => unreachable!(),
     }
 }
