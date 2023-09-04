@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 clap = "4.4.2"
+diesel = { version = "2.1.1", features = ["sqlite"] }
