@@ -85,7 +85,7 @@ impl Header {
         };
 
         Ok(match version {
-            Version::V1 => Self::V1(v1::Header::decode(header.data)),
+            Version::V1 => Self::V1(v1::Header::decode(header.data)?),
         })
     }
 }
@@ -96,4 +96,6 @@ pub enum DecodeError {
     InvalidMagic,
     #[error("Unknown version: {0}")]
     UnknownVersion(u32),
+    #[error("v1 error: {0}")]
+    V1(#[from] v1::DecodeError),
 }
