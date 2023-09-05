@@ -2,11 +2,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::error::Error;
-
 use clap::{ArgMatches, Command};
+use thiserror::Error;
 
-use crate::client::Client;
+use crate::client::{self, Client};
 
 pub fn command() -> Command {
     Command::new("list")
@@ -26,7 +25,7 @@ pub fn command() -> Command {
 }
 
 /// Handle listing by filter
-pub fn handle(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
+pub fn handle(args: &ArgMatches) -> Result<(), Error> {
     match args.subcommand() {
         Some(("available", _)) => {
             let _ = Client::system()?;
@@ -35,4 +34,10 @@ pub fn handle(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
         Some(("installed", _)) => unimplemented!(),
         _ => unreachable!(),
     }
+}
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("client error: {0}")]
+    Client(#[from] client::Error),
 }

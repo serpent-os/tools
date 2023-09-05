@@ -1,9 +1,11 @@
 [package]
 name = "moss"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
+stone = { version = "0.1.0", path = "../stone" }
+
 clap = { workspace = true }
 diesel = { workspace = true }
-stone = { version = "0.1.0", path = "../stone" }
+thiserror = { workspace = true }
