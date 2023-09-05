@@ -2,17 +2,54 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use core::slice;
-use std::{
-    io::{BufRead, Result},
-    mem::{size_of, zeroed},
-};
+use std::io::{self, Read};
+use thiserror::Error;
 
-use crate::header::AgnosticHeader;
+use crate::header::{self, AgnosticHeader};
+use crate::{Header, Stone};
+
+const HEADER_BYTES: usize = std::mem::size_of::<AgnosticHeader>();
+
+pub fn from_bytes(bytes: &[u8]) -> Result<Stone, ReadError> {
+    from_reader(bytes)
+}
+
+/// Create a new reader for the given byte sequence
+pub fn from_reader<R: Read>(mut reader: R) -> Result<Stone, ReadError> {
+    let mut header_bytes = [0u8; HEADER_BYTES];
+    reader.read_exact(&mut header_bytes)?;
+
+    let agnostic: AgnosticHeader = unsafe { std::mem::transmute(header_bytes) };
+    let header = Header::decode(agnostic).map_err(ReadError::HeaderDecode)?;
+
+    let mut payload = vec![];
+    reader.read_to_end(&mut payload)?;
+
+    Ok(Stone { header, payload })
+}
+
+#[derive(Debug, Error)]
+pub enum ReadError {
+    #[error("Stone must be >{HEADER_BYTES} bytes long")]
+    NotEnoughBytes,
+    #[error("failed to decode header: {0}")]
+    HeaderDecode(#[from] header::DecodeError),
+    #[error(transparent)]
+    Io(io::Error),
+}
+
+impl From<io::Error> for ReadError {
+    fn from(error: io::Error) -> Self {
+        match error.kind() {
+            io::ErrorKind::UnexpectedEof => ReadError::NotEnoughBytes,
+            _ => ReadError::Io(error),
+        }
+    }
+}
 
 #[cfg(test)]
-mod reader_tests {
-    use super::new;
+mod test {
+    use super::*;
 
     /// Header for bash completion stone archive
     const BASH_TEST_STONE: [u8; 32] = [
@@ -27,33 +64,10 @@ mod reader_tests {
     ];
 
     #[test]
-    fn test_versioning() {
+    fn header() {
         // Construct a reader from a byte sequence
-        let mut reader: Box<dyn std::io::BufRead> = Box::new(&BASH_TEST_STONE[..]);
-        let _ = new(&mut reader).unwrap();
+        let mut reader = &BASH_TEST_STONE[..];
+        let stone = from_bytes(&mut reader).expect("valid stone");
+        assert_eq!(stone.header.version(), header::Version::V1);
     }
-}
-
-///
-/// Create a new reader for the given byte sequence
-///
-pub fn new(bytes: &mut dyn BufRead) -> Result<()> {
-    let mut hdr: AgnosticHeader = unsafe { zeroed::<AgnosticHeader>() };
-
-    // Grab the AgnosticHeader from the 32-byte header
-    let slice = unsafe {
-        slice::from_raw_parts_mut(&mut hdr as *mut _ as *mut u8, size_of::<AgnosticHeader>())
-    };
-    bytes.read_exact(slice)?;
-
-    // Testing: Ensure we're reading V1.
-    #[cfg(test)]
-    {
-        use crate::header::{self, Header};
-
-        let decoded = Header::decode(hdr).expect("valid header");
-        assert_eq!(decoded.version(), header::Version::V1);
-    }
-
-    Ok(())
 }

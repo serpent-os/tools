@@ -3,4 +3,13 @@
 // SPDX-License-Identifier: MPL-2.0
 
 pub mod header;
-pub mod reader;
+mod reader;
+
+use self::header::Header;
+pub use self::reader::{from_bytes, from_reader, ReadError};
+
+// TODO: Add typed payload
+pub struct Stone {
+    pub header: Header,
+    pub payload: Vec<u8>,
+}
