@@ -5,7 +5,7 @@
 pub mod header;
 mod reader;
 
-use self::header::Header;
+pub use self::header::Header;
 pub use self::reader::{from_bytes, from_reader, ReadError};
 
 // TODO: Add typed payload
