@@ -4,6 +4,7 @@
 
 use clap::{Arg, ArgAction, Command};
 
+mod info;
 mod install;
 mod list;
 mod remove;
@@ -21,6 +22,7 @@ fn command() -> Command {
         )
         .arg_required_else_help(true)
         .subcommand(list::command())
+        .subcommand(info::command())
         .subcommand(install::command())
         .subcommand(remove::command())
         .subcommand(version::command())
