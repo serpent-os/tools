@@ -18,9 +18,7 @@ pub struct Client {
 impl Client {
     /// Construct a new Client
     fn new_for_root(root: PathBuf) -> Result<Client, ClientError> {
-        if !root.exists() {
-            Err(ClientError::RootInvalid)
-        } else if !root.is_dir() {
+        if !root.exists() || !root.is_dir() {
             Err(ClientError::RootInvalid)
         } else {
             Ok(Client { root })
