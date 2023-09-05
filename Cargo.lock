@@ -143,6 +143,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "diesel",
+ "stone",
 ]
 
 [[package]]
@@ -192,6 +193,10 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "stone"
+version = "0.1.0"
 
 [[package]]
 name = "strsim"
