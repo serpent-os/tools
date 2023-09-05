@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::error::Error;
+
 use clap::{Arg, ArgAction, Command};
 
 mod info;
@@ -29,11 +31,10 @@ fn command() -> Command {
 }
 
 /// Process all CLI arguments
-pub fn process() {
+pub fn process() -> Result<(), Box<dyn Error>> {
     let matches = command().get_matches();
     if matches.get_flag("version") {
-        version::print();
-        return;
+        return version::print();
     }
     match command().get_matches().subcommand() {
         Some(("version", _)) => version::print(),

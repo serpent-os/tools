@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::error::Error;
+
 use clap::Command;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -12,6 +14,7 @@ pub fn command() -> Command {
 }
 
 /// Print program version
-pub fn print() {
+pub fn print() -> Result<(), Box<dyn Error>> {
     println!("moss {VERSION}");
+    Ok(())
 }

@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::error::Error;
+
 use clap::{ArgMatches, Command};
 
 pub fn command() -> Command {
@@ -22,7 +24,7 @@ pub fn command() -> Command {
 }
 
 /// Handle listing by filter
-pub fn handle(args: &ArgMatches) {
+pub fn handle(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
     match args.subcommand() {
         Some(("available", _)) => unimplemented!(),
         Some(("installed", _)) => unimplemented!(),
