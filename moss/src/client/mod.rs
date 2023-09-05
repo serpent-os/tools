@@ -23,7 +23,7 @@ impl Client {
         } else if !root.is_dir() {
             Err(ClientError::RootInvalid)
         } else {
-            Ok(Client { root: root })
+            Ok(Client { root })
         }
     }
 
