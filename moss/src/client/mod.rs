@@ -2,13 +2,23 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::path::PathBuf;
+
 /// A Client is a connection to the underlying package management systems
-pub struct Client {}
+pub struct Client {
+    /// Root that we operate on
+    root: PathBuf,
+}
 
 impl Client {
     /// Construct a new Client
-    fn new() -> Client {
-        Client {}
+    fn new_for_root(root: PathBuf) -> Client {
+        Client { root }
+    }
+
+    /// Construct a new Client for the global installation
+    fn system() -> Client {
+        Client::new_for_root(PathBuf::from("/"))
     }
 }
 
