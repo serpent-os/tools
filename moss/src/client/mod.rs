@@ -20,7 +20,9 @@ pub struct Client {
 
 impl Client {
     /// Construct a new Client
-    pub fn new_for_root(root: PathBuf) -> Result<Client, Error> {
+    pub fn new_for_root(root: impl Into<PathBuf>) -> Result<Client, Error> {
+        let root = root.into();
+
         if !root.exists() || !root.is_dir() {
             Err(Error::RootInvalid)
         } else {
@@ -30,7 +32,7 @@ impl Client {
 
     /// Construct a new Client for the global installation
     pub fn system() -> Result<Client, Error> {
-        Client::new_for_root(PathBuf::from("/"))
+        Client::new_for_root("/")
     }
 }
 
