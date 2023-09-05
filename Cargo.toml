@@ -1,14 +1,13 @@
-[package]
-name = "moss-rs"
-version = "0.0.1"
-
 [workspace]
-
 members = [
     "moss",
     "stone",
 ]
 
+[workspace.package]
+edition = "2021"
+
 [workspace.dependencies]
 clap = "4.4.2"
 diesel = { version = "2.1.1", features = ["sqlite"] }
+thiserror = "1"

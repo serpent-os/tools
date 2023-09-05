@@ -2,9 +2,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::error::Error;
-
 use clap::{Arg, ArgAction, Command};
+use thiserror::Error;
 
 mod info;
 mod install;
@@ -31,14 +30,24 @@ fn command() -> Command {
 }
 
 /// Process all CLI arguments
-pub fn process() -> Result<(), Box<dyn Error>> {
+pub fn process() -> Result<(), Error> {
     let matches = command().get_matches();
     if matches.get_flag("version") {
-        return version::print();
+        version::print();
+        return Ok(());
     }
     match command().get_matches().subcommand() {
-        Some(("version", _)) => version::print(),
-        Some(("list", a)) => list::handle(a),
+        Some(("version", _)) => {
+            version::print();
+            Ok(())
+        }
+        Some(("list", a)) => list::handle(a).map_err(Error::List),
         _ => unreachable!(),
     }
+}
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("error handling list: {0}")]
+    List(#[from] list::Error),
 }
