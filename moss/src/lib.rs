@@ -4,3 +4,5 @@
 
 pub mod cli;
 pub mod client;
+
+extern crate stone;
