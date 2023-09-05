@@ -8,7 +8,7 @@ use std::{
     mem::{size_of, zeroed},
 };
 
-use crate::headers::versioning::{AgnosticHeader, Version};
+use crate::header::AgnosticHeader;
 
 #[cfg(test)]
 mod reader_tests {
@@ -48,7 +48,12 @@ pub fn new(bytes: &mut dyn BufRead) -> Result<()> {
 
     // Testing: Ensure we're reading V1.
     #[cfg(test)]
-    assert_eq!(hdr.version(), Version::V1);
+    {
+        use crate::header::{self, Header};
+
+        let decoded = Header::decode(hdr).expect("valid header");
+        assert_eq!(decoded.version(), header::Version::V1);
+    }
 
     Ok(())
 }

@@ -6,6 +6,6 @@ edition.workspace = true
 [dependencies]
 stone = { version = "0.1.0", path = "../stone" }
 
-clap = { workspace = true }
-diesel = { workspace = true }
-thiserror = { workspace = true }
+clap.workspace = true
+diesel.workspace = true 
+thiserror.workspace = true 
