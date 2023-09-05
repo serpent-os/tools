@@ -4,7 +4,7 @@
 
 use clap::{ArgMatches, Command};
 
-pub fn list_command() -> Command {
+pub fn command() -> Command {
     Command::new("list")
         .about("List packages")
         .long_about("List packages according to a filter")
@@ -22,6 +22,6 @@ pub fn list_command() -> Command {
 }
 
 /// Handle listing by filter
-pub fn list_command_handler(_: &ArgMatches) {
+pub fn handle(_: &ArgMatches) {
     println!("Listage");
 }

@@ -9,15 +9,8 @@ mod list;
 mod remove;
 mod version;
 
-use self::{
-    install::install_command,
-    list::{list_command, list_command_handler},
-    remove::remove_command,
-    version::*,
-};
-
 /// Generate the CLI command structure
-fn cli_main() -> Command {
+fn command() -> Command {
     Command::new("moss")
         .about("Next generation package manager")
         .arg(
@@ -27,22 +20,22 @@ fn cli_main() -> Command {
                 .action(ArgAction::SetTrue),
         )
         .arg_required_else_help(true)
-        .subcommand(list_command())
-        .subcommand(install_command())
-        .subcommand(remove_command())
-        .subcommand(version_command())
+        .subcommand(list::command())
+        .subcommand(install::command())
+        .subcommand(remove::command())
+        .subcommand(version::command())
 }
 
 /// Process all CLI arguments
 pub fn process() {
-    let matches = cli_main().get_matches();
+    let matches = command().get_matches();
     if matches.get_flag("version") {
-        print_version();
+        version::print();
         return;
     }
-    match cli_main().get_matches().subcommand() {
-        Some(("version", _)) => print_version(),
-        Some(("list", a)) => list_command_handler(a),
+    match command().get_matches().subcommand() {
+        Some(("version", _)) => version::print(),
+        Some(("list", a)) => list::handle(a),
         _ => unreachable!(),
     }
 }

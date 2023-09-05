@@ -4,12 +4,14 @@
 
 use clap::Command;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// Construct the Version command
-pub fn version_command() -> Command {
+pub fn command() -> Command {
     Command::new("version").about("Display version and exit")
 }
 
 /// Print program version
-pub fn print_version() {
-    println!("TODO: Set a version");
+pub fn print() {
+    println!("moss {VERSION}");
 }
