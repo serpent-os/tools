@@ -22,6 +22,10 @@ pub fn command() -> Command {
 }
 
 /// Handle listing by filter
-pub fn handle(_: &ArgMatches) {
-    println!("Listage");
+pub fn handle(args: &ArgMatches) {
+    match args.subcommand() {
+        Some(("available", _)) => unimplemented!(),
+        Some(("installed", _)) => unimplemented!(),
+        _ => unreachable!(),
+    }
 }
