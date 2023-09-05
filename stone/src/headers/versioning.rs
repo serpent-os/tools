@@ -7,7 +7,9 @@ pub const STONE_MAGIC: u32 = 0x006d6f73;
 
 /// Format versions are defined as u32, to allow further mangling in future
 #[repr(u32)]
+#[derive(Debug, PartialEq)]
 pub enum Version {
+    Unknown,
     V1 = 1,
 }
 
@@ -20,13 +22,26 @@ pub enum Version {
 /// reader implementation, ensuring the container format is extensible well into
 /// the future
 #[repr(C)]
+#[derive(Debug)]
 pub struct AgnosticHeader {
     /// 4-bytes, BE (u32): Magic to quickly identify a stone file
-    magic: [u8; 4],
+    pub magic: [u8; 4],
 
     /// 24 bytes, version specific
     data: [u8; 24],
 
     /// 4-bytes, BE (u32): Format version used in the container
-    version: [u8; 4],
+    pub version: [u8; 4],
+}
+
+impl AgnosticHeader {
+    ///
+    /// Return the version ID reported in the AgnosticHeader
+    ///
+    pub fn version(&self) -> Version {
+        match u32::from_be_bytes(self.version) {
+            1 => Version::V1,
+            _ => Version::Unknown,
+        }
+    }
 }
