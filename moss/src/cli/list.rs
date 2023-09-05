@@ -6,6 +6,8 @@ use std::error::Error;
 
 use clap::{ArgMatches, Command};
 
+use crate::client::Client;
+
 pub fn command() -> Command {
     Command::new("list")
         .about("List packages")
@@ -26,7 +28,10 @@ pub fn command() -> Command {
 /// Handle listing by filter
 pub fn handle(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
     match args.subcommand() {
-        Some(("available", _)) => unimplemented!(),
+        Some(("available", _)) => {
+            let _ = Client::system()?;
+            Ok(())
+        }
         Some(("installed", _)) => unimplemented!(),
         _ => unreachable!(),
     }
