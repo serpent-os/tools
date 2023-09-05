@@ -9,12 +9,11 @@ mod list;
 mod remove;
 mod version;
 
-use crate::cli::version::*;
-
 use self::{
     install::install_command,
     list::{list_command, list_command_handler},
     remove::remove_command,
+    version::*,
 };
 
 /// Generate the CLI command structure
