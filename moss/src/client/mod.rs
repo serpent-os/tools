@@ -4,6 +4,11 @@
 
 use std::path::PathBuf;
 
+#[derive(Debug)]
+pub enum ClientError {
+    RootInvalid,
+}
+
 /// A Client is a connection to the underlying package management systems
 pub struct Client {
     /// Root that we operate on
@@ -12,12 +17,18 @@ pub struct Client {
 
 impl Client {
     /// Construct a new Client
-    fn new_for_root(root: PathBuf) -> Client {
-        Client { root }
+    fn new_for_root(root: PathBuf) -> Result<Client, ClientError> {
+        if !root.exists() {
+            Err(ClientError::RootInvalid)
+        } else if !root.is_dir() {
+            Err(ClientError::RootInvalid)
+        } else {
+            Ok(Client { root: root })
+        }
     }
 
     /// Construct a new Client for the global installation
-    fn system() -> Client {
+    fn system() -> Result<Client, ClientError> {
         Client::new_for_root(PathBuf::from("/"))
     }
 }
