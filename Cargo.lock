@@ -146,6 +146,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "moss-rs"
+version = "0.0.1"
+
+[[package]]
 name = "pkg-config"
 version = "0.3.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
