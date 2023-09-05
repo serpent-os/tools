@@ -19,7 +19,7 @@ pub fn from_reader<R: Read>(mut reader: R) -> Result<Stone, ReadError> {
     let mut header_bytes = [0u8; HEADER_BYTES];
     reader.read_exact(&mut header_bytes)?;
 
-    let agnostic: AgnosticHeader = unsafe { std::mem::transmute(header_bytes) };
+    let agnostic = AgnosticHeader::from(header_bytes);
     let header = Header::decode(agnostic).map_err(ReadError::HeaderDecode)?;
 
     let mut payload = vec![];

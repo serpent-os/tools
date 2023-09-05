@@ -35,6 +35,19 @@ pub struct AgnosticHeader {
     version: [u8; 4],
 }
 
+impl From<[u8; 32]> for AgnosticHeader {
+    fn from(bytes: [u8; 32]) -> Self {
+        let (magic, rest) = bytes.split_at(4);
+        let (data, version) = rest.split_at(24);
+
+        AgnosticHeader {
+            magic: magic.try_into().unwrap(),
+            data: data.try_into().unwrap(),
+            version: version.try_into().unwrap(),
+        }
+    }
+}
+
 pub enum Header {
     V1(v1::Header),
 }
