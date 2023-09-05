@@ -5,11 +5,11 @@
 use clap::Command;
 
 /// Construct the Version command
-pub fn version_command() -> Command {
+pub fn command() -> Command {
     Command::new("version").about("Display version and exit")
 }
 
 /// Print program version
-pub fn print_version() {
+pub fn print() {
     println!("TODO: Set a version");
 }

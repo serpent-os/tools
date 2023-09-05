@@ -4,7 +4,7 @@
 
 use clap::Command;
 
-pub fn install_command() -> Command {
+pub fn command() -> Command {
     Command::new("install")
         .about("Install packages")
         .long_about("Install the requested software to the local system")

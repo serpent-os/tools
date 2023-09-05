@@ -4,7 +4,7 @@
 
 use clap::Command;
 
-pub fn remove_command() -> Command {
+pub fn command() -> Command {
     Command::new("remove")
         .about("Remove packages")
         .long_about("Remove packages by name")

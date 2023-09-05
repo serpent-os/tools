@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use moss::cli::process;
+use moss::cli;
 
 /// Main entry point
 fn main() {
-    process()
+    cli::process();
 }
