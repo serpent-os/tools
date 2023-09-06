@@ -6,6 +6,7 @@ use clap::{Arg, ArgAction, Command};
 use thiserror::Error;
 
 mod info;
+mod inspect;
 mod install;
 mod list;
 mod remove;
@@ -22,9 +23,10 @@ fn command() -> Command {
                 .action(ArgAction::SetTrue),
         )
         .arg_required_else_help(true)
-        .subcommand(list::command())
         .subcommand(info::command())
+        .subcommand(inspect::command())
         .subcommand(install::command())
+        .subcommand(list::command())
         .subcommand(remove::command())
         .subcommand(version::command())
 }
@@ -37,6 +39,7 @@ pub fn process() -> Result<(), Error> {
         return Ok(());
     }
     match command().get_matches().subcommand() {
+        Some(("inspect", args)) => inspect::handle(args).map_err(Error::Inspect),
         Some(("version", _)) => {
             version::print();
             Ok(())
@@ -50,4 +53,7 @@ pub fn process() -> Result<(), Error> {
 pub enum Error {
     #[error("error handling list: {0}")]
     List(#[from] list::Error),
+
+    #[error("error handling inspect: {0}")]
+    Inspect(#[from] inspect::Error),
 }
