@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{io, path::PathBuf};
+use std::path::PathBuf;
 
 use clap::{arg, ArgMatches, Command};
 use std::fs::File;
