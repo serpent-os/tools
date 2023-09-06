@@ -37,7 +37,7 @@ mod test {
         let stone = from_bytes(&BASH_TEST_STONE).expect("valid stone");
         assert_eq!(stone.header.version(), header::Version::V1);
 
-        let bytes = to_bytes(stone).expect("valid stone");
+        let bytes = to_bytes(&stone).expect("valid stone");
         assert_eq!(&bytes, &BASH_TEST_STONE);
     }
 }

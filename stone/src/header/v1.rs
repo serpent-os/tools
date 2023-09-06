@@ -64,7 +64,7 @@ impl Header {
         })
     }
 
-    pub fn encode(self) -> [u8; 24] {
+    pub fn encode(&self) -> [u8; 24] {
         let mut data = [0u8; 24];
 
         let num_payloads = u16::to_be_bytes(self.num_payloads);

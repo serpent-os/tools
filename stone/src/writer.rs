@@ -8,7 +8,7 @@ use thiserror::Error;
 use crate::header::AgnosticHeader;
 use crate::Stone;
 
-pub fn to_bytes(stone: Stone) -> Result<Vec<u8>, WriteError> {
+pub fn to_bytes(stone: &Stone) -> Result<Vec<u8>, WriteError> {
     let size = std::mem::size_of::<AgnosticHeader>() + stone.payload.len();
 
     let mut bytes = Vec::with_capacity(size);
@@ -17,7 +17,7 @@ pub fn to_bytes(stone: Stone) -> Result<Vec<u8>, WriteError> {
     Ok(bytes)
 }
 
-pub fn to_writer<W: Write>(stone: Stone, writer: &mut W) -> Result<(), WriteError> {
+pub fn to_writer<W: Write>(stone: &Stone, writer: &mut W) -> Result<(), WriteError> {
     let header = stone.header.encode();
 
     writer.write_all(&header.magic)?;

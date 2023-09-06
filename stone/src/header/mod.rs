@@ -59,7 +59,7 @@ impl Header {
         }
     }
 
-    pub fn encode(self) -> AgnosticHeader {
+    pub fn encode(&self) -> AgnosticHeader {
         let magic = u32::to_be_bytes(STONE_MAGIC);
         let version = u32::to_be_bytes(self.version() as u32);
 
