@@ -2,7 +2,11 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::io::{self, Read};
+
 use thiserror::Error;
+
+use crate::ReadExt;
 
 pub mod v1;
 
@@ -35,16 +39,17 @@ pub struct AgnosticHeader {
     pub version: [u8; 4],
 }
 
-impl From<[u8; 32]> for AgnosticHeader {
-    fn from(bytes: [u8; 32]) -> Self {
-        let (magic, rest) = bytes.split_at(4);
-        let (data, version) = rest.split_at(24);
+impl AgnosticHeader {
+    fn decode<R: Read>(mut reader: R) -> Result<Self, io::Error> {
+        let magic = reader.read_array()?;
+        let data = reader.read_array()?;
+        let version = reader.read_array()?;
 
-        AgnosticHeader {
-            magic: magic.try_into().unwrap(),
-            data: data.try_into().unwrap(),
-            version: version.try_into().unwrap(),
-        }
+        Ok(Self {
+            magic,
+            data,
+            version,
+        })
     }
 }
 
@@ -74,7 +79,9 @@ impl Header {
         }
     }
 
-    pub fn decode(header: AgnosticHeader) -> Result<Self, DecodeError> {
+    pub fn decode<R: Read>(reader: R) -> Result<Self, DecodeError> {
+        let header = AgnosticHeader::decode(reader)?;
+
         if STONE_MAGIC != u32::from_be_bytes(header.magic) {
             return Err(DecodeError::InvalidMagic);
         }
@@ -92,10 +99,23 @@ impl Header {
 
 #[derive(Debug, Error)]
 pub enum DecodeError {
+    #[error("Header must be {} bytes long", std::mem::size_of::<AgnosticHeader>())]
+    NotEnoughBytes,
     #[error("Invalid magic")]
     InvalidMagic,
     #[error("Unknown version: {0}")]
     UnknownVersion(u32),
     #[error("v1 error: {0}")]
     V1(#[from] v1::DecodeError),
+    #[error("io error: {0}")]
+    Io(io::Error),
+}
+
+impl From<io::Error> for DecodeError {
+    fn from(error: io::Error) -> Self {
+        match error.kind() {
+            io::ErrorKind::UnexpectedEof => DecodeError::NotEnoughBytes,
+            _ => DecodeError::Io(error),
+        }
+    }
 }

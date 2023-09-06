@@ -2,42 +2,48 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::io::{Read, Result};
+
 pub mod header;
-mod reader;
-mod writer;
+pub mod payload;
+pub mod read;
+mod write;
 
 pub use self::header::Header;
-pub use self::reader::{from_bytes, from_reader, ReadError};
-pub use self::writer::{to_bytes, to_writer, WriteError};
+pub use self::read::{read, read_bytes, ReadError};
 
-// TODO: Add typed payload
-pub struct Stone {
-    pub header: Header,
-    pub payload: Vec<u8>,
-}
+pub trait ReadExt: Read {
+    fn read_u8(&mut self) -> Result<u8> {
+        let bytes = self.read_array::<1>()?;
+        Ok(bytes[0])
+    }
 
-#[cfg(test)]
-mod test {
-    use super::*;
+    fn read_u16(&mut self) -> Result<u16> {
+        let bytes = self.read_array()?;
+        Ok(u16::from_be_bytes(bytes))
+    }
 
-    /// Header for bash completion stone archive
-    const BASH_TEST_STONE: [u8; 32] = [
-        0x0, 0x6d, 0x6f, 0x73, 0x0, 0x4, 0x0, 0x0, 0x1, 0x0, 0x0, 0x2, 0x0, 0x0, 0x3, 0x0, 0x0,
-        0x4, 0x0, 0x0, 0x5, 0x0, 0x0, 0x6, 0x0, 0x0, 0x7, 0x1, 0x0, 0x0, 0x0, 0x1,
-    ];
+    fn read_u32(&mut self) -> Result<u32> {
+        let bytes = self.read_array()?;
+        Ok(u32::from_be_bytes(bytes))
+    }
 
-    /// Legacy manifest archive
-    const TEST_MANIFEST: [u8; 32] = [
-        0x0, 0x6d, 0x6f, 0x73, 0x0, 0x1, 0x0, 0x0, 0x1, 0x0, 0x0, 0x2, 0x0, 0x0, 0x3, 0x0, 0x0,
-        0x4, 0x0, 0x0, 0x5, 0x0, 0x0, 0x6, 0x0, 0x0, 0x7, 0x4, 0x0, 0x0, 0x0, 0x1,
-    ];
+    fn read_u64(&mut self) -> Result<u64> {
+        let bytes = self.read_array()?;
+        Ok(u64::from_be_bytes(bytes))
+    }
 
-    #[test]
-    fn roundtrip() {
-        let stone = from_bytes(&BASH_TEST_STONE).expect("valid stone");
-        assert_eq!(stone.header.version(), header::Version::V1);
+    fn read_array<const N: usize>(&mut self) -> Result<[u8; N]> {
+        let mut bytes = [0u8; N];
+        self.read_exact(&mut bytes)?;
+        Ok(bytes)
+    }
 
-        let bytes = to_bytes(&stone).expect("valid stone");
-        assert_eq!(&bytes, &BASH_TEST_STONE);
+    fn read_vec(&mut self, length: usize) -> Result<Vec<u8>> {
+        let mut bytes = vec![0u8; length];
+        self.read_exact(&mut bytes)?;
+        Ok(bytes)
     }
 }
+
+impl<T: Read> ReadExt for T {}
