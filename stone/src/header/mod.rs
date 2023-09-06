@@ -26,13 +26,26 @@ pub enum Version {
 #[repr(C)]
 pub struct AgnosticHeader {
     /// 4-bytes, BE (u32): Magic to quickly identify a stone file
-    magic: [u8; 4],
+    pub magic: [u8; 4],
 
     /// 24 bytes, version specific
-    data: [u8; 24],
+    pub data: [u8; 24],
 
     /// 4-bytes, BE (u32): Format version used in the container
-    version: [u8; 4],
+    pub version: [u8; 4],
+}
+
+impl From<[u8; 32]> for AgnosticHeader {
+    fn from(bytes: [u8; 32]) -> Self {
+        let (magic, rest) = bytes.split_at(4);
+        let (data, version) = rest.split_at(24);
+
+        AgnosticHeader {
+            magic: magic.try_into().unwrap(),
+            data: data.try_into().unwrap(),
+            version: version.try_into().unwrap(),
+        }
+    }
 }
 
 pub enum Header {
@@ -46,7 +59,7 @@ impl Header {
         }
     }
 
-    pub fn encode(self) -> AgnosticHeader {
+    pub fn encode(&self) -> AgnosticHeader {
         let magic = u32::to_be_bytes(STONE_MAGIC);
         let version = u32::to_be_bytes(self.version() as u32);
 
@@ -72,7 +85,7 @@ impl Header {
         };
 
         Ok(match version {
-            Version::V1 => Self::V1(v1::Header::decode(header.data)),
+            Version::V1 => Self::V1(v1::Header::decode(header.data)?),
         })
     }
 }
@@ -83,4 +96,6 @@ pub enum DecodeError {
     InvalidMagic,
     #[error("Unknown version: {0}")]
     UnknownVersion(u32),
+    #[error("v1 error: {0}")]
+    V1(#[from] v1::DecodeError),
 }
