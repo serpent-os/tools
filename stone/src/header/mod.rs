@@ -26,13 +26,13 @@ pub enum Version {
 #[repr(C)]
 pub struct AgnosticHeader {
     /// 4-bytes, BE (u32): Magic to quickly identify a stone file
-    magic: [u8; 4],
+    pub magic: [u8; 4],
 
     /// 24 bytes, version specific
-    data: [u8; 24],
+    pub data: [u8; 24],
 
     /// 4-bytes, BE (u32): Format version used in the container
-    version: [u8; 4],
+    pub version: [u8; 4],
 }
 
 impl From<[u8; 32]> for AgnosticHeader {
