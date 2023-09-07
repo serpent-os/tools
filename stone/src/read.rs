@@ -219,6 +219,13 @@ mod test {
             let content = &content[index.start as usize..index.end as usize];
             let digest = xxh3_128(content);
             assert_eq!(digest, index.digest);
+
+            let layout = stone
+                .layouts
+                .iter()
+                .find(|layout| layout.source.as_deref() == Some(&index.digest.to_be_bytes()))
+                .expect("layout exists");
+            assert_eq!(layout.file_type, 1);
         }
     }
 }
