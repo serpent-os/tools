@@ -13,43 +13,97 @@ use self::zstd::Zstd;
 
 mod zstd;
 
-pub fn read<R: Read + Seek>(
-    mut reader: R,
-) -> Result<(Header, Vec<Payload>, ContentReader<R>), ReadError> {
-    let header = Header::decode(&mut reader).map_err(ReadError::HeaderDecode)?;
+pub fn read<R: Read + Seek>(mut reader: R) -> Result<Stone<R>, Error> {
+    let header = Header::decode(&mut reader).map_err(Error::HeaderDecode)?;
 
-    let mut payloads = vec![];
+    let mut metadata = vec![];
+    let mut attributes = vec![];
+    let mut layouts = vec![];
+    let mut indicies = vec![];
+    let mut content = None;
 
     while let Some(payload) = Payload::decode(&mut reader)? {
-        payloads.push(payload);
+        match payload {
+            Payload::Meta(m) => metadata.extend(m),
+            Payload::Attributes(a) => attributes.extend(a),
+            Payload::Layout(l) => layouts.extend(l),
+            Payload::Index(i) => indicies.extend(i),
+            Payload::Content(c) => {
+                if content.is_some() {
+                    return Err(Error::MultipleContent);
+                }
+                content = Some(c);
+            }
+        }
     }
 
-    Ok((header, payloads, ContentReader(reader)))
+    Ok(Stone {
+        reader,
+        header,
+        metadata,
+        attributes,
+        layouts,
+        indicies,
+        content,
+    })
 }
 
-pub fn read_bytes(
-    bytes: &[u8],
-) -> Result<(Header, Vec<Payload>, ContentReader<Cursor<&[u8]>>), ReadError> {
+pub fn read_bytes(bytes: &[u8]) -> Result<Stone<Cursor<&[u8]>>, Error> {
     read(Cursor::new(bytes))
 }
 
-pub struct ContentReader<R>(R);
-
-enum PayloadReader<'a, R: Read> {
-    Plain(&'a mut R),
-    Zstd(Zstd<'a, io::Take<&'a mut R>>),
+pub struct Stone<R> {
+    reader: R,
+    pub header: Header,
+    pub metadata: Vec<Meta>,
+    pub attributes: Vec<Attribute>,
+    pub layouts: Vec<Layout>,
+    pub indicies: Vec<Index>,
+    pub content: Option<Content>,
 }
 
-impl<'a, R: Read> PayloadReader<'a, R> {
-    fn new(reader: &'a mut R, length: u64, compression: Compression) -> Result<Self, ReadError> {
+impl<R: Read + Seek> Stone<R> {
+    pub fn unpack_content<W: Write>(
+        &mut self,
+        content: Content,
+        writer: &mut W,
+    ) -> Result<(), Error>
+    where
+        W: Write,
+    {
+        self.reader.seek(SeekFrom::Start(content.offset))?;
+
+        let mut framed = (&mut self.reader).take(content.length);
+        let mut reader = PayloadReader::new(&mut framed, content.compression)?;
+
+        io::copy(&mut reader, writer)?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Content {
+    offset: u64,
+    length: u64,
+    compression: Compression,
+}
+
+enum PayloadReader<R: Read> {
+    Plain(R),
+    Zstd(Zstd<R>),
+}
+
+impl<R: Read> PayloadReader<R> {
+    fn new(reader: R, compression: Compression) -> Result<Self, Error> {
         Ok(match compression {
             Compression::None => PayloadReader::Plain(reader),
-            Compression::Zstd => PayloadReader::Zstd(Zstd::new(reader.take(length))?),
+            Compression::Zstd => PayloadReader::Zstd(Zstd::new(reader)?),
         })
     }
 }
 
-impl<'a, R: Read> Read for PayloadReader<'a, R> {
+impl<R: Read> Read for PayloadReader<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
             PayloadReader::Plain(reader) => reader.read(buf),
@@ -59,7 +113,7 @@ impl<'a, R: Read> Read for PayloadReader<'a, R> {
 }
 
 #[derive(Debug)]
-pub enum Payload {
+enum Payload {
     Meta(Vec<Meta>),
     Attributes(Vec<Attribute>),
     Layout(Vec<Layout>),
@@ -68,24 +122,26 @@ pub enum Payload {
 }
 
 impl Payload {
-    fn decode<R: Read + Seek>(mut reader: R) -> Result<Option<Self>, ReadError> {
+    fn decode<R: Read + Seek>(mut reader: R) -> Result<Option<Self>, Error> {
         match payload::Header::decode(&mut reader) {
             Ok(header) => {
+                let mut framed = (&mut reader).take(header.stored_size);
+
                 let payload = match header.kind {
                     payload::Kind::Meta => Payload::Meta(payload::decode_records(
-                        PayloadReader::new(&mut reader, header.stored_size, header.compression)?,
+                        PayloadReader::new(&mut framed, header.compression)?,
                         header.num_records,
                     )?),
                     payload::Kind::Layout => Payload::Layout(payload::decode_records(
-                        PayloadReader::new(&mut reader, header.stored_size, header.compression)?,
+                        PayloadReader::new(&mut framed, header.compression)?,
                         header.num_records,
                     )?),
                     payload::Kind::Index => Payload::Index(payload::decode_records(
-                        PayloadReader::new(&mut reader, header.stored_size, header.compression)?,
+                        PayloadReader::new(&mut framed, header.compression)?,
                         header.num_records,
                     )?),
                     payload::Kind::Attributes => Payload::Attributes(payload::decode_records(
-                        PayloadReader::new(&mut reader, header.stored_size, header.compression)?,
+                        PayloadReader::new(&mut framed, header.compression)?,
                         header.num_records,
                     )?),
                     payload::Kind::Content => {
@@ -111,39 +167,18 @@ impl Payload {
             {
                 Ok(None)
             }
-            Err(error) => Err(ReadError::PayloadDecode(error)),
+            Err(error) => Err(Error::PayloadDecode(error)),
         }
     }
 }
 
-#[derive(Debug)]
-pub struct Content {
-    offset: u64,
-    length: u64,
-    compression: Compression,
-}
-
-impl Content {
-    pub fn load<R, W>(self, reader: &mut ContentReader<R>, writer: &mut W) -> Result<(), ReadError>
-    where
-        R: Read + Seek,
-        W: Write,
-    {
-        reader.0.seek(SeekFrom::Start(self.offset))?;
-
-        let mut reader = PayloadReader::new(&mut reader.0, self.length, self.compression)?;
-
-        io::copy(&mut reader, writer)?;
-
-        Ok(())
-    }
-}
-
 #[derive(Debug, Error)]
-pub enum ReadError {
+pub enum Error {
+    #[error("Multiple content payloads not allowed")]
+    MultipleContent,
     #[error("failed to decode header: {0}")]
     HeaderDecode(#[from] header::DecodeError),
-    #[error("failed to decode payload header: {0}")]
+    #[error("failed to decode payload: {0}")]
     PayloadDecode(#[from] payload::DecodeError),
     #[error("io error: {0}")]
     Io(#[from] io::Error),
@@ -161,17 +196,24 @@ mod test {
 
     #[test]
     fn read_header() {
-        let (header, _, _) = read_bytes(&BASH_TEST_STONE).expect("valid stone");
-        assert_eq!(header.version(), header::Version::V1);
+        let stone = read_bytes(&BASH_TEST_STONE).expect("valid stone");
+        assert_eq!(stone.header.version(), header::Version::V1);
     }
 
     #[test]
     fn read_bash_completion() {
-        let (header, payloads, _) = read_bytes(include_bytes!(
+        let mut stone = read_bytes(include_bytes!(
             "../test/bash-completion-2.11-1-1-x86_64.stone"
         ))
         .expect("valid stone");
-        assert_eq!(header.version(), header::Version::V1);
-        assert_eq!(payloads.len(), 4);
+        assert_eq!(stone.header.version(), header::Version::V1);
+
+        let mut content = vec![];
+        stone
+            .unpack_content(stone.content.unwrap(), &mut content)
+            .expect("valid content");
+
+        let content = String::from_utf8_lossy(&content);
+        assert!(content.contains("# config file for bash-completion"));
     }
 }

@@ -10,7 +10,7 @@ pub mod read;
 mod write;
 
 pub use self::header::Header;
-pub use self::read::{read, read_bytes, ReadError};
+pub use self::read::{read, read_bytes};
 
 pub trait ReadExt: Read {
     fn read_u8(&mut self) -> Result<u8> {
