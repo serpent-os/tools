@@ -54,6 +54,14 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
                 _ => println!("Record: {record:?}"),
             }
         }
+
+        for entry in reader.layouts {
+            println!(
+                " - /usr/{} - [{:?}]",
+                String::from_utf8_lossy(entry.target.as_slice()),
+                entry.file_type
+            );
+        }
     }
 
     Ok(())
