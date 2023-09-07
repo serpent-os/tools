@@ -8,9 +8,10 @@ pub struct Zstd<'a, R: Read> {
 
 impl<'a, R: Read> Zstd<'a, R> {
     pub fn new(reader: R) -> Result<Self> {
-        Ok(Self {
-            decoder: Decoder::new(reader)?,
-        })
+        let mut decoder = Decoder::new(reader)?;
+        decoder.window_log_max(31)?;
+
+        Ok(Self { decoder })
     }
 }
 

@@ -37,14 +37,14 @@ pub struct ContentReader<R>(R);
 
 enum PayloadReader<'a, R: Read> {
     Plain(&'a mut R),
-    Zstd(Zstd<'a, &'a mut R>),
+    Zstd(Zstd<'a, io::Take<&'a mut R>>),
 }
 
 impl<'a, R: Read> PayloadReader<'a, R> {
-    fn new(reader: &'a mut R, compression: Compression) -> Result<Self, ReadError> {
+    fn new(reader: &'a mut R, length: u64, compression: Compression) -> Result<Self, ReadError> {
         Ok(match compression {
             Compression::None => PayloadReader::Plain(reader),
-            Compression::Zstd => PayloadReader::Zstd(Zstd::new(reader)?),
+            Compression::Zstd => PayloadReader::Zstd(Zstd::new(reader.take(length))?),
         })
     }
 }
@@ -73,27 +73,27 @@ impl Payload {
             Ok(header) => {
                 let payload = match header.kind {
                     payload::Kind::Meta => Payload::Meta(payload::decode_records(
-                        PayloadReader::new(&mut reader, header.compression)?,
+                        PayloadReader::new(&mut reader, header.stored_size, header.compression)?,
                         header.num_records,
                     )?),
                     payload::Kind::Layout => Payload::Layout(payload::decode_records(
-                        PayloadReader::new(&mut reader, header.compression)?,
+                        PayloadReader::new(&mut reader, header.stored_size, header.compression)?,
                         header.num_records,
                     )?),
                     payload::Kind::Index => Payload::Index(payload::decode_records(
-                        PayloadReader::new(&mut reader, header.compression)?,
+                        PayloadReader::new(&mut reader, header.stored_size, header.compression)?,
                         header.num_records,
                     )?),
                     payload::Kind::Attributes => Payload::Attributes(payload::decode_records(
-                        PayloadReader::new(&mut reader, header.compression)?,
+                        PayloadReader::new(&mut reader, header.stored_size, header.compression)?,
                         header.num_records,
                     )?),
                     payload::Kind::Content => {
-                        let offset = reader.stream_position()? as i64;
+                        let offset = reader.stream_position()?;
                         let length = header.stored_size;
 
                         // Skip past, these are read by user later
-                        reader.seek(SeekFrom::Current(header.stored_size as i64))?;
+                        reader.seek(SeekFrom::Current(length as i64))?;
 
                         Payload::Content(Content {
                             offset,
@@ -118,7 +118,7 @@ impl Payload {
 
 #[derive(Debug)]
 pub struct Content {
-    offset: i64,
+    offset: u64,
     length: u64,
     compression: Compression,
 }
@@ -129,13 +129,9 @@ impl Content {
         R: Read + Seek,
         W: Write,
     {
-        // Seek to beginning of content
-        let offset = reader.0.stream_position()? as i64 - self.offset;
-        reader.0.seek(SeekFrom::Current(offset))?;
+        reader.0.seek(SeekFrom::Start(self.offset))?;
 
-        // Only read `length` bytes
-        let mut take = (&mut reader.0).take(self.length);
-        let mut reader = PayloadReader::new(&mut take, self.compression)?;
+        let mut reader = PayloadReader::new(&mut reader.0, self.length, self.compression)?;
 
         io::copy(&mut reader, writer)?;
 
@@ -176,6 +172,6 @@ mod test {
         ))
         .expect("valid stone");
         assert_eq!(header.version(), header::Version::V1);
-        dbg!(&payloads);
+        assert_eq!(payloads.len(), 4);
     }
 }
