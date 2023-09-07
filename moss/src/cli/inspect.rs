@@ -34,6 +34,10 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
             "{path:?} = stone container version {:?}",
             reader.header.version()
         );
+
+        for record in reader.metadata {
+            println!("Record: {record:?}");
+        }
     }
 
     Ok(())
