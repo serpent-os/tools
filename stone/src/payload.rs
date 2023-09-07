@@ -129,6 +129,35 @@ impl Record for Attribute {
     }
 }
 
+///
+/// Layout entries record their target file type so they can be rebuilt on
+/// the target installation.
+///
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileType {
+    /// Regular file
+    Regular = 1,
+
+    /// Symbolic link (source + target set)
+    Symlink,
+
+    /// Directory node
+    Directory,
+
+    /// Character device
+    CharacterDevice,
+
+    /// Block device
+    BlockDevice,
+
+    /// FIFO node
+    Fifo,
+
+    /// UNIX Socket
+    Socket,
+}
+
 // TODO: Strong types these fields
 #[derive(Debug)]
 pub struct Layout {
@@ -138,7 +167,7 @@ pub struct Layout {
     pub tag: u32,
     pub source: Option<Vec<u8>>,
     pub target: Vec<u8>,
-    pub file_type: u8,
+    pub file_type: FileType,
 }
 
 impl Record for Layout {
@@ -151,7 +180,17 @@ impl Record for Layout {
         let source_length = reader.read_u16()?;
         let target_length = reader.read_u16()?;
 
-        let file_type = reader.read_u8()?;
+        let file_type = match reader.read_u8()? {
+            1 => FileType::Regular,
+            2 => FileType::Symlink,
+            3 => FileType::Directory,
+            4 => FileType::CharacterDevice,
+            5 => FileType::BlockDevice,
+            6 => FileType::Fifo,
+            7 => FileType::Socket,
+            t => return Err(DecodeError::UnknownFileType(t)),
+        };
+
         let _padding = reader.read_array::<11>()?;
 
         let source = (source_length > 0)
@@ -302,6 +341,8 @@ pub enum DecodeError {
     UnknownMetaKind(u8),
     #[error("Unknown metadata tag: {0}")]
     UnknownMetaTag(u16),
+    #[error("Unknown file type: {0}")]
+    UnknownFileType(u8),
     #[error("io error: {0}")]
     Io(#[from] io::Error),
 }
