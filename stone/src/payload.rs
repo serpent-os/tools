@@ -98,14 +98,14 @@ pub fn decode_records<T: Record, R: Read>(
 pub struct Index {
     pub start: u64,
     pub end: u64,
-    pub digest: [u8; 16],
+    pub digest: u128,
 }
 
 impl Record for Index {
     fn decode<R: Read>(mut reader: R) -> Result<Self, DecodeError> {
         let start = reader.read_u64()?;
         let end = reader.read_u64()?;
-        let digest = reader.read_array()?;
+        let digest = reader.read_u128()?;
 
         Ok(Self { start, end, digest })
     }

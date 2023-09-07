@@ -33,6 +33,11 @@ pub trait ReadExt: Read {
         Ok(u64::from_be_bytes(bytes))
     }
 
+    fn read_u128(&mut self) -> Result<u128> {
+        let bytes = self.read_array()?;
+        Ok(u128::from_be_bytes(bytes))
+    }
+
     fn read_array<const N: usize>(&mut self) -> Result<[u8; N]> {
         let mut bytes = [0u8; N];
         self.read_exact(&mut bytes)?;

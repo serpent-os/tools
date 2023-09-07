@@ -19,7 +19,7 @@ pub fn read<R: Read + Seek>(mut reader: R) -> Result<Stone<R>, Error> {
     let mut metadata = vec![];
     let mut attributes = vec![];
     let mut layouts = vec![];
-    let mut indicies = vec![];
+    let mut indices = vec![];
     let mut content = None;
 
     while let Some(payload) = Payload::decode(&mut reader)? {
@@ -27,7 +27,7 @@ pub fn read<R: Read + Seek>(mut reader: R) -> Result<Stone<R>, Error> {
             Payload::Meta(m) => metadata.extend(m),
             Payload::Attributes(a) => attributes.extend(a),
             Payload::Layout(l) => layouts.extend(l),
-            Payload::Index(i) => indicies.extend(i),
+            Payload::Index(i) => indices.extend(i),
             Payload::Content(c) => {
                 if content.is_some() {
                     return Err(Error::MultipleContent);
@@ -43,7 +43,7 @@ pub fn read<R: Read + Seek>(mut reader: R) -> Result<Stone<R>, Error> {
         metadata,
         attributes,
         layouts,
-        indicies,
+        indices,
         content,
     })
 }
@@ -58,7 +58,7 @@ pub struct Stone<R> {
     pub metadata: Vec<Meta>,
     pub attributes: Vec<Attribute>,
     pub layouts: Vec<Layout>,
-    pub indicies: Vec<Index>,
+    pub indices: Vec<Index>,
     pub content: Option<Content>,
 }
 
@@ -186,6 +186,8 @@ pub enum Error {
 
 #[cfg(test)]
 mod test {
+    use xxhash_rust::xxh3::xxh3_128;
+
     use super::*;
 
     /// Header for bash completion stone archive
@@ -213,7 +215,10 @@ mod test {
             .unpack_content(stone.content.unwrap(), &mut content)
             .expect("valid content");
 
-        let content = String::from_utf8_lossy(&content);
-        assert!(content.contains("# config file for bash-completion"));
+        for index in stone.indices {
+            let content = &content[index.start as usize..index.end as usize];
+            let digest = xxh3_128(content);
+            assert_eq!(digest, index.digest);
+        }
     }
 }

@@ -8,3 +8,7 @@ edition.workspace = true
 [dependencies]
 thiserror.workspace = true
 zstd.workspace = true
+
+[dev-dependencies.xxhash-rust]
+version = "0.8.5"
+features = ["xxh3"]
