@@ -28,7 +28,7 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
     // Process each input path in order.
     for path in paths {
         let rdr = File::open(path).map_err(Error::IO)?;
-        let reader = stone::from_reader(rdr).map_err(Error::Format)?;
+        let reader = stone::read(rdr).map_err(Error::Format)?;
         // Grab the header version
         println!(
             "{path:?} = stone container version {:?}",
@@ -45,5 +45,5 @@ pub enum Error {
     IO(#[from] std::io::Error),
 
     #[error("Format failure")]
-    Format(#[from] stone::ReadError),
+    Format(#[from] stone::read::Error),
 }
