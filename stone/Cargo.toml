@@ -9,6 +9,10 @@ edition.workspace = true
 thiserror.workspace = true
 zstd.workspace = true
 
-[dev-dependencies.xxhash-rust]
-version = "0.8.5"
-features = ["xxh3"]
+[dev-dependencies]
+criterion = { version = "0.4", features = ["html_reports"] }
+xxhash-rust = { version = "0.8.5", features = ["xxh3"] }
+
+[[bench]]
+name = "read"
+harness = false
