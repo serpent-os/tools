@@ -188,6 +188,8 @@ pub enum Error {
 mod test {
     use xxhash_rust::xxh3::xxh3_128;
 
+    use crate::payload::FileType;
+
     use super::*;
 
     /// Header for bash completion stone archive
@@ -225,7 +227,7 @@ mod test {
                 .iter()
                 .find(|layout| layout.source.as_deref() == Some(&index.digest.to_be_bytes()))
                 .expect("layout exists");
-            assert_eq!(layout.file_type, 1);
+            assert_eq!(layout.file_type, FileType::Regular);
         }
     }
 }
