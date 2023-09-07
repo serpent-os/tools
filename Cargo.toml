@@ -10,4 +10,5 @@ edition = "2021"
 [workspace.dependencies]
 clap = "4.4.2"
 diesel = { version = "2.1.1", features = ["sqlite"] }
+zstd = "0.12.4"
 thiserror = "1"

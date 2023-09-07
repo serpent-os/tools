@@ -7,3 +7,12 @@ edition.workspace = true
 
 [dependencies]
 thiserror.workspace = true
+zstd.workspace = true
+
+[dev-dependencies]
+criterion = { version = "0.4", features = ["html_reports"] }
+xxhash-rust = { version = "0.8.5", features = ["xxh3"] }
+
+[[bench]]
+name = "read"
+harness = false
