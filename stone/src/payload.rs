@@ -173,19 +173,19 @@ impl Record for Layout {
 }
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MetaKind {
-    Int8 = 1,
-    Uint8 = 2,
-    Int16 = 3,
-    Uint16 = 4,
-    Int32 = 5,
-    Uint32 = 6,
-    Int64 = 7,
-    Uint64 = 8,
-    String = 9,
-    Dependency = 10,
-    Provider = 11,
+    Int8(i8),
+    Uint8(u8),
+    Int16(i16),
+    Uint16(u16),
+    Int32(i32),
+    Uint32(u32),
+    Int64(i64),
+    Uint64(u64),
+    String(String),
+    Dependency(String),
+    Provider(String),
 }
 
 #[repr(u16)]
@@ -238,7 +238,6 @@ pub enum MetaTag {
 pub struct Meta {
     pub tag: MetaTag,
     pub kind: MetaKind,
-    pub data: Vec<u8>,
 }
 
 impl Record for Meta {
@@ -269,26 +268,25 @@ impl Record for Meta {
             t => return Err(DecodeError::UnknownMetaTag(t)),
         };
 
-        let kind = match reader.read_u8()? {
-            1 => MetaKind::Int8,
-            2 => MetaKind::Uint8,
-            3 => MetaKind::Int16,
-            4 => MetaKind::Uint16,
-            5 => MetaKind::Int32,
-            6 => MetaKind::Uint32,
-            7 => MetaKind::Int64,
-            8 => MetaKind::Uint64,
-            9 => MetaKind::String,
-            10 => MetaKind::Dependency,
-            11 => MetaKind::Provider,
+        let kind = reader.read_u8()?;
+        let _padding = reader.read_array::<1>()?;
+
+        let kind = match kind {
+            1 => MetaKind::Int8(reader.read_u8()? as i8),
+            2 => MetaKind::Uint8(reader.read_u8()?),
+            3 => MetaKind::Int16(reader.read_u16()? as i16),
+            4 => MetaKind::Uint16(reader.read_u16()?),
+            5 => MetaKind::Int32(reader.read_u32()? as i32),
+            6 => MetaKind::Uint32(reader.read_u32()?),
+            7 => MetaKind::Int64(reader.read_u64()? as i64),
+            8 => MetaKind::Uint64(reader.read_u64()?),
+            9 => MetaKind::String(reader.read_string(length as u64)?),
+            10 => MetaKind::Dependency(reader.read_string(length as u64)?),
+            11 => MetaKind::Provider(reader.read_string(length as u64)?),
             k => return Err(DecodeError::UnknownMetaKind(k)),
         };
 
-        let _padding = reader.read_array::<1>()?;
-
-        let data = reader.read_vec(length as usize)?;
-
-        Ok(Self { tag, kind, data })
+        Ok(Self { tag, kind })
     }
 }
 

@@ -38,18 +38,12 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
 
         for record in reader.metadata {
             match record.kind {
-                MetaKind::String => println!(
-                    "Record: `{:?}` = {}",
-                    record.tag,
-                    String::from_utf8_lossy(record.data.as_slice())
-                ),
-                MetaKind::Int64 => {
-                    let arr = record.data[0..8].try_into().unwrap();
-                    println!("Record: `{:?}` = {}", record.tag, i64::from_be_bytes(arr));
+                MetaKind::String(s) => println!("Record: `{:?}` = {}", record.tag, s),
+                MetaKind::Int64(i) => {
+                    println!("Record: `{:?}` = {}", record.tag, i);
                 }
-                MetaKind::Uint64 => {
-                    let arr = record.data[0..8].try_into().unwrap();
-                    println!("Record: `{:?}` = {}", record.tag, u64::from_be_bytes(arr));
+                MetaKind::Uint64(i) => {
+                    println!("Record: `{:?}` = {}", record.tag, i);
                 }
                 _ => println!("Record: {record:?}"),
             }
