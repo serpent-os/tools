@@ -49,6 +49,12 @@ pub trait ReadExt: Read {
         self.read_exact(&mut bytes)?;
         Ok(bytes)
     }
+
+    fn read_string(&mut self, length: u64) -> Result<String> {
+        let mut string = String::with_capacity(length as usize);
+        self.take(length).read_to_string(&mut string)?;
+        Ok(string)
+    }
 }
 
 impl<T: Read> ReadExt for T {}
