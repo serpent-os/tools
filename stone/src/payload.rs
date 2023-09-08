@@ -1,5 +1,5 @@
 use std::{
-    fmt::{write, Display},
+    fmt::Display,
     io::{self, Read},
 };
 
