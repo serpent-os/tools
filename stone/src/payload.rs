@@ -1,4 +1,7 @@
-use std::io::{self, Read};
+use std::{
+    fmt::{write, Display},
+    io::{self, Read},
+};
 
 use thiserror::Error;
 
@@ -240,6 +243,26 @@ pub enum DependencyKind {
 
     /// An emul32-compatible pkgconfig .pc dependency (lib32/*.pc)
     PkgConfig32,
+}
+
+///
+/// Override display for `pkgconfig32(name)` style strings
+///
+impl Display for DependencyKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DependencyKind::PackageName => write!(f, "name"),
+            DependencyKind::SharedLibary => write!(f, "soname"),
+            DependencyKind::PkgConfig => write!(f, "pkgconfig"),
+            DependencyKind::Interpreter => write!(f, "interpreter"),
+            DependencyKind::CMake => write!(f, "cmake"),
+            DependencyKind::Python => write!(f, "python"),
+            DependencyKind::Binary => write!(f, "binary"),
+            DependencyKind::SystemBinary => write!(f, "sysbinary"),
+            DependencyKind::PkgConfig32 => write!(f, "pkgconfig32"),
+            _ => write!(f, "{:?}", self),
+        }
+    }
 }
 
 #[repr(u8)]
