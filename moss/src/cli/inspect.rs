@@ -38,8 +38,8 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
 
         for record in reader.metadata {
             match record.kind {
-                MetaKind::Provider(p) => println!("Provides: {}", p),
-                MetaKind::Dependency(d) => println!("Dependency: {}", d),
+                MetaKind::Provider(k, p) => println!("Provides: {} {:?}", p, k),
+                MetaKind::Dependency(k, d) => println!("Dependency: {} {:?}", d, k),
                 MetaKind::String(s) => println!("Record: `{:?}` = {}", record.tag, s),
                 MetaKind::Int64(i) => {
                     println!("Record: `{:?}` = {}", record.tag, i);
