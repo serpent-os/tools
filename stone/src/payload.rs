@@ -213,6 +213,37 @@ impl Record for Layout {
 
 #[repr(u8)]
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DependencyKind {
+    /// Just the plain name of a package
+    PackageName = 0,
+
+    /// A soname based dependency
+    SharedLibary,
+
+    /// A pkgconfig `.pc` based dependency
+    PkgConfig,
+
+    /// Special interpreter (PT_INTERP/etc) to run the binaries
+    Interpreter,
+
+    /// A CMake module
+    CMake,
+
+    /// A Python module
+    Python,
+
+    /// A binary in /usr/bin
+    Binary,
+
+    /// A binary in /usr/sbin
+    SystemBinary,
+
+    /// An emul32-compatible pkgconfig .pc dependency (lib32/*.pc)
+    PkgConfig32,
+}
+
+#[repr(u8)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MetaKind {
     Int8(i8),
     Uint8(u8),
@@ -223,8 +254,8 @@ pub enum MetaKind {
     Int64(i64),
     Uint64(u64),
     String(String),
-    Dependency(String),
-    Provider(String),
+    Dependency(DependencyKind, String),
+    Provider(DependencyKind, String),
 }
 
 #[repr(u16)]
@@ -279,6 +310,25 @@ pub struct Meta {
     pub kind: MetaKind,
 }
 
+///
+/// Helper to decode a dependency's encoded kind
+///
+fn decode_dependency(i: u8) -> Result<DependencyKind, DecodeError> {
+    let result = match i {
+        0 => DependencyKind::PackageName,
+        1 => DependencyKind::SharedLibary,
+        2 => DependencyKind::PkgConfig,
+        3 => DependencyKind::Interpreter,
+        4 => DependencyKind::CMake,
+        5 => DependencyKind::Python,
+        6 => DependencyKind::Binary,
+        7 => DependencyKind::SystemBinary,
+        8 => DependencyKind::PkgConfig32,
+        _ => return Err(DecodeError::UnknownDependency(i)),
+    };
+    Ok(result)
+}
+
 impl Record for Meta {
     fn decode<R: Read>(mut reader: R) -> Result<Self, DecodeError> {
         let length = reader.read_u32()?;
@@ -320,8 +370,14 @@ impl Record for Meta {
             7 => MetaKind::Int64(reader.read_u64()? as i64),
             8 => MetaKind::Uint64(reader.read_u64()?),
             9 => MetaKind::String(reader.read_string(length as u64)?),
-            10 => MetaKind::Dependency(reader.read_string(length as u64)?),
-            11 => MetaKind::Provider(reader.read_string(length as u64)?),
+            10 => MetaKind::Dependency(
+                decode_dependency(reader.read_u8()?)?,
+                reader.read_string(length as u64 - 1)?,
+            ),
+            11 => MetaKind::Provider(
+                decode_dependency(reader.read_u8()?)?,
+                reader.read_string(length as u64 - 1)?,
+            ),
             k => return Err(DecodeError::UnknownMetaKind(k)),
         };
 
@@ -341,6 +397,8 @@ pub enum DecodeError {
     UnknownMetaTag(u16),
     #[error("Unknown file type: {0}")]
     UnknownFileType(u8),
+    #[error("Unknown dependency type: {0}")]
+    UnknownDependency(u8),
     #[error("io error: {0}")]
     Io(#[from] io::Error),
 }
