@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use clap::{arg, ArgMatches, Command};
 use std::fs::File;
-use stone::payload::MetaKind;
+use stone::payload::meta::MetaKind;
 use thiserror::Error;
 
 pub fn command() -> Command {
