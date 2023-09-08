@@ -394,10 +394,12 @@ impl Record for Meta {
             8 => MetaKind::Uint64(reader.read_u64()?),
             9 => MetaKind::String(reader.read_string(length as u64)?),
             10 => MetaKind::Dependency(
+                /* DependencyKind u8 subtracted from length  */
                 decode_dependency(reader.read_u8()?)?,
                 reader.read_string(length as u64 - 1)?,
             ),
             11 => MetaKind::Provider(
+                /* DependencyKind u8 subtracted from length  */
                 decode_dependency(reader.read_u8()?)?,
                 reader.read_string(length as u64 - 1)?,
             ),
