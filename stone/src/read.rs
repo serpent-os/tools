@@ -6,7 +6,7 @@ use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 use thiserror::Error;
 
 use crate::header;
-use crate::payload::{index::Index, layout::Layout, meta::Meta, Attribute, Compression};
+use crate::payload::{attribute::Attribute, index::Index, layout::Layout, meta::Meta, Compression};
 use crate::{payload, Header};
 
 use self::zstd::Zstd;
