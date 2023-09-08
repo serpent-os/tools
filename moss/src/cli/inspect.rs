@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use clap::{arg, ArgMatches, Command};
 use std::fs::File;
-use stone::payload::meta::MetaKind;
+use stone::payload::meta;
 use thiserror::Error;
 
 pub fn command() -> Command {
@@ -38,13 +38,13 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
 
         for record in reader.metadata {
             match record.kind {
-                MetaKind::Provider(k, p) => println!("Provides: {}({})", k, p),
-                MetaKind::Dependency(k, d) => println!("Dependency: {}({})", k, d),
-                MetaKind::String(s) => println!("Record: `{:?}` = {}", record.tag, s),
-                MetaKind::Int64(i) => {
+                meta::Kind::Provider(k, p) => println!("Provides: {}({})", k, p),
+                meta::Kind::Dependency(k, d) => println!("Dependency: {}({})", k, d),
+                meta::Kind::String(s) => println!("Record: `{:?}` = {}", record.tag, s),
+                meta::Kind::Int64(i) => {
                     println!("Record: `{:?}` = {}", record.tag, i);
                 }
-                MetaKind::Uint64(i) => {
+                meta::Kind::Uint64(i) => {
                     println!("Record: `{:?}` = {}", record.tag, i);
                 }
                 _ => println!("Record: {record:?}"),

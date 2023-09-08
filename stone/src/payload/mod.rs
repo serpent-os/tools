@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-pub mod attribute;
-pub mod index;
+mod attribute;
+mod index;
 pub mod layout;
 pub mod meta;
 
@@ -11,6 +11,10 @@ use std::io::{self, Read};
 
 use thiserror::Error;
 
+pub use self::attribute::Attribute;
+pub use self::index::Index;
+pub use self::layout::Layout;
+pub use self::meta::Meta;
 use crate::ReadExt;
 
 #[repr(u8)]

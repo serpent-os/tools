@@ -6,7 +6,7 @@ use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 use thiserror::Error;
 
 use crate::header;
-use crate::payload::{attribute::Attribute, index::Index, layout::Layout, meta::Meta, Compression};
+use crate::payload::{Attribute, Compression, Index, Layout, Meta};
 use crate::{payload, Header};
 
 use self::zstd::Zstd;
@@ -188,7 +188,7 @@ pub enum Error {
 mod test {
     use xxhash_rust::xxh3::xxh3_128;
 
-    use crate::payload::FileType;
+    use crate::payload::layout::FileType;
 
     use super::*;
 
