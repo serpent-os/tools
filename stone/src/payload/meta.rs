@@ -7,6 +7,19 @@ use std::{fmt::Display, io::Read};
 use super::{DecodeError, Record};
 use crate::ReadExt;
 
+///
+/// The Meta payload contains a series of sequential records with
+/// strong types and context tags, i.e. their use such as Name.
+/// These record all metadata for every .stone packages and provide
+/// no content
+///
+// TODO: Strong types these fields
+#[derive(Debug)]
+pub struct Meta {
+    pub tag: MetaTag,
+    pub kind: MetaKind,
+}
+
 #[repr(u8)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DependencyKind {
@@ -116,13 +129,6 @@ pub enum MetaTag {
     SourcePath = 19,
     // Ref/commit of the upstream source
     SourceRef = 20,
-}
-
-// TODO: Strong types these fields
-#[derive(Debug)]
-pub struct Meta {
-    pub tag: MetaTag,
-    pub kind: MetaKind,
 }
 
 ///

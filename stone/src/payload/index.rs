@@ -7,10 +7,21 @@ use std::io::Read;
 use super::{DecodeError, Record};
 use crate::ReadExt;
 
+///
+/// An IndexEntry (a series of sequential entries within the IndexPayload)
+/// record offsets to unique files within the ContentPayload when decompressed
+/// This is used to split the file into the content store on disk before promoting
+/// to a transaction
+///
 #[derive(Debug, Clone, Copy)]
 pub struct Index {
+    /// Start pf the entry within the ContentPayload
     pub start: u64,
+
+    /// End pointer, remove start for length
     pub end: u64,
+
+    /// XXH3_128 hash
     pub digest: u128,
 }
 
