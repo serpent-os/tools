@@ -260,7 +260,6 @@ impl Display for DependencyKind {
             DependencyKind::Binary => write!(f, "binary"),
             DependencyKind::SystemBinary => write!(f, "sysbinary"),
             DependencyKind::PkgConfig32 => write!(f, "pkgconfig32"),
-            _ => write!(f, "{:?}", self),
         }
     }
 }
