@@ -7,22 +7,19 @@ use std::{fmt::Display, io::Read};
 use super::{DecodeError, Record};
 use crate::ReadExt;
 
-///
 /// The Meta payload contains a series of sequential records with
 /// strong types and context tags, i.e. their use such as Name.
 /// These record all metadata for every .stone packages and provide
 /// no content
-///
-// TODO: Strong types these fields
 #[derive(Debug)]
 pub struct Meta {
-    pub tag: MetaTag,
-    pub kind: MetaKind,
+    pub tag: Tag,
+    pub kind: Kind,
 }
 
 #[repr(u8)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DependencyKind {
+pub enum Dependency {
     /// Just the plain name of a package
     PackageName = 0,
 
@@ -51,28 +48,26 @@ pub enum DependencyKind {
     PkgConfig32,
 }
 
-///
 /// Override display for `pkgconfig32(name)` style strings
-///
-impl Display for DependencyKind {
+impl Display for Dependency {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DependencyKind::PackageName => write!(f, "name"),
-            DependencyKind::SharedLibary => write!(f, "soname"),
-            DependencyKind::PkgConfig => write!(f, "pkgconfig"),
-            DependencyKind::Interpreter => write!(f, "interpreter"),
-            DependencyKind::CMake => write!(f, "cmake"),
-            DependencyKind::Python => write!(f, "python"),
-            DependencyKind::Binary => write!(f, "binary"),
-            DependencyKind::SystemBinary => write!(f, "sysbinary"),
-            DependencyKind::PkgConfig32 => write!(f, "pkgconfig32"),
+            Dependency::PackageName => write!(f, "name"),
+            Dependency::SharedLibary => write!(f, "soname"),
+            Dependency::PkgConfig => write!(f, "pkgconfig"),
+            Dependency::Interpreter => write!(f, "interpreter"),
+            Dependency::CMake => write!(f, "cmake"),
+            Dependency::Python => write!(f, "python"),
+            Dependency::Binary => write!(f, "binary"),
+            Dependency::SystemBinary => write!(f, "sysbinary"),
+            Dependency::PkgConfig32 => write!(f, "pkgconfig32"),
         }
     }
 }
 
 #[repr(u8)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MetaKind {
+pub enum Kind {
     Int8(i8),
     Uint8(u8),
     Int16(i16),
@@ -82,13 +77,13 @@ pub enum MetaKind {
     Int64(i64),
     Uint64(u64),
     String(String),
-    Dependency(DependencyKind, String),
-    Provider(DependencyKind, String),
+    Dependency(Dependency, String),
+    Provider(Dependency, String),
 }
 
 #[repr(u16)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MetaTag {
+pub enum Tag {
     // Name of the package
     Name = 1,
     // Architecture of the package
@@ -131,20 +126,18 @@ pub enum MetaTag {
     SourceRef = 20,
 }
 
-///
 /// Helper to decode a dependency's encoded kind
-///
-fn decode_dependency(i: u8) -> Result<DependencyKind, DecodeError> {
+fn decode_dependency(i: u8) -> Result<Dependency, DecodeError> {
     let result = match i {
-        0 => DependencyKind::PackageName,
-        1 => DependencyKind::SharedLibary,
-        2 => DependencyKind::PkgConfig,
-        3 => DependencyKind::Interpreter,
-        4 => DependencyKind::CMake,
-        5 => DependencyKind::Python,
-        6 => DependencyKind::Binary,
-        7 => DependencyKind::SystemBinary,
-        8 => DependencyKind::PkgConfig32,
+        0 => Dependency::PackageName,
+        1 => Dependency::SharedLibary,
+        2 => Dependency::PkgConfig,
+        3 => Dependency::Interpreter,
+        4 => Dependency::CMake,
+        5 => Dependency::Python,
+        6 => Dependency::Binary,
+        7 => Dependency::SystemBinary,
+        8 => Dependency::PkgConfig32,
         _ => return Err(DecodeError::UnknownDependency(i)),
     };
     Ok(result)
@@ -155,26 +148,26 @@ impl Record for Meta {
         let length = reader.read_u32()?;
 
         let tag = match reader.read_u16()? {
-            1 => MetaTag::Name,
-            2 => MetaTag::Architecture,
-            3 => MetaTag::Version,
-            4 => MetaTag::Summary,
-            5 => MetaTag::Description,
-            6 => MetaTag::Homepage,
-            7 => MetaTag::SourceID,
-            8 => MetaTag::Depends,
-            9 => MetaTag::Provides,
-            10 => MetaTag::Conflicts,
-            11 => MetaTag::Release,
-            12 => MetaTag::License,
-            13 => MetaTag::BuildRelease,
-            14 => MetaTag::PackageURI,
-            15 => MetaTag::PackageHash,
-            16 => MetaTag::PackageSize,
-            17 => MetaTag::BuildDepends,
-            18 => MetaTag::SourceURI,
-            19 => MetaTag::SourcePath,
-            20 => MetaTag::SourceRef,
+            1 => Tag::Name,
+            2 => Tag::Architecture,
+            3 => Tag::Version,
+            4 => Tag::Summary,
+            5 => Tag::Description,
+            6 => Tag::Homepage,
+            7 => Tag::SourceID,
+            8 => Tag::Depends,
+            9 => Tag::Provides,
+            10 => Tag::Conflicts,
+            11 => Tag::Release,
+            12 => Tag::License,
+            13 => Tag::BuildRelease,
+            14 => Tag::PackageURI,
+            15 => Tag::PackageHash,
+            16 => Tag::PackageSize,
+            17 => Tag::BuildDepends,
+            18 => Tag::SourceURI,
+            19 => Tag::SourcePath,
+            20 => Tag::SourceRef,
             t => return Err(DecodeError::UnknownMetaTag(t)),
         };
 
@@ -182,22 +175,22 @@ impl Record for Meta {
         let _padding = reader.read_array::<1>()?;
 
         let kind = match kind {
-            1 => MetaKind::Int8(reader.read_u8()? as i8),
-            2 => MetaKind::Uint8(reader.read_u8()?),
-            3 => MetaKind::Int16(reader.read_u16()? as i16),
-            4 => MetaKind::Uint16(reader.read_u16()?),
-            5 => MetaKind::Int32(reader.read_u32()? as i32),
-            6 => MetaKind::Uint32(reader.read_u32()?),
-            7 => MetaKind::Int64(reader.read_u64()? as i64),
-            8 => MetaKind::Uint64(reader.read_u64()?),
-            9 => MetaKind::String(reader.read_string(length as u64)?),
-            10 => MetaKind::Dependency(
-                /* DependencyKind u8 subtracted from length  */
+            1 => Kind::Int8(reader.read_u8()? as i8),
+            2 => Kind::Uint8(reader.read_u8()?),
+            3 => Kind::Int16(reader.read_u16()? as i16),
+            4 => Kind::Uint16(reader.read_u16()?),
+            5 => Kind::Int32(reader.read_u32()? as i32),
+            6 => Kind::Uint32(reader.read_u32()?),
+            7 => Kind::Int64(reader.read_u64()? as i64),
+            8 => Kind::Uint64(reader.read_u64()?),
+            9 => Kind::String(reader.read_string(length as u64)?),
+            10 => Kind::Dependency(
+                // DependencyKind u8 subtracted from length
                 decode_dependency(reader.read_u8()?)?,
                 reader.read_string(length as u64 - 1)?,
             ),
-            11 => MetaKind::Provider(
-                /* DependencyKind u8 subtracted from length  */
+            11 => Kind::Provider(
+                // DependencyKind u8 subtracted from length
                 decode_dependency(reader.read_u8()?)?,
                 reader.read_string(length as u64 - 1)?,
             ),

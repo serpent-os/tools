@@ -7,10 +7,8 @@ use std::io::Read;
 use super::{DecodeError, Record};
 use crate::ReadExt;
 
-///
 /// Layout entries record their target file type so they can be rebuilt on
 /// the target installation.
-///
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileType {
