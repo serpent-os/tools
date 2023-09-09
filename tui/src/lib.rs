@@ -14,8 +14,6 @@ use ratatui::{
 
 pub type Backend = CrosstermBackend<Stdout>;
 
-pub struct Terminal(ratatui::Terminal<Backend>);
-
 pub fn run<P: Program, T: Send, F>(mut program: P, f: impl Fn(Handle<P::Message>) -> F) -> Result<T>
 where
     F: Future<Output = T> + Send,
