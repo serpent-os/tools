@@ -13,6 +13,8 @@ use ratatui::{
     Frame, TerminalOptions, Viewport,
 };
 
+pub mod widget;
+
 pub type Backend = CrosstermBackend<Stdout>;
 
 pub fn run<P: Program, T: Send, F>(mut program: P, f: impl Fn(Handle<P::Message>) -> F) -> Result<T>

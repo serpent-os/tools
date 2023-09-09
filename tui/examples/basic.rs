@@ -1,11 +1,8 @@
 use std::time::{Duration, Instant};
 
-use ratatui::{
-    prelude::{Constraint, Layout},
-    style::{Color, Style},
-    widgets::LineGauge,
-};
+use ratatui::prelude::{Constraint, Direction, Layout};
 use smol::Timer;
+use tui::widget::progress;
 use tui::Handle;
 
 fn main() {
@@ -30,7 +27,7 @@ async fn run(mut handle: Handle<Message>) {
 
 #[derive(Default)]
 struct Program {
-    progress: f64,
+    progress: f32,
 }
 
 enum Message {
@@ -38,18 +35,20 @@ enum Message {
 }
 
 impl tui::Program for Program {
-    const LINES: u16 = 3;
+    const LINES: u16 = 5;
 
     type Message = Message;
 
     fn update(&mut self, message: Self::Message) {
         match message {
-            Message::Progress(p) => self.progress = p as f64 / 100.0,
+            Message::Progress(p) => self.progress = p as f32 / 100.0,
         }
     }
 
     fn draw(&self, frame: &mut ratatui::Frame<tui::Backend>) {
         let layout = Layout::new()
+            .direction(Direction::Vertical)
+            .vertical_margin(1)
             .constraints([
                 Constraint::Length(1),
                 Constraint::Length(1),
@@ -57,12 +56,7 @@ impl tui::Program for Program {
             ])
             .split(frame.size());
 
-        frame.render_widget(
-            LineGauge::default()
-                .ratio(self.progress)
-                .style(Style::default().fg(Color::Gray))
-                .gauge_style(Style::default().fg(Color::Green)),
-            layout[1],
-        );
+        frame.render_widget(progress(self.progress, progress::Fill::UpAcross), layout[0]);
+        frame.render_widget(progress(self.progress, progress::Fill::AcrossUp), layout[2]);
     }
 }
