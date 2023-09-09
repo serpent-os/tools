@@ -41,6 +41,7 @@ pub fn process() -> Result<(), Error> {
         return Ok(());
     }
     match command().get_matches().subcommand() {
+        Some(("extract", args)) => extract::handle(args).map_err(Error::Extract),
         Some(("inspect", args)) => inspect::handle(args).map_err(Error::Inspect),
         Some(("version", _)) => {
             version::print();
@@ -58,4 +59,7 @@ pub enum Error {
 
     #[error("error handling inspect: {0}")]
     Inspect(#[from] inspect::Error),
+
+    #[error("error in extraction: {0}")]
+    Extract(#[from] extract::Error),
 }
