@@ -1,5 +1,6 @@
 use std::io::{stdout, Result, Stdout};
 
+use async_signal::{Signal, Signals};
 use futures::{
     channel::mpsc::{self, Sender},
     stream, Future, FutureExt, SinkExt, StreamExt,
@@ -19,6 +20,9 @@ where
     F: Future<Output = T> + Send,
 {
     smol::block_on(async move {
+        // Ctrl-c capture
+        let ctrl_c = Signals::new([Signal::Int])?;
+
         // Setup terminal
         let mut terminal = ratatui::Terminal::with_options(
             CrosstermBackend::new(stdout()),
@@ -39,6 +43,7 @@ where
         enum Input<P, T> {
             Event(Event<P>),
             Finished(T),
+            Term,
         }
 
         // Run task
@@ -48,10 +53,12 @@ where
             .into_stream();
         // Channel task
         let mut receiver = receiver.map(Input::<_, T>::Event);
+        // Ctrl c task
+        let mut ctrl_c = ctrl_c.map(|_| Input::Term);
 
         loop {
             // Get next input
-            let input = stream::select(&mut run, &mut receiver)
+            let input = stream::select(&mut run, stream::select(&mut receiver, &mut ctrl_c))
                 .next()
                 .await
                 .unwrap();
@@ -77,9 +84,14 @@ where
                     }
                 },
                 Input::Finished(t) => {
-                    // Cleanup and return
+                    terminal.show_cursor()?;
                     terminal.clear()?;
                     return Ok(t);
+                }
+                Input::Term => {
+                    terminal.show_cursor()?;
+                    terminal.clear()?;
+                    std::process::exit(0);
                 }
             }
         }

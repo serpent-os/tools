@@ -162,6 +162,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-signal"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "81af2ed896b71b98dd8153fe26495d45cde20d985380a8b8703bcf17172961b0"
+dependencies = [
+ "async-io",
+ "autocfg",
+ "futures-core",
+ "futures-io",
+ "libc",
+ "signal-hook-registry",
+]
+
+[[package]]
 name = "async-task"
 version = "4.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1311,6 +1325,7 @@ dependencies = [
 name = "tui"
 version = "0.1.0"
 dependencies = [
+ "async-signal",
  "futures",
  "ratatui",
  "smol",
