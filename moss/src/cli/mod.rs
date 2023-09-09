@@ -5,6 +5,7 @@
 use clap::{Arg, ArgAction, Command};
 use thiserror::Error;
 
+mod extract;
 mod info;
 mod inspect;
 mod install;
@@ -23,6 +24,7 @@ fn command() -> Command {
                 .action(ArgAction::SetTrue),
         )
         .arg_required_else_help(true)
+        .subcommand(extract::command())
         .subcommand(info::command())
         .subcommand(inspect::command())
         .subcommand(install::command())
