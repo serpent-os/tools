@@ -833,6 +833,7 @@ dependencies = [
  "diesel",
  "stone",
  "thiserror",
+ "tui",
 ]
 
 [[package]]

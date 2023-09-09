@@ -3,7 +3,7 @@ use std::io::{stdout, Result, Stdout};
 use async_signal::{Signal, Signals};
 use futures::{
     channel::mpsc::{self, Sender},
-    stream, Future, FutureExt, SinkExt, StreamExt,
+    stream, FutureExt, StreamExt,
 };
 pub use ratatui;
 use ratatui::{
@@ -17,9 +17,13 @@ pub mod widget;
 
 pub type Backend = CrosstermBackend<Stdout>;
 
-pub fn run<P: Program, T: Send, F>(mut program: P, f: impl Fn(Handle<P::Message>) -> F) -> Result<T>
+pub fn run<P: Program, T: Send>(
+    mut program: P,
+    f: impl FnOnce(Handle<P::Message>) -> T + Send + Sync + 'static,
+) -> Result<T>
 where
-    F: Future<Output = T> + Send,
+    P::Message: Send + 'static,
+    T: 'static,
 {
     smol::block_on(async move {
         // Ctrl-c capture
@@ -49,7 +53,7 @@ where
         }
 
         // Run task
-        let mut run = f(Handle { sender })
+        let mut run = smol::unblock(move || f(Handle { sender }))
             .boxed()
             .map(Input::<P::Message, _>::Finished)
             .into_stream();
@@ -123,12 +127,12 @@ impl<Message> Clone for Handle<Message> {
 }
 
 impl<Message> Handle<Message> {
-    pub async fn print(&mut self, content: String) {
-        let _ = self.sender.send(Event::Print(content)).await;
+    pub fn print(&mut self, content: String) {
+        let _ = self.sender.try_send(Event::Print(content));
     }
 
-    pub async fn update(&mut self, message: Message) {
-        let _ = self.sender.send(Event::Message(message)).await;
+    pub fn update(&mut self, message: Message) {
+        let _ = self.sender.try_send(Event::Message(message));
     }
 }
 

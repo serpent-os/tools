@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 stone = { version = "0.1.0", path = "../stone" }
+tui = { path = "../tui" }
 
 clap.workspace = true
 diesel.workspace = true 

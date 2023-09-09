@@ -84,6 +84,7 @@ impl<R: Read + Seek> Stone<R> {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Content {
+    pub plain_size: u64,
     offset: u64,
     length: u64,
     compression: Compression,
@@ -152,6 +153,7 @@ impl Payload {
                         reader.seek(SeekFrom::Current(length as i64))?;
 
                         Payload::Content(Content {
+                            plain_size: header.plain_size,
                             offset,
                             length,
                             compression: header.compression,

@@ -1,7 +1,7 @@
+use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use ratatui::prelude::{Constraint, Direction, Layout};
-use smol::Timer;
 use tui::widget::progress;
 use tui::Handle;
 
@@ -9,19 +9,19 @@ fn main() {
     tui::run(Program::default(), run).unwrap();
 }
 
-async fn run(mut handle: Handle<Message>) {
+fn run(mut handle: Handle<Message>) {
     let now = Instant::now();
 
     let mut progress = 0;
 
     loop {
-        handle.print(format!("{:?}", now.elapsed())).await;
+        handle.print(format!("{:?}", now.elapsed()));
 
-        Timer::after(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50));
 
         progress = (progress + 1) % 100;
 
-        handle.update(Message::Progress(progress)).await;
+        handle.update(Message::Progress(progress));
     }
 }
 
