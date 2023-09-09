@@ -2,6 +2,7 @@
 members = [
     "moss",
     "stone",
+    "tui",
 ]
 
 [workspace.package]

@@ -1,0 +1,11 @@
+[package]
+name = "tui"
+version = "0.1.0"
+edition.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+futures = "0.3.28"
+ratatui = "0.23.1-alpha.1"
+smol = "1.3"
