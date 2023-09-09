@@ -11,7 +11,7 @@ use crate::ReadExt;
 pub mod v1;
 
 /// Well defined magic field for a stone header
-pub const STONE_MAGIC: u32 = 0x006d6f73;
+pub const STONE_MAGIC: &[u8; 4] = b"\0mos";
 
 /// Format versions are defined as u32, to allow further mangling in future
 #[repr(u32)]
@@ -65,7 +65,6 @@ impl Header {
     }
 
     pub fn encode(&self) -> AgnosticHeader {
-        let magic = u32::to_be_bytes(STONE_MAGIC);
         let version = u32::to_be_bytes(self.version() as u32);
 
         let data = match self {
@@ -73,7 +72,7 @@ impl Header {
         };
 
         AgnosticHeader {
-            magic,
+            magic: *STONE_MAGIC,
             data,
             version,
         }
@@ -82,7 +81,7 @@ impl Header {
     pub fn decode<R: Read>(reader: R) -> Result<Self, DecodeError> {
         let header = AgnosticHeader::decode(reader)?;
 
-        if STONE_MAGIC != u32::from_be_bytes(header.magic) {
+        if *STONE_MAGIC != header.magic {
             return Err(DecodeError::InvalidMagic);
         }
 
