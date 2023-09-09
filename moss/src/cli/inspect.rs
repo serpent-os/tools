@@ -2,12 +2,13 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::path::PathBuf;
-
 use clap::{arg, ArgMatches, Command};
 use std::fs::File;
+use std::path::PathBuf;
 use stone::payload::meta;
 use thiserror::Error;
+
+const COLUMN_WIDTH: usize = 20;
 
 pub fn command() -> Command {
     Command::new("inspect")
@@ -36,27 +37,45 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
             reader.header.version()
         );
 
+        // Grab deps/providers
+        let mut deps = vec![];
+        let mut provs = vec![];
+
         for record in reader.metadata {
+            let name = format!("{:?}", record.tag);
+
             match record.kind {
-                meta::Kind::Provider(k, p) => println!("Provides: {}({})", k, p),
-                meta::Kind::Dependency(k, d) => println!("Dependency: {}({})", k, d),
-                meta::Kind::String(s) => println!("Record: `{:?}` = {}", record.tag, s),
-                meta::Kind::Int64(i) => {
-                    println!("Record: `{:?}` = {}", record.tag, i);
-                }
-                meta::Kind::Uint64(i) => {
-                    println!("Record: `{:?}` = {}", record.tag, i);
-                }
-                _ => println!("Record: {record:?}"),
+                meta::Kind::Provider(k, p) => deps.push(format!("{}({})", k, p)),
+                meta::Kind::Dependency(k, d) => provs.push(format!("{}({})", k, d)),
+                meta::Kind::String(s) => println!("{:width$} : {}", name, s, width = COLUMN_WIDTH),
+                meta::Kind::Int64(i) => println!("{:width$} : {}", name, i, width = COLUMN_WIDTH),
+                meta::Kind::Uint64(i) => println!("{:width$} : {}", name, i, width = COLUMN_WIDTH),
+                _ => println!("{:width$} : {:?}", name, record, width = COLUMN_WIDTH),
             }
         }
 
-        for entry in reader.layouts {
-            println!(
-                " - /usr/{} - [{:?}]",
-                String::from_utf8_lossy(entry.target.as_slice()),
-                entry.file_type
-            );
+        if !deps.is_empty() {
+            println!("\n{:width$} :", "Dependencies", width = COLUMN_WIDTH);
+            for dep in deps {
+                println!("    - {dep}");
+            }
+        }
+        if !provs.is_empty() {
+            println!("\n{:width$} :", "Providers", width = COLUMN_WIDTH);
+            for prov in provs {
+                println!("    - {prov}");
+            }
+        }
+
+        if !reader.layouts.is_empty() {
+            println!("\n{:width$} :", "Layout entries", width = COLUMN_WIDTH);
+            for entry in reader.layouts {
+                println!(
+                    "     - /usr/{} - [{:?}]",
+                    String::from_utf8_lossy(entry.target.as_slice()),
+                    entry.file_type
+                );
+            }
         }
     }
 
