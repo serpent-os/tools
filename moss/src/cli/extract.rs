@@ -2,7 +2,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::path::PathBuf;
+use std::{
+    fs::{remove_file, File},
+    path::PathBuf,
+};
 
 use clap::{arg, ArgMatches, Command};
 use thiserror::{self, Error};
@@ -22,8 +25,17 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
         .flatten()
         .collect::<Vec<_>>();
 
+    // Begin unpack
     for path in paths {
         println!("Extract: {:?}", path);
+
+        let rdr = File::open(path).map_err(Error::IO)?;
+        let mut reader = stone::read(rdr).map_err(Error::Format)?;
+
+        let mut writer = File::create(".stoneContent")?;
+        reader.unpack_content(reader.content.unwrap(), &mut writer)?;
+
+        remove_file(".stoneContent")?;
     }
 
     Ok(())
