@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
-    fs::{remove_file, File},
-    io::Write,
+    fs::{create_dir_all, remove_file, File},
+    io::{copy, Read, Seek, Write},
     path::PathBuf,
 };
 
@@ -30,6 +30,7 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
 
     tui::run(Program::default(), move |mut handle| {
         // Begin unpack
+        create_dir_all(".stoneStore")?;
         for path in paths {
             handle.print(format!("Extract: {:?}", path));
 
@@ -39,9 +40,24 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
             if let Some(content) = reader.content {
                 let size = content.plain_size;
 
-                let mut writer =
-                    ProgressWriter::new(File::create(".stoneContent")?, size, handle.clone());
+                let mut underfile = File::options()
+                    .read(true)
+                    .write(true)
+                    .create(true)
+                    .open(".stoneContent")?;
+                let mut writer = ProgressWriter::new(&mut underfile, size, handle.clone());
                 reader.unpack_content(reader.content.unwrap(), &mut writer)?;
+
+                // Rewind.
+                underfile.seek(std::io::SeekFrom::Start(0))?;
+
+                // Extract all indices from the `.stoneContent` into hash-indexed unique files
+                for idx in reader.indices {
+                    let mut output = File::create(format!(".stoneStore/{:02x}", idx.digest))?;
+                    let mut split_file: std::io::Take<&mut File> =
+                        (&mut underfile).take(idx.end - idx.start);
+                    copy(&mut split_file, &mut output)?;
+                }
 
                 remove_file(".stoneContent")?;
             }
