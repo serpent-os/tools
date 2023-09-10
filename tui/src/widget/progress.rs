@@ -39,7 +39,7 @@ impl Widget for Progress {
         let space = pct_str.len() as u16;
 
         for i in 0..self.num_bars {
-            let x = area.x + space + i as u16;
+            let x = area.x + space + i;
             let y = area.y;
 
             let char = match self.fill {

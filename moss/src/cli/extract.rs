@@ -10,7 +10,7 @@ use std::{
 
 use clap::{arg, ArgMatches, Command};
 use thiserror::{self, Error};
-use tui::{widget::progress, Constraint, Direction, Frame, Handle, Layout, Rect};
+use tui::{widget::progress, Constraint, Direction, Frame, Handle, Layout};
 
 pub fn command() -> Command {
     Command::new("extract")
