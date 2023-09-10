@@ -40,22 +40,21 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
             if let Some(content) = reader.content {
                 let size = content.plain_size;
 
-                let mut underfile = File::options()
+                let mut content_storage = File::options()
                     .read(true)
                     .write(true)
                     .create(true)
                     .open(".stoneContent")?;
-                let mut writer = ProgressWriter::new(&mut underfile, size, handle.clone());
+                let mut writer = ProgressWriter::new(&mut content_storage, size, handle.clone());
                 reader.unpack_content(reader.content.unwrap(), &mut writer)?;
 
                 // Rewind.
-                underfile.seek(std::io::SeekFrom::Start(0))?;
+                content_storage.seek(std::io::SeekFrom::Start(0))?;
 
                 // Extract all indices from the `.stoneContent` into hash-indexed unique files
                 for idx in reader.indices {
                     let mut output = File::create(format!(".stoneStore/{:02x}", idx.digest))?;
-                    let mut split_file: std::io::Take<&mut File> =
-                        (&mut underfile).take(idx.end - idx.start);
+                    let mut split_file = (&mut content_storage).take(idx.end - idx.start);
                     copy(&mut split_file, &mut output)?;
                 }
 
