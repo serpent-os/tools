@@ -27,13 +27,13 @@ impl Widget for Progress {
             return;
         }
 
-        let pct_str = format!("{:>3}%", (self.pct * 100.0) as u8);
+        let pct_str = format!("{:>3}% |", (self.pct * 100.0) as u8);
 
         buf.set_string(area.x, area.y, &pct_str, Style::default());
 
-        let space = pct_str.len() as u16 + 1;
+        let space = pct_str.len() as u16;
 
-        let num_bars = area.width.saturating_sub(space);
+        let num_bars = area.width.saturating_sub(space + 1);
 
         for i in 0..num_bars {
             let x = area.x + space + i as u16;
@@ -46,6 +46,8 @@ impl Widget for Progress {
 
             buf.get_mut(x, y).set_char(char);
         }
+
+        buf.get_mut(area.right() - 1, area.y).set_char('|');
     }
 }
 

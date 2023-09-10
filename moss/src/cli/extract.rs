@@ -124,7 +124,7 @@ impl tui::Program for Program {
     }
 
     fn draw(&self, frame: &mut ratatui::Frame<tui::Backend>) {
-        const MAX_WIDTH: u16 = 40;
+        const MAX_WIDTH: u16 = 20;
 
         let layout = Layout::new()
             .direction(Direction::Vertical)
@@ -135,7 +135,7 @@ impl tui::Program for Program {
         let width = u16::min(MAX_WIDTH, layout[0].width);
 
         frame.render_widget(
-            progress(self.progress, progress::Fill::AcrossUp),
+            progress(self.progress, progress::Fill::UpAcross),
             Rect { width, ..layout[0] },
         );
     }
