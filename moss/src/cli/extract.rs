@@ -4,7 +4,7 @@
 
 use std::{
     fs::{create_dir_all, remove_file, File},
-    io::{copy, Read, Seek, Write},
+    io::{copy, Read, Seek, SeekFrom, Write},
     path::PathBuf,
 };
 
@@ -49,7 +49,7 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
                 reader.unpack_content(reader.content.unwrap(), &mut writer)?;
 
                 // Rewind.
-                content_storage.seek(std::io::SeekFrom::Start(0))?;
+                content_storage.seek(SeekFrom::Start(0))?;
 
                 // Extract all indices from the `.stoneContent` into hash-indexed unique files
                 for idx in reader.indices {
