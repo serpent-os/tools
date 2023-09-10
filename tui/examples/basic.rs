@@ -55,7 +55,13 @@ impl tui::Program for Program {
             ])
             .split(frame.size());
 
-        frame.render_widget(progress(self.progress, progress::Fill::UpAcross), layout[0]);
-        frame.render_widget(progress(self.progress, progress::Fill::AcrossUp), layout[2]);
+        frame.render_widget(
+            progress(self.progress, progress::Fill::UpAcross, 20),
+            layout[0],
+        );
+        frame.render_widget(
+            progress(self.progress, progress::Fill::AcrossUp, 20),
+            layout[2],
+        );
     }
 }

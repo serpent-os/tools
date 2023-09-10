@@ -117,19 +117,15 @@ impl tui::Program for Program {
     }
 
     fn draw(&self, frame: &mut Frame) {
-        const MAX_WIDTH: u16 = 20;
-
         let layout = Layout::new()
             .direction(Direction::Vertical)
             .vertical_margin(1)
             .constraints([Constraint::Length(1)])
             .split(frame.size());
 
-        let width = u16::min(MAX_WIDTH, layout[0].width);
-
         frame.render_widget(
-            progress(self.progress, progress::Fill::UpAcross),
-            Rect { width, ..layout[0] },
+            progress(self.progress, progress::Fill::UpAcross, 20),
+            layout[0],
         );
     }
 }

@@ -12,13 +12,18 @@ pub enum Fill {
     AcrossUp,
 }
 
-pub fn progress(pct: f32, fill: Fill) -> impl Widget {
-    Progress { pct, fill }
+pub fn progress(pct: f32, fill: Fill, num_bars: u16) -> impl Widget {
+    Progress {
+        pct,
+        fill,
+        num_bars,
+    }
 }
 
 pub struct Progress {
     pct: f32,
     fill: Fill,
+    num_bars: u16,
 }
 
 impl Widget for Progress {
@@ -33,21 +38,19 @@ impl Widget for Progress {
 
         let space = pct_str.len() as u16;
 
-        let num_bars = area.width.saturating_sub(space + 1);
-
-        for i in 0..num_bars {
+        for i in 0..self.num_bars {
             let x = area.x + space + i as u16;
             let y = area.y;
 
             let char = match self.fill {
-                Fill::UpAcross => up_across(self.pct, num_bars, i),
-                Fill::AcrossUp => across_up(self.pct, num_bars, i),
+                Fill::UpAcross => up_across(self.pct, self.num_bars, i),
+                Fill::AcrossUp => across_up(self.pct, self.num_bars, i),
             };
 
             buf.get_mut(x, y).set_char(char);
         }
 
-        buf.get_mut(area.right() - 1, area.y).set_char('|');
+        buf.get_mut(space + self.num_bars, area.y).set_char('|');
     }
 }
 
