@@ -10,14 +10,7 @@ use std::{
 
 use clap::{arg, ArgMatches, Command};
 use thiserror::{self, Error};
-use tui::{
-    ratatui::{
-        self,
-        prelude::{Constraint, Direction, Layout, Rect},
-    },
-    widget::progress,
-    Handle,
-};
+use tui::{widget::progress, Constraint, Direction, Frame, Handle, Layout, Rect};
 
 pub fn command() -> Command {
     Command::new("extract")
@@ -123,7 +116,7 @@ impl tui::Program for Program {
         }
     }
 
-    fn draw(&self, frame: &mut ratatui::Frame<tui::Backend>) {
+    fn draw(&self, frame: &mut Frame) {
         const MAX_WIDTH: u16 = 20;
 
         let layout = Layout::new()

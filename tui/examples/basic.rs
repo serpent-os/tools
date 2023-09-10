@@ -1,9 +1,8 @@
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-use ratatui::prelude::{Constraint, Direction, Layout};
 use tui::widget::progress;
-use tui::Handle;
+use tui::{Constraint, Direction, Frame, Handle, Layout};
 
 fn main() {
     tui::run(Program::default(), run).unwrap();
@@ -45,7 +44,7 @@ impl tui::Program for Program {
         }
     }
 
-    fn draw(&self, frame: &mut ratatui::Frame<tui::Backend>) {
+    fn draw(&self, frame: &mut Frame) {
         let layout = Layout::new()
             .direction(Direction::Vertical)
             .vertical_margin(1)

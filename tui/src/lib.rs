@@ -1,142 +1,16 @@
-use std::io::{stdout, Result, Stdout};
+pub use self::program::Program;
+pub use self::reexport::*;
+pub use self::runtime::{run, Handle};
 
-use async_signal::{Signal, Signals};
-use futures::{
-    channel::mpsc::{self, Sender},
-    stream, FutureExt, StreamExt,
-};
-pub use ratatui;
-use ratatui::{
-    prelude::CrosstermBackend,
-    text::Line,
-    widgets::{Paragraph, Widget},
-    Frame, TerminalOptions, Viewport,
-};
-
+mod program;
+mod runtime;
 pub mod widget;
 
-pub type Backend = CrosstermBackend<Stdout>;
+mod reexport {
+    use std::io::Stdout;
 
-pub fn run<P: Program, T: Send>(
-    mut program: P,
-    f: impl FnOnce(Handle<P::Message>) -> T + Send + Sync + 'static,
-) -> Result<T>
-where
-    P::Message: Send + 'static,
-    T: 'static,
-{
-    smol::block_on(async move {
-        // Ctrl-c capture
-        let ctrl_c = Signals::new([Signal::Int])?;
+    use ratatui::prelude::CrosstermBackend;
+    pub use ratatui::prelude::{Constraint, Direction, Layout, Rect};
 
-        // Setup terminal
-        let mut terminal = ratatui::Terminal::with_options(
-            CrosstermBackend::new(stdout()),
-            TerminalOptions {
-                viewport: Viewport::Inline(P::LINES),
-            },
-        )?;
-
-        // Draw initial view
-        terminal.draw(|frame| {
-            program.draw(frame);
-        })?;
-
-        // Setup channel
-        let (sender, receiver) = mpsc::channel(10);
-
-        // We can receive user event or finished status
-        enum Input<P, T> {
-            Event(Event<P>),
-            Finished(T),
-            Term,
-        }
-
-        // Run task
-        let mut run = smol::unblock(move || f(Handle { sender }))
-            .boxed()
-            .map(Input::<P::Message, _>::Finished)
-            .into_stream();
-        // Channel task
-        let mut receiver = receiver.map(Input::<_, T>::Event);
-        // Ctrl c task
-        let mut ctrl_c = ctrl_c.map(|_| Input::Term);
-
-        loop {
-            // Get next input
-            let input = stream::select(&mut run, stream::select(&mut receiver, &mut ctrl_c))
-                .next()
-                .await
-                .unwrap();
-
-            match input {
-                Input::Event(event) => match event {
-                    Event::Message(message) => {
-                        // Update
-                        program.update(message);
-                        // Draw
-                        terminal.draw(|frame| program.draw(frame))?;
-                    }
-                    Event::Print(content) => {
-                        let lines = content.lines().collect::<Vec<_>>();
-                        let num_lines = lines.len();
-                        let paragraph =
-                            Paragraph::new(lines.into_iter().map(Line::from).collect::<Vec<_>>());
-
-                        terminal.insert_before(num_lines as u16, |buf| {
-                            paragraph.render(buf.area, buf)
-                        })?;
-                        terminal.draw(|frame| program.draw(frame))?;
-                    }
-                },
-                Input::Finished(t) => {
-                    terminal.show_cursor()?;
-                    terminal.clear()?;
-                    return Ok(t);
-                }
-                Input::Term => {
-                    terminal.show_cursor()?;
-                    terminal.clear()?;
-                    std::process::exit(0);
-                }
-            }
-        }
-    })
-}
-
-pub trait Program: Sized {
-    type Message;
-
-    const LINES: u16;
-
-    fn update(&mut self, message: Self::Message);
-
-    fn draw(&self, frame: &mut Frame<Backend>);
-}
-
-pub struct Handle<Message> {
-    sender: Sender<Event<Message>>,
-}
-
-impl<Message> Clone for Handle<Message> {
-    fn clone(&self) -> Self {
-        Self {
-            sender: self.sender.clone(),
-        }
-    }
-}
-
-impl<Message> Handle<Message> {
-    pub fn print(&mut self, content: String) {
-        let _ = self.sender.try_send(Event::Print(content));
-    }
-
-    pub fn update(&mut self, message: Message) {
-        let _ = self.sender.try_send(Event::Message(message));
-    }
-}
-
-enum Event<Message> {
-    Message(Message),
-    Print(String),
+    pub type Frame<'a> = ratatui::Frame<'a, CrosstermBackend<Stdout>>;
 }
