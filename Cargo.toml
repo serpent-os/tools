@@ -9,7 +9,9 @@ members = [
 edition = "2021"
 
 [workspace.dependencies]
+bitflags = "2.4.0"
 clap = "4.4.2"
 diesel = { version = "2.1.1", features = ["sqlite"] }
+itertools = "0.11.0"
 zstd = "0.12.4"
 thiserror = "1"
