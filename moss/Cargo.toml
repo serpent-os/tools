@@ -11,4 +11,6 @@ bitflags.workspace = true
 clap.workspace = true
 diesel.workspace = true 
 itertools.workspace = true
+log.workspace = true
+nix.workspace = true
 thiserror.workspace = true 
