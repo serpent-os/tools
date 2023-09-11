@@ -23,6 +23,23 @@ fn command() -> Command {
                 .long("version")
                 .action(ArgAction::SetTrue),
         )
+        .arg(
+            Arg::new("root")
+                .short('D')
+                .long("directory")
+                .global(true)
+                .help("Root directory")
+                .action(ArgAction::Set)
+                .default_value("/"),
+        )
+        .arg(
+            Arg::new("yes")
+                .short('y')
+                .long("yes-all")
+                .global(true)
+                .help("Assume yes for all questions")
+                .action(ArgAction::SetTrue),
+        )
         .arg_required_else_help(true)
         .subcommand(extract::command())
         .subcommand(info::command())
