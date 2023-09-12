@@ -290,6 +290,11 @@ fn build_entry(package: package::Id, metadata: &[payload::Meta]) -> Result<Entry
     let providers = metadata
         .iter()
         .filter_map(|meta| meta_provider(meta))
+        // Add package name as provider
+        .chain(Some(Provider {
+            kind: dependency::Kind::PackageName,
+            name: name.clone(),
+        }))
         .collect();
 
     Ok(Entry {
