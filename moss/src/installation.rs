@@ -71,6 +71,10 @@ impl Installation {
         }
     }
 
+    pub fn read_only(&self) -> bool {
+        matches!(self.mutability, Mutability::ReadOnly)
+    }
+
     fn moss_path(&self, path: impl AsRef<Path>) -> PathBuf {
         self.root.join(".moss").join(path)
     }
@@ -107,8 +111,11 @@ fn read_state_id(root: &PathBuf) -> Option<db::state::Id> {
     let usr_path = root.join("usr");
     let state_path = root.join("usr").join(".stateID");
 
-    if let Ok(content) = fs::read_to_string(&state_path) {
-        return Some(db::state::Id::from(content));
+    if let Some(id) = fs::read_to_string(&state_path)
+        .ok()
+        .and_then(|s| s.parse::<u32>().ok())
+    {
+        return Some(db::state::Id::from(id));
     } else if let Ok(usr_target) = usr_path.read_link() {
         return read_legacy_state_id(&usr_target);
     }
@@ -120,7 +127,7 @@ fn read_legacy_state_id(usr_target: &PathBuf) -> Option<db::state::Id> {
     if usr_target.ends_with("usr") {
         let parent = usr_target.parent()?;
         let base = parent.file_name()?;
-        let id = base.to_str()?.to_string();
+        let id = base.to_str()?.parse::<u32>().ok()?;
 
         return Some(db::state::Id::from(id));
     }

@@ -32,6 +32,12 @@ impl From<String> for Id {
     }
 }
 
+impl From<Id> for String {
+    fn from(id: Id) -> Self {
+        id.0
+    }
+}
+
 /// The name of a [`Package`]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Name(String);
