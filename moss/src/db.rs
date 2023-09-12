@@ -4,6 +4,7 @@
 
 pub use self::encoding::{Decoder, Encoding};
 
+pub mod meta;
 pub mod state;
 
 mod encoding {
@@ -13,6 +14,7 @@ mod encoding {
     use sqlx::{Sqlite, Type};
 
     use crate::registry::package;
+    use crate::{dependency, Dependency, Provider};
 
     /// Decode from a database type using [`Encoding::decode`]
     #[derive(Debug, Clone, Copy)]
@@ -66,6 +68,32 @@ mod encoding {
 
         fn encode(self) -> Self::Encoded {
             String::from(self)
+        }
+    }
+
+    impl Encoding for Dependency {
+        type Encoded = String;
+        type Error = dependency::ParseError;
+
+        fn decode(encoded: Self::Encoded) -> Result<Self, Self::Error> {
+            encoded.parse()
+        }
+
+        fn encode(self) -> Self::Encoded {
+            self.to_string()
+        }
+    }
+
+    impl Encoding for Provider {
+        type Encoded = String;
+        type Error = dependency::ParseError;
+
+        fn decode(encoded: Self::Encoded) -> Result<Self, Self::Error> {
+            encoded.parse()
+        }
+
+        fn encode(self) -> Self::Encoded {
+            self.to_string()
         }
     }
 }

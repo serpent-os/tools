@@ -11,5 +11,5 @@ CREATE TABLE IF NOT EXISTS state_packages (
     state_id INTEGER NOT NULL,  
     package_id TEXT NOT NULL,
     reason TEXT NULL,
-    FOREIGN KEY(state_id) REFERENCES state(id)
+    FOREIGN KEY(state_id) REFERENCES state(id) ON DELETE CASCADE
 );
