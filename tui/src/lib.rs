@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: Copyright © 2020-2023 Serpent OS Developers
+//
+// SPDX-License-Identifier: MPL-2.0
+
 pub use self::program::Program;
 pub use self::reexport::*;
 pub use self::runtime::{run, Handle};
