@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS state (
     description TEXT NULL
 );
 
-CREATE TABLE IF NOT EXISTS packages (
+CREATE TABLE IF NOT EXISTS state_packages (
     state_id INTEGER NOT NULL,  
     package_id TEXT NOT NULL,
     reason TEXT NULL,

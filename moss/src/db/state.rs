@@ -99,7 +99,7 @@ impl Database {
         let packages_query = sqlx::query_as::<_, encoding::Package>(
             "
             SELECT package_id
-            FROM packages
+            FROM state_packages
             WHERE state_id = ?;
             ",
         )
@@ -150,7 +150,7 @@ impl Database {
             .execute(
                 sqlx::QueryBuilder::new(
                     "
-                    INSERT INTO packages (state_id, package_id, reason)
+                    INSERT INTO state_packages (state_id, package_id, reason)
                     ",
                 )
                 .push_values(packages, |mut b, package| {
