@@ -15,15 +15,15 @@ use crate::Installation;
 
 /// Unique identifier for [`State`]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Id(u32);
+pub struct Id(i64);
 
-impl From<u32> for Id {
-    fn from(id: u32) -> Self {
+impl From<i64> for Id {
+    fn from(id: i64) -> Self {
         Id(id)
     }
 }
 
-impl From<Id> for u32 {
+impl From<Id> for i64 {
     fn from(id: Id) -> Self {
         id.0
     }
@@ -212,15 +212,15 @@ mod encoding {
     }
 
     impl Encoding for Id {
-        type Encoded = i32;
+        type Encoded = i64;
         type Error = Infallible;
 
-        fn decode(value: i32) -> Result<Self, Self::Error> {
-            Ok(Self(value as u32))
+        fn decode(value: i64) -> Result<Self, Self::Error> {
+            Ok(Self(value))
         }
 
-        fn encode(self) -> i32 {
-            self.0 as i32
+        fn encode(self) -> i64 {
+            self.0
         }
     }
 

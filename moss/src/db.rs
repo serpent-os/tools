@@ -48,6 +48,10 @@ mod encoding {
         fn type_info() -> <Sqlite as sqlx::Database>::TypeInfo {
             U::type_info()
         }
+
+        fn compatible(ty: &<Sqlite as sqlx::Database>::TypeInfo) -> bool {
+            U::compatible(ty)
+        }
     }
 
     /** Encoding on external types */

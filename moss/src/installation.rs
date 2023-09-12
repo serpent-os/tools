@@ -113,7 +113,7 @@ fn read_state_id(root: &PathBuf) -> Option<db::state::Id> {
 
     if let Some(id) = fs::read_to_string(&state_path)
         .ok()
-        .and_then(|s| s.parse::<u32>().ok())
+        .and_then(|s| s.parse::<i64>().ok())
     {
         return Some(db::state::Id::from(id));
     } else if let Ok(usr_target) = usr_path.read_link() {
@@ -127,7 +127,7 @@ fn read_legacy_state_id(usr_target: &PathBuf) -> Option<db::state::Id> {
     if usr_target.ends_with("usr") {
         let parent = usr_target.parent()?;
         let base = parent.file_name()?;
-        let id = base.to_str()?.parse::<u32>().ok()?;
+        let id = base.to_str()?.parse::<i64>().ok()?;
 
         return Some(db::state::Id::from(id));
     }

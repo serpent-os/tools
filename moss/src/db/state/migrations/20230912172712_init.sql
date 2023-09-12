@@ -2,7 +2,7 @@
 CREATE TABLE IF NOT EXISTS state (
     id INTEGER PRIMARY KEY AUTOINCREMENT,  
     type TEXT NOT NULL,
-    created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created BIGINT NOT NULL DEFAULT (unixepoch()),
     summary TEXT NULL,
     description TEXT NULL
 );
