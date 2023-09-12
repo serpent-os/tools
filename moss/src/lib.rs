@@ -6,7 +6,6 @@ pub use self::dependency::{Dependency, Provider};
 pub use self::installation::Installation;
 pub use self::registry::Registry;
 
-pub mod cli;
 pub mod client;
 pub mod db;
 pub mod dependency;
