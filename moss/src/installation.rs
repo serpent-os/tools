@@ -91,6 +91,10 @@ impl Installation {
         self.moss_path("assets").join(path)
     }
 
+    pub fn remotes_path(&self, path: impl AsRef<Path>) -> PathBuf {
+        self.moss_path("remotes").join(path)
+    }
+
     pub fn root_path(&self, path: impl AsRef<Path>) -> PathBuf {
         self.moss_path("root").join(path)
     }
@@ -142,6 +146,7 @@ fn ensure_dirs_exist(root: &PathBuf) {
     for path in [
         moss.join("db"),
         moss.join("cache"),
+        moss.join("assets"),
         moss.join("remotes"),
         moss.join("root").join("staging"),
     ] {
