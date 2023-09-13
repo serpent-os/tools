@@ -55,6 +55,7 @@ pub struct Header {
 }
 
 impl Header {
+    /// Size of the encoded payload header in bytes
     pub const SIZE: usize = 8 + 8 + 8 + 4 + 2 + 1 + 1;
 
     pub fn decode<R: Read>(mut reader: R) -> Result<Self, DecodeError> {
