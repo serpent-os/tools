@@ -7,7 +7,7 @@ use std::io::Read;
 use super::{DecodeError, Record};
 use crate::ReadExt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Attribute {
     pub key: Vec<u8>,
     pub value: Vec<u8>,

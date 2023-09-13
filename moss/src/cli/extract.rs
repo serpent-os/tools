@@ -9,6 +9,7 @@ use std::{
 };
 
 use clap::{arg, ArgMatches, Command};
+use stone::read::Payload;
 use thiserror::{self, Error};
 use tui::{widget::progress, Constraint, Direction, Frame, Handle, Layout};
 
@@ -37,7 +38,10 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
             let rdr = File::open(path).map_err(Error::IO)?;
             let mut reader = stone::read(rdr).map_err(Error::Format)?;
 
-            if let Some(content) = reader.content {
+            let payloads = reader.payloads()?.collect::<Result<Vec<_>, _>>()?;
+            let content = payloads.iter().find_map(Payload::content);
+
+            if let Some(content) = content {
                 let size = content.plain_size;
 
                 let mut content_storage = File::options()
@@ -46,13 +50,13 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
                     .create(true)
                     .open(".stoneContent")?;
                 let mut writer = ProgressWriter::new(&mut content_storage, size, handle.clone());
-                reader.unpack_content(reader.content.unwrap(), &mut writer)?;
+                reader.unpack_content(content, &mut writer)?;
 
                 // Rewind.
                 content_storage.seek(SeekFrom::Start(0))?;
 
                 // Extract all indices from the `.stoneContent` into hash-indexed unique files
-                for idx in reader.indices {
+                for idx in payloads.iter().filter_map(Payload::index).flatten() {
                     let mut output = File::create(format!(".stoneStore/{:02x}", idx.digest))?;
                     let mut split_file = (&mut content_storage).take(idx.end - idx.start);
                     copy(&mut split_file, &mut output)?;

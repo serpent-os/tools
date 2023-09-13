@@ -20,9 +20,16 @@ fn read_buffered(path: impl AsRef<Path>) {
 
 fn read<R: Read + Seek>(reader: R) {
     let mut stone = stone::read(reader).unwrap();
-    stone
-        .unpack_content(stone.content.unwrap(), &mut sink())
+
+    let payloads = stone
+        .payloads()
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
         .unwrap();
+
+    if let Some(content) = payloads.iter().find_map(stone::read::Payload::content) {
+        stone.unpack_content(&content, &mut sink()).unwrap();
+    }
 }
 
 fn criterion_benchmark(c: &mut Criterion) {

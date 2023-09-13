@@ -6,6 +6,7 @@ use clap::{arg, ArgMatches, Command};
 use std::fs::File;
 use std::path::PathBuf;
 use stone::payload::meta;
+use stone::read::Payload;
 use thiserror::Error;
 
 const COLUMN_WIDTH: usize = 20;
@@ -30,7 +31,16 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
     // Process each input path in order.
     for path in paths {
         let rdr = File::open(path).map_err(Error::IO)?;
-        let reader = stone::read(rdr).map_err(Error::Format)?;
+        let mut reader = stone::read(rdr).map_err(Error::Format)?;
+
+        let payloads = reader.payloads()?.collect::<Result<Vec<_>, _>>()?;
+
+        let layouts = payloads
+            .iter()
+            .filter_map(Payload::layout)
+            .flatten()
+            .collect::<Vec<_>>();
+
         // Grab the header version
         println!(
             "{path:?} = stone container version {:?}",
@@ -41,10 +51,10 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
         let mut deps = vec![];
         let mut provs = vec![];
 
-        for record in reader.metadata {
+        for record in payloads.iter().filter_map(Payload::meta).flatten() {
             let name = format!("{:?}", record.tag);
 
-            match record.kind {
+            match &record.kind {
                 meta::Kind::Provider(k, p) => deps.push(format!("{}({})", k, p)),
                 meta::Kind::Dependency(k, d) => provs.push(format!("{}({})", k, d)),
                 meta::Kind::String(s) => println!("{:width$} : {}", name, s, width = COLUMN_WIDTH),
@@ -67,9 +77,9 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
             }
         }
 
-        if !reader.layouts.is_empty() {
+        if !layouts.is_empty() {
             println!("\n{:width$} :", "Layout entries", width = COLUMN_WIDTH);
-            for entry in reader.layouts {
+            for entry in layouts {
                 println!(
                     "     - /usr/{} - [{:?}]",
                     String::from_utf8_lossy(entry.target.as_slice()),

@@ -11,7 +11,7 @@ use crate::ReadExt;
 /// strong types and context tags, i.e. their use such as Name.
 /// These record all metadata for every .stone packages and provide
 /// no content
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Meta {
     pub tag: Tag,
     pub kind: Kind,
