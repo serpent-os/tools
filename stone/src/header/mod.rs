@@ -58,6 +58,7 @@ pub enum Header {
 }
 
 impl Header {
+    /// Size of the encoded header in bytes
     pub const SIZE: usize = std::mem::size_of::<AgnosticHeader>();
 
     pub fn version(&self) -> Version {
