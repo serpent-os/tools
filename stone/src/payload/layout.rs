@@ -35,7 +35,7 @@ pub enum FileType {
 }
 
 // TODO: Strong types these fields
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Layout {
     pub uid: u32,
     pub gid: u32,

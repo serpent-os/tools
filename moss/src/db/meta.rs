@@ -440,6 +440,7 @@ mod test {
     use std::str::FromStr;
 
     use futures::executor::block_on;
+    use stone::read::Payload;
 
     use super::*;
 
@@ -454,12 +455,24 @@ mod test {
             let bash_completion =
                 include_bytes!("../../../test/bash-completion-2.11-1-1-x86_64.stone");
 
-            let stone = stone::read_bytes(bash_completion).unwrap();
+            let mut stone = stone::read_bytes(bash_completion).unwrap();
+
+            let payloads = stone
+                .payloads()
+                .unwrap()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            let meta = payloads
+                .iter()
+                .filter_map(Payload::meta)
+                .flatten()
+                .cloned()
+                .collect::<Vec<_>>();
 
             let package = package::Id::from("test".to_string());
 
             let entry = database
-                .load_stone_metadata(package.clone(), &stone.metadata)
+                .load_stone_metadata(package.clone(), &meta)
                 .await
                 .unwrap();
 

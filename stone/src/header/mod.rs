@@ -58,9 +58,17 @@ pub enum Header {
 }
 
 impl Header {
+    pub const SIZE: usize = std::mem::size_of::<AgnosticHeader>();
+
     pub fn version(&self) -> Version {
         match self {
             Header::V1(_) => Version::V1,
+        }
+    }
+
+    pub fn num_payloads(&self) -> u16 {
+        match self {
+            Header::V1(header) => header.num_payloads,
         }
     }
 
