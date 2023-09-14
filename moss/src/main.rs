@@ -2,13 +2,9 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::error::Error;
-
 mod cli;
 
 /// Main entry point
-fn main() -> Result<(), Box<dyn Error>> {
-    cli::process()?;
-
-    Ok(())
+fn main() -> Result<(), cli::Error> {
+    cli::process()
 }
