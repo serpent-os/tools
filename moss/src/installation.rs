@@ -30,14 +30,27 @@ impl fmt::Display for Mutability {
     }
 }
 
+/// An Installation is a general encapsulation pattern for a root filesystem
+/// as seen from moss.
+/// We're largely active in the mutability, path builders and the potential active
+/// state identifier.
 #[derive(Debug, Clone)]
 pub struct Installation {
+    /// Fully qualified rootfs path
     pub root: PathBuf,
+
+    /// Do we have R/W access?
     pub mutability: Mutability,
+
+    /// Detected currently active state (optional)
     pub active_state: Option<db::state::Id>,
 }
 
 impl Installation {
+    /// Open a system root as an Installation type
+    /// This will query the potential active state if found,
+    /// and determine the mutability per the current user identity
+    /// and ACL permissions.
     pub fn open(root: impl Into<PathBuf>) -> Self {
         let root: PathBuf = root.into();
 
@@ -49,6 +62,7 @@ impl Installation {
             warn!("Unable to discover Active State ID");
         }
 
+        // Root? Always RW. Otherwise, check access for W
         let mutability = if Uid::effective().is_root() {
             Mutability::ReadWrite
         } else if access(&root, AccessFlags::W_OK).is_ok() {
@@ -71,38 +85,47 @@ impl Installation {
         }
     }
 
+    /// Return true if we lack write access
     pub fn read_only(&self) -> bool {
         matches!(self.mutability, Mutability::ReadOnly)
     }
 
+    // Helper to form paths
     fn moss_path(&self, path: impl AsRef<Path>) -> PathBuf {
         self.root.join(".moss").join(path)
     }
 
+    /// Build a database path relative to the moss root
     pub fn db_path(&self, path: impl AsRef<Path>) -> PathBuf {
         self.moss_path("db").join(path)
     }
 
+    /// Build a cache path relative to the moss root
     pub fn cache_path(&self, path: impl AsRef<Path>) -> PathBuf {
         self.moss_path("cache").join(path)
     }
 
+    /// Build an asset path relative to the moss root
     pub fn assets_path(&self, path: impl AsRef<Path>) -> PathBuf {
         self.moss_path("assets").join(path)
     }
 
+    /// Build a remotes path relative to the root
     pub fn remotes_path(&self, path: impl AsRef<Path>) -> PathBuf {
         self.moss_path("remotes").join(path)
     }
 
+    /// Build a path relative to the moss system roots tree
     pub fn root_path(&self, path: impl AsRef<Path>) -> PathBuf {
         self.moss_path("root").join(path)
     }
 
+    /// Build a staging path for in-progress system root transactions
     pub fn staging_path(&self, path: impl AsRef<Path>) -> PathBuf {
         self.root_path("staging").join(path)
     }
 
+    /// Return the staging directory itself
     pub fn staging_dir(&self) -> PathBuf {
         self.root_path("staging")
     }
@@ -127,6 +150,7 @@ fn read_state_id(root: &PathBuf) -> Option<db::state::Id> {
     None
 }
 
+// Legacy `/usr` link support
 fn read_legacy_state_id(usr_target: &PathBuf) -> Option<db::state::Id> {
     if usr_target.ends_with("usr") {
         let parent = usr_target.parent()?;
