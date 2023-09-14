@@ -14,5 +14,7 @@ itertools.workspace = true
 futures.workspace = true
 log.workspace = true
 nix.workspace = true
+serde.workspace = true
+serde_yaml.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true 
