@@ -16,36 +16,7 @@ mod zstd;
 pub fn read<R: Read + Seek>(mut reader: R) -> Result<Stone<R>, Error> {
     let header = Header::decode(&mut reader).map_err(Error::HeaderDecode)?;
 
-    let mut metadata = vec![];
-    let mut attributes = vec![];
-    let mut layouts = vec![];
-    let mut indices = vec![];
-    let mut content = None;
-
-    while let Some(payload) = Payload::decode(&mut reader)? {
-        match payload {
-            Payload::Meta(m) => metadata.extend(m),
-            Payload::Attributes(a) => attributes.extend(a),
-            Payload::Layout(l) => layouts.extend(l),
-            Payload::Index(i) => indices.extend(i),
-            Payload::Content(c) => {
-                if content.is_some() {
-                    return Err(Error::MultipleContent);
-                }
-                content = Some(c);
-            }
-        }
-    }
-
-    Ok(Stone {
-        reader,
-        header,
-        metadata,
-        attributes,
-        layouts,
-        indices,
-        content,
-    })
+    Ok(Stone { header, reader })
 }
 
 pub fn read_bytes(bytes: &[u8]) -> Result<Stone<Cursor<&[u8]>>, Error> {
@@ -53,19 +24,24 @@ pub fn read_bytes(bytes: &[u8]) -> Result<Stone<Cursor<&[u8]>>, Error> {
 }
 
 pub struct Stone<R> {
-    reader: R,
     pub header: Header,
-    pub metadata: Vec<Meta>,
-    pub attributes: Vec<Attribute>,
-    pub layouts: Vec<Layout>,
-    pub indices: Vec<Index>,
-    pub content: Option<Content>,
+    reader: R,
 }
 
 impl<R: Read + Seek> Stone<R> {
+    pub fn payloads(&mut self) -> Result<impl Iterator<Item = Result<Payload, Error>> + '_, Error> {
+        if self.reader.stream_position()? != Header::SIZE as u64 {
+            // Rewind to start of payloads
+            self.reader.seek(SeekFrom::Start(Header::SIZE as u64))?;
+        }
+
+        Ok((0..self.header.num_payloads())
+            .flat_map(|_| Payload::decode(&mut self.reader).transpose()))
+    }
+
     pub fn unpack_content<W: Write>(
         &mut self,
-        content: Content,
+        content: &Content,
         writer: &mut W,
     ) -> Result<(), Error>
     where
@@ -114,7 +90,7 @@ impl<R: Read> Read for PayloadReader<R> {
 }
 
 #[derive(Debug)]
-enum Payload {
+pub enum Payload {
     Meta(Vec<Meta>),
     Attributes(Vec<Attribute>),
     Layout(Vec<Layout>),
@@ -172,6 +148,46 @@ impl Payload {
             Err(error) => Err(Error::PayloadDecode(error)),
         }
     }
+
+    pub fn meta(&self) -> Option<&[Meta]> {
+        if let Self::Meta(meta) = self {
+            Some(meta)
+        } else {
+            None
+        }
+    }
+
+    pub fn attributes(&self) -> Option<&[Attribute]> {
+        if let Self::Attributes(attributes) = self {
+            Some(attributes)
+        } else {
+            None
+        }
+    }
+
+    pub fn layout(&self) -> Option<&[Layout]> {
+        if let Self::Layout(layouts) = self {
+            Some(layouts)
+        } else {
+            None
+        }
+    }
+
+    pub fn index(&self) -> Option<&[Index]> {
+        if let Self::Index(indicies) = self {
+            Some(indicies)
+        } else {
+            None
+        }
+    }
+
+    pub fn content(&self) -> Option<&Content> {
+        if let Self::Content(content) = self {
+            Some(content)
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Error)]
@@ -214,22 +230,32 @@ mod test {
         .expect("valid stone");
         assert_eq!(stone.header.version(), header::Version::V1);
 
-        let mut content = vec![];
-        stone
-            .unpack_content(stone.content.unwrap(), &mut content)
-            .expect("valid content");
+        let payloads = stone
+            .payloads()
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .expect("seek payloads");
 
-        for index in stone.indices {
-            let content = &content[index.start as usize..index.end as usize];
-            let digest = xxh3_128(content);
-            assert_eq!(digest, index.digest);
+        let mut unpacked_content = vec![];
 
-            let layout = stone
-                .layouts
-                .iter()
-                .find(|layout| layout.source.as_deref() == Some(&index.digest.to_be_bytes()))
-                .expect("layout exists");
-            assert_eq!(layout.file_type, FileType::Regular);
+        if let Some(content) = payloads.iter().find_map(Payload::content) {
+            stone
+                .unpack_content(content, &mut unpacked_content)
+                .expect("valid content");
+
+            for index in payloads.iter().filter_map(Payload::index).flatten() {
+                let content = &unpacked_content[index.start as usize..index.end as usize];
+                let digest = xxh3_128(content);
+                assert_eq!(digest, index.digest);
+
+                let layout = payloads
+                    .iter()
+                    .filter_map(Payload::layout)
+                    .flatten()
+                    .find(|layout| layout.source.as_deref() == Some(&index.digest.to_be_bytes()))
+                    .expect("layout exists");
+                assert_eq!(layout.file_type, FileType::Regular);
+            }
         }
     }
 }
