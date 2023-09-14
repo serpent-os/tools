@@ -9,17 +9,35 @@ use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Kind {
+    /// Name based dependency
     PackageName,
+
+    /// Shared library (soname)
     SharedLibary,
+
+    /// Exported pkg-config provider
     PkgConfig,
+
+    /// PT_INTERP, or specialist shell support
     Interpreter,
+
+    /// CMake module dependency
     CMake,
+
+    /// Python dependency (unused)
     Python,
+
+    /// Executable in /usr/bin
     Binary,
+
+    /// Executable in /usr/sbin
     SystemBinary,
+
+    /// Exported 32-bit pkgconfig provider
     PkgConfig32,
 }
 
+/// Custom pretty-print, i.e `pkgconfig(zlib)`
 impl fmt::Display for Kind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -36,6 +54,7 @@ impl fmt::Display for Kind {
     }
 }
 
+/// Decode a name into a Kind (yaml helper)
 impl FromStr for Kind {
     type Err = ParseError;
 
@@ -55,6 +74,7 @@ impl FromStr for Kind {
     }
 }
 
+/// Convert payload dependency types to our internal representation
 impl From<payload::meta::Dependency> for Kind {
     fn from(dependency: payload::meta::Dependency) -> Self {
         match dependency {
@@ -71,12 +91,18 @@ impl From<payload::meta::Dependency> for Kind {
     }
 }
 
+/// A Dependency in moss is simplistic in that it only contains
+/// a target and a Kind, ie. `pkgconfig(zlib)`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Dependency {
+    /// Tag for the table-type of dependency
     pub kind: Kind,
+
+    /// Bare target
     pub name: String,
 }
 
+/// Pretty-printing of dependencies (e.g.: `binary(whoami)`)
 impl fmt::Display for Dependency {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}({})", self.kind, self.name)

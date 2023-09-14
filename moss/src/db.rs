@@ -58,6 +58,7 @@ mod encoding {
 
     /** Encoding on external types */
 
+    /// Encoding of package identity (String)
     impl Encoding for package::Id {
         type Encoded = String;
         type Error = Infallible;
@@ -71,6 +72,7 @@ mod encoding {
         }
     }
 
+    /// Encoding of Dependency type
     impl Encoding for Dependency {
         type Encoded = String;
         type Error = dependency::ParseError;
@@ -84,6 +86,7 @@ mod encoding {
         }
     }
 
+    /// Encoding of Provider type
     impl Encoding for Provider {
         type Encoded = String;
         type Error = dependency::ParseError;
