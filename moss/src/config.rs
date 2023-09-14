@@ -3,11 +3,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
+    fmt,
     fs::{self, File},
+    io,
     path::{Path, PathBuf},
 };
 
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Serialize};
+use thiserror::Error;
 
 const EXTENSION: &str = "conf";
 
@@ -30,6 +33,30 @@ pub fn load<T: Config>(root: impl AsRef<Path>) -> Option<T> {
     .flat_map(|(base, search)| enumerate_paths(search, &root, base, &domain))
     .filter_map(read_config)
     .reduce(T::merge)
+}
+
+pub fn save<T: Config + Serialize>(
+    root: impl AsRef<Path>,
+    name: impl fmt::Display,
+    config: &T,
+) -> Result<(), SaveError> {
+    let domain = T::domain();
+
+    let path = domain_dir(root, Base::Admin, &domain).join(format!("{name}.{EXTENSION}"));
+
+    let serialized = serde_yaml::to_string(config)?;
+
+    fs::write(&path, serialized).map_err(|io| SaveError::Write(path, io))?;
+
+    Ok(())
+}
+
+#[derive(Debug, Error)]
+pub enum SaveError {
+    #[error("failed to serialize config as yaml: {0}")]
+    Yaml(#[from] serde_yaml::Error),
+    #[error("failed to write config file at {0:?}: {1}")]
+    Write(PathBuf, io::Error),
 }
 
 fn enumerate_paths(
@@ -83,7 +110,7 @@ fn domain_dir(root: impl AsRef<Path>, base: Base, domain: &str) -> PathBuf {
     root.as_ref()
         .join(base.path())
         .join("moss")
-        .join(format!("{domain}.d"))
+        .join(format!("{domain}.{EXTENSION}.d"))
 }
 
 fn read_config<T: Config>(path: PathBuf) -> Option<T> {
@@ -110,3 +137,5 @@ enum Search {
     File,
     Directory,
 }
+
+mod test {}
