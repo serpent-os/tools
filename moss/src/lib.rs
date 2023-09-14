@@ -13,3 +13,4 @@ pub mod db;
 pub mod dependency;
 pub mod installation;
 pub mod registry;
+pub mod remote;

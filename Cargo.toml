@@ -18,6 +18,8 @@ log = "0.4"
 nix = { version = "0.27.1", features = ["user", "fs"] }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
-sqlx = { version = "0.7.1", features = ["sqlite", "chrono", "runtime-async-std"] }
+sqlx = { version = "0.7.1", features = ["sqlite", "chrono", "runtime-tokio"] }
 thiserror = "1"
+tokio = { version = "1.32", features = ["signal", "rt", "sync"] }
+tokio-stream = { version = "0.1.14", feature = ["time"] }
 zstd = "0.12.4"
