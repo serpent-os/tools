@@ -5,7 +5,7 @@
 use clap::{ArgMatches, Command};
 use thiserror::Error;
 
-use crate::client::{self, Client};
+use moss::client::{self, Client};
 
 pub fn command() -> Command {
     Command::new("list")

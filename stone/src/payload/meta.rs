@@ -174,6 +174,9 @@ impl Record for Meta {
         let kind = reader.read_u8()?;
         let _padding = reader.read_array::<1>()?;
 
+        // Remove null terminated byte from string
+        let sanitize = |s: String| s.trim_end_matches('\0').to_string();
+
         let kind = match kind {
             1 => Kind::Int8(reader.read_u8()? as i8),
             2 => Kind::Uint8(reader.read_u8()?),
@@ -183,16 +186,16 @@ impl Record for Meta {
             6 => Kind::Uint32(reader.read_u32()?),
             7 => Kind::Int64(reader.read_u64()? as i64),
             8 => Kind::Uint64(reader.read_u64()?),
-            9 => Kind::String(reader.read_string(length as u64)?),
+            9 => Kind::String(sanitize(reader.read_string(length as u64)?)),
             10 => Kind::Dependency(
                 // DependencyKind u8 subtracted from length
                 decode_dependency(reader.read_u8()?)?,
-                reader.read_string(length as u64 - 1)?,
+                sanitize(reader.read_string(length as u64 - 1)?),
             ),
             11 => Kind::Provider(
                 // DependencyKind u8 subtracted from length
                 decode_dependency(reader.read_u8()?)?,
-                reader.read_string(length as u64 - 1)?,
+                sanitize(reader.read_string(length as u64 - 1)?),
             ),
             k => return Err(DecodeError::UnknownMetaKind(k)),
         };

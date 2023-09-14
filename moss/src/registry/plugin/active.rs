@@ -2,6 +2,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-pub use self::progress::progress;
-
-pub mod progress;
+// TODO:
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Plugin;

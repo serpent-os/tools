@@ -4,7 +4,7 @@
 
 use std::error::Error;
 
-use moss::cli;
+mod cli;
 
 /// Main entry point
 fn main() -> Result<(), Box<dyn Error>> {

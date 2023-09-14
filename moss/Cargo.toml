@@ -7,6 +7,12 @@ edition.workspace = true
 stone = { version = "0.1.0", path = "../stone" }
 tui = { path = "../tui" }
 
+bitflags.workspace = true
+chrono.workspace = true
 clap.workspace = true
-diesel.workspace = true 
+itertools.workspace = true
+futures.workspace = true
+log.workspace = true
+nix.workspace = true
+sqlx.workspace = true
 thiserror.workspace = true 

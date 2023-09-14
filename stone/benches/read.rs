@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: Copyright © 2020-2023 Serpent OS Developers
+//
+// SPDX-License-Identifier: MPL-2.0
+
 use std::{
     fs::File,
     io::{sink, BufReader, Read, Seek},
@@ -23,10 +27,10 @@ fn read<R: Read + Seek>(reader: R) {
 
 fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("read unbuffered", |b| {
-        b.iter(|| read_unbuffered(black_box("test/bash-completion-2.11-1-1-x86_64.stone")))
+        b.iter(|| read_unbuffered(black_box("../test/bash-completion-2.11-1-1-x86_64.stone")))
     });
     c.bench_function("read buffered", |b| {
-        b.iter(|| read_buffered(black_box("test/bash-completion-2.11-1-1-x86_64.stone")))
+        b.iter(|| read_buffered(black_box("../test/bash-completion-2.11-1-1-x86_64.stone")))
     });
 }
 
