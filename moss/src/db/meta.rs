@@ -48,7 +48,7 @@ pub struct Entry {
     pub download_size: Option<u64>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Database {
     pool: Pool<Sqlite>,
 }
@@ -57,6 +57,7 @@ impl Database {
     pub async fn new(path: impl AsRef<Path>, read_only: bool) -> Result<Self, Error> {
         let options = sqlx::sqlite::SqliteConnectOptions::new()
             .filename(path)
+            .create_if_missing(true)
             .read_only(read_only)
             .foreign_keys(true);
 
@@ -148,12 +149,8 @@ impl Database {
     }
 
     // TODO: Make more safe, this module shouldn't deal w/ metadata. Caller should convert to Entry
-    pub async fn load_stone_metadata(
-        &self,
-        id: package::Id,
-        metadata: &[payload::Meta],
-    ) -> Result<Entry, Error> {
-        let entry = build_entry(id, metadata)?;
+    pub async fn load_stone_metadata(&self, metadata: &[payload::Meta]) -> Result<Entry, Error> {
+        let entry = build_entry(metadata)?;
 
         let mut transaction = self.pool.begin().await?;
 
@@ -265,7 +262,7 @@ async fn remove(package: package::Id, connection: &mut SqliteConnection) -> Resu
     Ok(())
 }
 
-fn build_entry(package: package::Id, metadata: &[payload::Meta]) -> Result<Entry, Error> {
+fn build_entry(metadata: &[payload::Meta]) -> Result<Entry, Error> {
     let name = required_meta_string(metadata, payload::meta::Tag::Name)?;
     let version_identifier = required_meta_string(metadata, payload::meta::Tag::Version)?;
     let source_release = required_meta_u64(metadata, payload::meta::Tag::Release)?;
@@ -278,6 +275,8 @@ fn build_entry(package: package::Id, metadata: &[payload::Meta]) -> Result<Entry
     let uri = required_meta_string(metadata, payload::meta::Tag::PackageURI).ok();
     let hash = required_meta_string(metadata, payload::meta::Tag::PackageHash).ok();
     let download_size = required_meta_u64(metadata, payload::meta::Tag::PackageSize).ok();
+
+    let package = package::Id::from(hash.as_ref().unwrap_or(&name).clone());
 
     let licenses = metadata
         .iter()
@@ -471,10 +470,7 @@ mod test {
 
             let package = package::Id::from("test".to_string());
 
-            let entry = database
-                .load_stone_metadata(package.clone(), &meta)
-                .await
-                .unwrap();
+            let entry = database.load_stone_metadata(&meta).await.unwrap();
 
             assert_eq!(entry.name, "bash-completion".to_string());
 

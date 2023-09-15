@@ -42,7 +42,11 @@ pub fn save<T: Config + Serialize>(
 ) -> Result<(), SaveError> {
     let domain = T::domain();
 
-    let path = domain_dir(root, Base::Admin, &domain).join(format!("{name}.{EXTENSION}"));
+    let dir = domain_dir(root, Base::Admin, &domain);
+
+    fs::create_dir_all(&dir).map_err(|io| SaveError::CreateDir(dir.clone(), io))?;
+
+    let path = dir.join(format!("{name}.{EXTENSION}"));
 
     let serialized = serde_yaml::to_string(config)?;
 
@@ -53,6 +57,8 @@ pub fn save<T: Config + Serialize>(
 
 #[derive(Debug, Error)]
 pub enum SaveError {
+    #[error("could not create config dir {0:?}: {1}")]
+    CreateDir(PathBuf, io::Error),
     #[error("failed to serialize config as yaml: {0}")]
     Yaml(#[from] serde_yaml::Error),
     #[error("failed to write config file at {0:?}: {1}")]
@@ -137,5 +143,3 @@ enum Search {
     File,
     Directory,
 }
-
-mod test {}

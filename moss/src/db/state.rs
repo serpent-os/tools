@@ -74,6 +74,7 @@ impl Database {
 
         let options = sqlx::sqlite::SqliteConnectOptions::new()
             .filename(path)
+            .create_if_missing(true)
             .read_only(installation.read_only())
             .foreign_keys(true);
 

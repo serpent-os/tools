@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::path::PathBuf;
+
 use clap::{Arg, ArgAction, Command};
 use thiserror::Error;
 
@@ -10,6 +12,7 @@ mod info;
 mod inspect;
 mod install;
 mod list;
+mod remote;
 mod remove;
 mod version;
 
@@ -30,7 +33,8 @@ fn command() -> Command {
                 .global(true)
                 .help("Root directory")
                 .action(ArgAction::Set)
-                .default_value("/"),
+                .default_value("/")
+                .value_parser(clap::value_parser!(PathBuf)),
         )
         .arg(
             Arg::new("yes")
@@ -48,6 +52,7 @@ fn command() -> Command {
         .subcommand(list::command())
         .subcommand(remove::command())
         .subcommand(version::command())
+        .subcommand(remote::command())
 }
 
 /// Process all CLI arguments
@@ -57,6 +62,9 @@ pub fn process() -> Result<(), Error> {
         version::print();
         return Ok(());
     }
+
+    let root = matches.get_one::<PathBuf>("root").unwrap();
+
     match command().get_matches().subcommand() {
         Some(("extract", args)) => extract::handle(args).map_err(Error::Extract),
         Some(("inspect", args)) => inspect::handle(args).map_err(Error::Inspect),
@@ -65,6 +73,7 @@ pub fn process() -> Result<(), Error> {
             Ok(())
         }
         Some(("list", a)) => list::handle(a).map_err(Error::List),
+        Some(("remote", a)) => remote::handle(a, root).map_err(Error::Remote),
         _ => unreachable!(),
     }
 }
@@ -79,4 +88,7 @@ pub enum Error {
 
     #[error("error in extraction: {0}")]
     Extract(#[from] extract::Error),
+
+    #[error("error handling remote: {0}")]
+    Remote(#[from] remote::Error),
 }

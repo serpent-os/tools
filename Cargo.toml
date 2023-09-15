@@ -16,10 +16,12 @@ itertools = "0.11.0"
 futures = "0.3.28"
 log = "0.4"
 nix = { version = "0.27.1", features = ["user", "fs"] }
+reqwest = { version = "0.11.20", features = ["tokio-rustls", "rustls", "hyper-rustls", "stream"] }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
 sqlx = { version = "0.7.1", features = ["sqlite", "chrono", "runtime-tokio"] }
 thiserror = "1"
-tokio = { version = "1.32", features = ["signal", "rt", "sync"] }
+tokio = { version = "1.32", features = ["signal", "rt", "sync", "fs"] }
 tokio-stream = { version = "0.1.14", feature = ["time"] }
+url = { version = "2.4.1", features = ["serde"] }
 zstd = "0.12.4"
