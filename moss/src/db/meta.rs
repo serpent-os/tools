@@ -72,6 +72,12 @@ impl Database {
         Ok(Self { pool })
     }
 
+    pub async fn wipe(&self) -> Result<(), Error> {
+        // Other tables cascade delete so we only need to truncate `meta`
+        sqlx::query("DELETE FROM meta;").execute(&self.pool).await?;
+        Ok(())
+    }
+
     pub async fn get(&self, package: &package::Id) -> Result<Entry, Error> {
         let entry_query = sqlx::query_as::<_, encoding::Entry>(
             "
@@ -438,49 +444,51 @@ mod encoding {
 mod test {
     use std::str::FromStr;
 
-    use futures::executor::block_on;
     use stone::read::Payload;
 
     use super::*;
 
-    #[test]
-    fn create_insert_select() {
-        block_on(async {
-            let database =
-                Database::connect(SqliteConnectOptions::from_str("sqlite::memory:").unwrap())
-                    .await
-                    .unwrap();
-
-            let bash_completion =
-                include_bytes!("../../../test/bash-completion-2.11-1-1-x86_64.stone");
-
-            let mut stone = stone::read_bytes(bash_completion).unwrap();
-
-            let payloads = stone
-                .payloads()
-                .unwrap()
-                .collect::<Result<Vec<_>, _>>()
-                .unwrap();
-            let meta = payloads
-                .iter()
-                .filter_map(Payload::meta)
-                .flatten()
-                .cloned()
-                .collect::<Vec<_>>();
-
-            let package = package::Id::from("test".to_string());
-
-            let entry = database.load_stone_metadata(&meta).await.unwrap();
-
-            assert_eq!(entry.name, "bash-completion".to_string());
-
-            remove(package.clone(), &mut database.pool.acquire().await.unwrap())
+    #[tokio::test]
+    async fn create_insert_select() {
+        let database =
+            Database::connect(SqliteConnectOptions::from_str("sqlite::memory:").unwrap())
                 .await
                 .unwrap();
 
-            let result = database.get(&package).await;
+        let bash_completion = include_bytes!("../../../test/bash-completion-2.11-1-1-x86_64.stone");
 
-            assert!(result.is_err());
-        });
+        let mut stone = stone::read_bytes(bash_completion).unwrap();
+
+        let payloads = stone
+            .payloads()
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let meta = payloads
+            .iter()
+            .filter_map(Payload::meta)
+            .flatten()
+            .cloned()
+            .collect::<Vec<_>>();
+
+        let package = package::Id::from("test".to_string());
+
+        let entry = database.load_stone_metadata(&meta).await.unwrap();
+
+        assert_eq!(entry.name, "bash-completion".to_string());
+
+        remove(package.clone(), &mut database.pool.acquire().await.unwrap())
+            .await
+            .unwrap();
+
+        let result = database.get(&package).await;
+
+        assert!(result.is_err());
+
+        // Test wipe
+        database.load_stone_metadata(&meta).await.unwrap();
+        database.wipe().await.unwrap();
+        let result = database.get(&package).await;
+        assert!(result.is_err());
     }
 }

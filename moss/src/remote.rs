@@ -116,6 +116,9 @@ async fn refresh_index_file(
     // Fetch index & write to `out_path`
     repository::fetch_index(state.repository.url.clone(), &out_path).await?;
 
+    // Wipe db since we're refreshing from a new index file
+    state.db.wipe().await?;
+
     // Take ownership, thread needs 'static / owned data
     let db = state.db.clone();
 
