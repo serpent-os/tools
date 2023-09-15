@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: '30 2 * * *'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: Build & Test Project
+
+    steps:
+    - name: Checkout source
+      uses: actions/checkout@v3
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+
+    - name: Check Formatting
+      run: cargo fmt --all -- --check
+
+    - name: Cargo Cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          target/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Build project
+      run: cargo build
+
+    - name: Test project
+      run: cargo test
+
+    - name: Run clippy
+      uses: giraffate/clippy-action@v1
+      with:
+        reporter: 'github-pr-check'
+        clippy_flags: --no-deps
+        filter_mode: nofilter
+        github_token: ${{ secrets.GITHUB_TOKEN }}
