@@ -16,7 +16,7 @@ itertools = "0.11.0"
 futures = "0.3.28"
 log = "0.4"
 nix = { version = "0.27.1", features = ["user", "fs"] }
-reqwest = { version = "0.11.20", features = ["tokio-rustls", "rustls", "hyper-rustls", "stream"] }
+reqwest = { version = "0.11.20", default-features = false, features = ["rustls-tls", "stream"] }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
 sqlx = { version = "0.7.1", features = ["sqlite", "chrono", "runtime-tokio"] }
