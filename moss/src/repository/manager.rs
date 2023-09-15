@@ -13,18 +13,16 @@ use tokio::{fs, io, task};
 use crate::db::meta;
 use crate::{config, Installation};
 
-pub use self::repository::Repository;
+use crate::repository::{self, Repository};
 
-pub mod repository;
-
-/// Manage a bunch of remote repositories
-pub struct Remote {
+/// Manage a bunch of repositories
+pub struct Manager {
     installation: Installation,
     repositories: HashMap<repository::Id, State>,
 }
 
-impl Remote {
-    /// Create a [`Remote`] for the supplied [`Installation`]
+impl Manager {
+    /// Create a [`Manager`] for the supplied [`Installation`]
     pub async fn new(installation: Installation) -> Result<Self, Error> {
         // Load all configs, default if none exist
         let configs = config::load::<repository::Map>(&installation.root)
@@ -76,7 +74,7 @@ impl Remote {
     pub async fn remove_repository(&mut self, id: repository::Id) -> Result<(), Error> {
         self.repositories.remove(&id);
 
-        let path = self.installation.remotes_path(id.to_string());
+        let path = self.installation.repo_path(id.to_string());
 
         fs::remove_dir_all(path).await.map_err(Error::RemoveDir)?;
 
@@ -114,7 +112,7 @@ async fn open_meta_db(
     id: &repository::Id,
     installation: &Installation,
 ) -> Result<meta::Database, Error> {
-    let dir = installation.remotes_path(id.to_string());
+    let dir = installation.repo_path(id.to_string());
 
     fs::create_dir_all(&dir).await.map_err(Error::CreateDir)?;
 
@@ -124,14 +122,14 @@ async fn open_meta_db(
 }
 
 /// Fetches a stone index file from the repository URL,
-/// saves it to the remote installation path, then
+/// saves it to the repo installation path, then
 /// loads it's metadata into the meta db
 async fn refresh_index(
     id: &repository::Id,
     state: &State,
     installation: &Installation,
 ) -> Result<(), Error> {
-    let out_dir = installation.remotes_path(id.to_string());
+    let out_dir = installation.repo_path(id.to_string());
 
     fs::create_dir_all(&out_dir)
         .await
@@ -140,7 +138,7 @@ async fn refresh_index(
     let out_path = out_dir.join("stone.index");
 
     // Fetch index & write to `out_path`
-    repository::fetch_index(state.repository.url.clone(), &out_path).await?;
+    repository::fetch_index(state.repository.uri.clone(), &out_path).await?;
 
     // Wipe db since we're refreshing from a new index file
     state.db.wipe().await?;

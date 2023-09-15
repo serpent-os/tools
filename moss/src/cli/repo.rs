@@ -5,57 +5,54 @@
 use std::path::{Path, PathBuf};
 
 use clap::{arg, ArgMatches, Command};
-use moss::{
-    remote::{self, repository, Repository},
-    Installation, Remote,
-};
+use moss::{repository, Installation, Repository};
 use thiserror::Error;
 use tokio::runtime;
 use url::Url;
 
 pub fn command() -> Command {
-    Command::new("remote")
+    Command::new("repo")
         .about("...")
         .long_about("...")
-        .arg(arg!(<NAME> "remote name").value_parser(clap::value_parser!(String)))
-        .arg(arg!(<URL> "remote url").value_parser(clap::value_parser!(Url)))
+        .arg(arg!(<NAME> "repo name").value_parser(clap::value_parser!(String)))
+        .arg(arg!(<URI> "repo uri").value_parser(clap::value_parser!(Url)))
 }
 
 pub fn handle(args: &ArgMatches, root: &PathBuf) -> Result<(), Error> {
     let name = args.get_one::<String>("NAME").cloned().unwrap();
-    let url = args.get_one::<Url>("URL").cloned().unwrap();
+    let uri = args.get_one::<Url>("URI").cloned().unwrap();
 
     let rt = runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .unwrap();
 
-    rt.block_on(add(root, name, url))
+    rt.block_on(add(root, name, uri))
 }
 
-async fn add(root: &Path, name: String, url: Url) -> Result<(), Error> {
+async fn add(root: &Path, name: String, uri: Url) -> Result<(), Error> {
     let installation = Installation::open(root);
 
-    let mut remote = Remote::new(installation).await?;
+    let mut manager = repository::Manager::new(installation).await?;
 
-    remote
+    manager
         .add_repository(
             repository::Id::new(name),
             Repository {
                 description: "...".into(),
-                url,
+                uri,
                 priority: 0,
             },
         )
         .await?;
 
-    remote.refresh_all().await?;
+    manager.refresh_all().await?;
 
     Ok(())
 }
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("remote error: {0}")]
-    Remote(#[from] remote::Error),
+    #[error("repo error: {0}")]
+    RepositoryManager(#[from] repository::manager::Error),
 }

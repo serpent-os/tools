@@ -15,6 +15,10 @@ use url::Url;
 
 use crate::Config;
 
+pub use self::manager::Manager;
+
+pub mod manager;
+
 /// A unique [`Repository`] identifier
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Id(String);
@@ -40,7 +44,7 @@ impl fmt::Display for Id {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Repository {
     pub description: String,
-    pub url: Url,
+    pub uri: Url,
     pub priority: u64,
 }
 
@@ -68,7 +72,7 @@ impl Map {
 
 impl Config for Map {
     fn domain() -> String {
-        "repos".into()
+        "repo".into()
     }
 
     fn merge(self, other: Self) -> Self {
@@ -76,7 +80,7 @@ impl Config for Map {
     }
 }
 
-pub(super) async fn fetch_index(url: Url, out_path: impl AsRef<Path>) -> Result<(), FetchError> {
+async fn fetch_index(url: Url, out_path: impl AsRef<Path>) -> Result<(), FetchError> {
     let resp = reqwest::get(url).await?;
 
     let mut out = File::create(out_path).await?;

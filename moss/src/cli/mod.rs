@@ -12,8 +12,8 @@ mod info;
 mod inspect;
 mod install;
 mod list;
-mod remote;
 mod remove;
+mod repo;
 mod version;
 
 /// Generate the CLI command structure
@@ -52,7 +52,7 @@ fn command() -> Command {
         .subcommand(list::command())
         .subcommand(remove::command())
         .subcommand(version::command())
-        .subcommand(remote::command())
+        .subcommand(repo::command())
 }
 
 /// Process all CLI arguments
@@ -73,7 +73,7 @@ pub fn process() -> Result<(), Error> {
             Ok(())
         }
         Some(("list", a)) => list::handle(a).map_err(Error::List),
-        Some(("remote", a)) => remote::handle(a, root).map_err(Error::Remote),
+        Some(("repo", a)) => repo::handle(a, root).map_err(Error::Repo),
         _ => unreachable!(),
     }
 }
@@ -89,6 +89,6 @@ pub enum Error {
     #[error("error in extraction: {0}")]
     Extract(#[from] extract::Error),
 
-    #[error("error handling remote: {0}")]
-    Remote(#[from] remote::Error),
+    #[error("error handling repo: {0}")]
+    Repo(#[from] repo::Error),
 }
