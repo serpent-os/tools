@@ -12,13 +12,26 @@ use url::Url;
 
 pub fn command() -> Command {
     Command::new("repo")
-        .about("...")
-        .long_about("...")
-        .arg(arg!(<NAME> "repo name").value_parser(clap::value_parser!(String)))
-        .arg(arg!(<URI> "repo uri").value_parser(clap::value_parser!(Url)))
+        .about("Manage software repositories")
+        .long_about("Manage the available software repositories visible to the installed system")
+        .subcommand_required(true)
+        .subcommand(
+            Command::new("add")
+                .arg(arg!(<NAME> "repo name").value_parser(clap::value_parser!(String)))
+                .arg(arg!(<URI> "repo uri").value_parser(clap::value_parser!(Url))),
+        )
 }
 
+/// Handle subcommands to `repo`
 pub fn handle(args: &ArgMatches, root: &PathBuf) -> Result<(), Error> {
+    match args.subcommand() {
+        Some(("add", cmd_args)) => add_repo(cmd_args, root),
+        _ => unreachable!(),
+    }
+}
+
+/// moss repo add <NAME> <URI>
+fn add_repo(args: &ArgMatches, root: &PathBuf) -> Result<(), Error> {
     let name = args.get_one::<String>("NAME").cloned().unwrap();
     let uri = args.get_one::<Url>("URI").cloned().unwrap();
 
@@ -30,6 +43,7 @@ pub fn handle(args: &ArgMatches, root: &PathBuf) -> Result<(), Error> {
     rt.block_on(add(root, name, uri))
 }
 
+// Actual implementation of moss repo add, asynchronous
 async fn add(root: &Path, name: String, uri: Url) -> Result<(), Error> {
     let installation = Installation::open(root);
 
