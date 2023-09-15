@@ -206,7 +206,7 @@ pub enum Error {
 mod test {
     use xxhash_rust::xxh3::xxh3_128;
 
-    use crate::payload::layout::LayoutEntry;
+    use crate::payload::layout::Entry;
 
     use super::*;
 
@@ -253,7 +253,7 @@ mod test {
                     .filter_map(Payload::layout)
                     .flatten()
                     .find(|layout| {
-                        if let LayoutEntry::Regular(digest, _) = &layout.entry {
+                        if let Entry::Regular(digest, _) = &layout.entry {
                             return *digest == index.digest;
                         }
                         false

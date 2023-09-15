@@ -3,9 +3,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use clap::{arg, ArgMatches, Command};
+use reqwest::header::Entry;
 use std::fs::File;
 use std::path::PathBuf;
-use stone::payload::layout::LayoutEntry;
+use stone::payload::layout::Entry as LayoutEntry;
 use stone::payload::meta;
 use stone::read::Payload;
 use thiserror::Error;
