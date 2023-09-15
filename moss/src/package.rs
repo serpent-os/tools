@@ -5,9 +5,9 @@
 use bitflags::bitflags;
 use itertools::Itertools;
 
-pub use self::metadata::{Metadata, MissingMetadataError, Name};
+pub use self::meta::{Meta, MissingMetaError, Name};
 
-mod metadata;
+mod meta;
 
 /// Unique ID of a [`Package`]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,7 +28,7 @@ impl From<Id> for String {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Package {
     pub id: Id,
-    pub metadata: Metadata,
+    pub meta: Meta,
     pub flags: Flags,
 }
 
@@ -40,14 +40,14 @@ impl PartialOrd for Package {
 
 impl Ord for Package {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.metadata
+        self.meta
             .source_release
-            .cmp(&other.metadata.source_release)
+            .cmp(&other.meta.source_release)
             .reverse()
             .then_with(|| {
-                self.metadata
+                self.meta
                     .build_release
-                    .cmp(&other.metadata.build_release)
+                    .cmp(&other.meta.build_release)
                     .reverse()
             })
     }

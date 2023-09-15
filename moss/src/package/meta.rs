@@ -27,7 +27,7 @@ impl From<Name> for String {
 
 /// The metadata of a [`Package`]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Metadata {
+pub struct Meta {
     /// Package name
     pub name: Name,
     /// Human readable version identifier
@@ -60,10 +60,8 @@ pub struct Metadata {
     pub download_size: Option<u64>,
 }
 
-impl Metadata {
-    pub fn from_stone_payload(
-        payload: &[::stone::payload::Meta],
-    ) -> Result<Self, MissingMetadataError> {
+impl Meta {
+    pub fn from_stone_payload(payload: &[stone::payload::Meta]) -> Result<Self, MissingMetaError> {
         let name = find_meta_string(payload, payload::meta::Tag::Name)?;
         let version_identifier = find_meta_string(payload, payload::meta::Tag::Version)?;
         let source_release = find_meta_u64(payload, payload::meta::Tag::Release)?;
@@ -95,7 +93,7 @@ impl Metadata {
             }))
             .collect();
 
-        Ok(Metadata {
+        Ok(Meta {
             name: Name::from(name),
             version_identifier,
             source_release,
@@ -116,23 +114,18 @@ impl Metadata {
 }
 
 fn find_meta_string(
-    metadata: &[payload::Meta],
+    meta: &[payload::Meta],
     tag: payload::meta::Tag,
-) -> Result<String, MissingMetadataError> {
-    metadata
-        .iter()
+) -> Result<String, MissingMetaError> {
+    meta.iter()
         .find_map(|meta| meta_string(meta, tag))
-        .ok_or(MissingMetadataError(tag))
+        .ok_or(MissingMetaError(tag))
 }
 
-fn find_meta_u64(
-    metadata: &[payload::Meta],
-    tag: payload::meta::Tag,
-) -> Result<u64, MissingMetadataError> {
-    metadata
-        .iter()
+fn find_meta_u64(meta: &[payload::Meta], tag: payload::meta::Tag) -> Result<u64, MissingMetaError> {
+    meta.iter()
         .find_map(|meta| meta_u64(meta, tag))
-        .ok_or(MissingMetadataError(tag))
+        .ok_or(MissingMetaError(tag))
 }
 
 fn meta_u64(meta: &payload::Meta, tag: payload::meta::Tag) -> Option<u64> {
@@ -184,4 +177,4 @@ fn meta_provider(meta: &payload::Meta) -> Option<Provider> {
 
 #[derive(Debug, Error)]
 #[error("Missing metadata field: {0:?}")]
-pub struct MissingMetadataError(pub payload::meta::Tag);
+pub struct MissingMetaError(pub payload::meta::Tag);

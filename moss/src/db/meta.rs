@@ -9,7 +9,7 @@ use sqlx::{sqlite::SqliteConnectOptions, Acquire, Pool, Sqlite};
 use thiserror::Error;
 
 use crate::db::Encoding;
-use crate::package::{self, Metadata};
+use crate::package::{self, Meta};
 
 #[derive(Debug, Clone)]
 pub struct Database {
@@ -41,7 +41,7 @@ impl Database {
         Ok(())
     }
 
-    pub async fn get(&self, package: &package::Id) -> Result<Metadata, Error> {
+    pub async fn get(&self, package: &package::Id) -> Result<Meta, Error> {
         let entry_query = sqlx::query_as::<_, encoding::Entry>(
             "
             SELECT name,
@@ -96,7 +96,7 @@ impl Database {
             providers_query.fetch_all(&self.pool),
         )?;
 
-        Ok(Metadata {
+        Ok(Meta {
             name: entry.name.0,
             version_identifier: entry.version_identifier,
             source_release: entry.source_release as u64,
@@ -115,8 +115,8 @@ impl Database {
         })
     }
 
-    pub async fn add(&self, id: package::Id, metadata: Metadata) -> Result<(), Error> {
-        let Metadata {
+    pub async fn add(&self, id: package::Id, meta: Meta) -> Result<(), Error> {
+        let Meta {
             name,
             version_identifier,
             source_release,
@@ -132,7 +132,7 @@ impl Database {
             uri,
             hash,
             download_size,
-        } = metadata;
+        } = meta;
 
         let mut transaction = self.pool.begin().await?;
 
@@ -318,14 +318,14 @@ mod test {
             .unwrap()
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
-        let meta = payloads.iter().find_map(Payload::meta).unwrap();
-        let metadata = Metadata::from_stone_payload(&meta).unwrap();
+        let meta_payload = payloads.iter().find_map(Payload::meta).unwrap();
+        let meta = Meta::from_stone_payload(&meta_payload).unwrap();
 
         let id = package::Id::from("test".to_string());
 
-        database.add(id.clone(), metadata.clone()).await.unwrap();
+        database.add(id.clone(), meta.clone()).await.unwrap();
 
-        assert_eq!(&metadata.name, &"bash-completion".to_string().into());
+        assert_eq!(&meta.name, &"bash-completion".to_string().into());
 
         remove(id.clone(), &mut database.pool.acquire().await.unwrap())
             .await
@@ -336,7 +336,7 @@ mod test {
         assert!(result.is_err());
 
         // Test wipe
-        database.add(id.clone(), metadata.clone()).await.unwrap();
+        database.add(id.clone(), meta.clone()).await.unwrap();
         database.wipe().await.unwrap();
         let result = database.get(&id).await;
         assert!(result.is_err());
