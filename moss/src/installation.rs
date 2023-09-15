@@ -62,6 +62,13 @@ impl Installation {
             warn!("Unable to discover Active State ID");
         }
 
+        // Make sure directories exist (silently fail if read-only)
+        //
+        // It's important we try this first in-case `root` needs to be created
+        // as well, otherwise mutability will always be read-only
+        // TODO: Should we instead fail if root doesn't exist?
+        ensure_dirs_exist(&root);
+
         // Root? Always RW. Otherwise, check access for W
         let mutability = if Uid::effective().is_root() {
             Mutability::ReadWrite
@@ -73,10 +80,6 @@ impl Installation {
 
         trace!("Mutability: {mutability}");
         trace!("Root dir: {root:?}");
-
-        if matches!(mutability, Mutability::ReadWrite) {
-            ensure_dirs_exist(&root);
-        }
 
         Self {
             root,
@@ -110,9 +113,9 @@ impl Installation {
         self.moss_path("assets").join(path)
     }
 
-    /// Build a remotes path relative to the root
-    pub fn remotes_path(&self, path: impl AsRef<Path>) -> PathBuf {
-        self.moss_path("remotes").join(path)
+    /// Build a repo path relative to the root
+    pub fn repo_path(&self, path: impl AsRef<Path>) -> PathBuf {
+        self.moss_path("repo").join(path)
     }
 
     /// Build a path relative to the moss system roots tree
@@ -171,7 +174,7 @@ fn ensure_dirs_exist(root: &PathBuf) {
         moss.join("db"),
         moss.join("cache"),
         moss.join("assets"),
-        moss.join("remotes"),
+        moss.join("repo"),
         moss.join("root").join("staging"),
     ] {
         let _ = fs::create_dir_all(path);

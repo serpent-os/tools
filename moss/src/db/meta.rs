@@ -48,7 +48,7 @@ pub struct Entry {
     pub download_size: Option<u64>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Database {
     pool: Pool<Sqlite>,
 }
@@ -57,6 +57,7 @@ impl Database {
     pub async fn new(path: impl AsRef<Path>, read_only: bool) -> Result<Self, Error> {
         let options = sqlx::sqlite::SqliteConnectOptions::new()
             .filename(path)
+            .create_if_missing(true)
             .read_only(read_only)
             .foreign_keys(true);
 
@@ -69,6 +70,12 @@ impl Database {
         sqlx::migrate!("src/db/meta/migrations").run(&pool).await?;
 
         Ok(Self { pool })
+    }
+
+    pub async fn wipe(&self) -> Result<(), Error> {
+        // Other tables cascade delete so we only need to truncate `meta`
+        sqlx::query("DELETE FROM meta;").execute(&self.pool).await?;
+        Ok(())
     }
 
     pub async fn get(&self, package: &package::Id) -> Result<Entry, Error> {
@@ -148,12 +155,8 @@ impl Database {
     }
 
     // TODO: Make more safe, this module shouldn't deal w/ metadata. Caller should convert to Entry
-    pub async fn load_stone_metadata(
-        &self,
-        id: package::Id,
-        metadata: &[payload::Meta],
-    ) -> Result<Entry, Error> {
-        let entry = build_entry(id, metadata)?;
+    pub async fn load_stone_metadata(&self, metadata: &[payload::Meta]) -> Result<Entry, Error> {
+        let entry = build_entry(metadata)?;
 
         let mut transaction = self.pool.begin().await?;
 
@@ -265,7 +268,7 @@ async fn remove(package: package::Id, connection: &mut SqliteConnection) -> Resu
     Ok(())
 }
 
-fn build_entry(package: package::Id, metadata: &[payload::Meta]) -> Result<Entry, Error> {
+fn build_entry(metadata: &[payload::Meta]) -> Result<Entry, Error> {
     let name = required_meta_string(metadata, payload::meta::Tag::Name)?;
     let version_identifier = required_meta_string(metadata, payload::meta::Tag::Version)?;
     let source_release = required_meta_u64(metadata, payload::meta::Tag::Release)?;
@@ -278,6 +281,8 @@ fn build_entry(package: package::Id, metadata: &[payload::Meta]) -> Result<Entry
     let uri = required_meta_string(metadata, payload::meta::Tag::PackageURI).ok();
     let hash = required_meta_string(metadata, payload::meta::Tag::PackageHash).ok();
     let download_size = required_meta_u64(metadata, payload::meta::Tag::PackageSize).ok();
+
+    let package = package::Id::from(hash.as_ref().unwrap_or(&name).clone());
 
     let licenses = metadata
         .iter()
@@ -439,52 +444,51 @@ mod encoding {
 mod test {
     use std::str::FromStr;
 
-    use futures::executor::block_on;
     use stone::read::Payload;
 
     use super::*;
 
-    #[test]
-    fn create_insert_select() {
-        block_on(async {
-            let database =
-                Database::connect(SqliteConnectOptions::from_str("sqlite::memory:").unwrap())
-                    .await
-                    .unwrap();
-
-            let bash_completion =
-                include_bytes!("../../../test/bash-completion-2.11-1-1-x86_64.stone");
-
-            let mut stone = stone::read_bytes(bash_completion).unwrap();
-
-            let payloads = stone
-                .payloads()
-                .unwrap()
-                .collect::<Result<Vec<_>, _>>()
-                .unwrap();
-            let meta = payloads
-                .iter()
-                .filter_map(Payload::meta)
-                .flatten()
-                .cloned()
-                .collect::<Vec<_>>();
-
-            let package = package::Id::from("test".to_string());
-
-            let entry = database
-                .load_stone_metadata(package.clone(), &meta)
+    #[tokio::test]
+    async fn create_insert_select() {
+        let database =
+            Database::connect(SqliteConnectOptions::from_str("sqlite::memory:").unwrap())
                 .await
                 .unwrap();
 
-            assert_eq!(entry.name, "bash-completion".to_string());
+        let bash_completion = include_bytes!("../../../test/bash-completion-2.11-1-1-x86_64.stone");
 
-            remove(package.clone(), &mut database.pool.acquire().await.unwrap())
-                .await
-                .unwrap();
+        let mut stone = stone::read_bytes(bash_completion).unwrap();
 
-            let result = database.get(&package).await;
+        let payloads = stone
+            .payloads()
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let meta = payloads
+            .iter()
+            .filter_map(Payload::meta)
+            .flatten()
+            .cloned()
+            .collect::<Vec<_>>();
 
-            assert!(result.is_err());
-        });
+        let package = package::Id::from("test".to_string());
+
+        let entry = database.load_stone_metadata(&meta).await.unwrap();
+
+        assert_eq!(entry.name, "bash-completion".to_string());
+
+        remove(package.clone(), &mut database.pool.acquire().await.unwrap())
+            .await
+            .unwrap();
+
+        let result = database.get(&package).await;
+
+        assert!(result.is_err());
+
+        // Test wipe
+        database.load_stone_metadata(&meta).await.unwrap();
+        database.wipe().await.unwrap();
+        let result = database.get(&package).await;
+        assert!(result.is_err());
     }
 }

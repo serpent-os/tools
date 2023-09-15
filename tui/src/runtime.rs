@@ -7,7 +7,6 @@ use std::{
     time::Duration,
 };
 
-use async_signal::{Signal, Signals};
 use futures::{stream, FutureExt, StreamExt};
 use ratatui::{
     prelude::CrosstermBackend,
@@ -15,10 +14,8 @@ use ratatui::{
     widgets::{Paragraph, Widget},
     TerminalOptions, Viewport,
 };
-use smol::{
-    channel::{self, Sender},
-    Timer,
-};
+use tokio::{runtime, signal::ctrl_c, sync::mpsc, task, time};
+use tokio_stream::wrappers::IntervalStream;
 
 use crate::Program;
 
@@ -30,10 +27,11 @@ where
     P::Message: Send + 'static,
     T: 'static,
 {
-    smol::block_on(async move {
-        // Ctrl-c capture
-        let ctrl_c = Signals::new([Signal::Int])?;
+    let rt = runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
 
+    rt.block_on(async move {
         // Setup terminal
         let mut terminal = ratatui::Terminal::with_options(
             CrosstermBackend::new(stdout()),
@@ -48,9 +46,9 @@ where
         })?;
 
         // Setup channel
-        let (sender, receiver) = channel::unbounded();
+        let (sender, mut receiver) = mpsc::unbounded_channel();
 
-        // We can receive user event or finished status
+        // We can receive render event or finished status
         enum Input<T> {
             Render,
             Finished(T),
@@ -58,21 +56,18 @@ where
         }
 
         // Run task
-        let mut run = smol::unblock(move || f(Handle { sender }))
-            .boxed()
+        let mut run = task::spawn_blocking(move || f(Handle { sender }))
             .map(Input::Finished)
             .into_stream();
         // Ctrl c task
-        let mut ctrl_c = ctrl_c.map(|_| Input::Term);
+        let mut ctrl_c = ctrl_c().map(|_| Input::Term).into_stream().boxed();
         // Rerender @ 60fps
-        let mut interval =
-            StreamExt::map(Timer::interval(Duration::from_millis(1000 / 60)), |_| {
-                Input::Render
-            });
+        let mut interval = IntervalStream::new(time::interval(Duration::from_millis(1000 / 60)))
+            .map(|_| Input::Render);
 
         loop {
             // Get next input
-            let input = stream::select(&mut run, stream::select(&mut interval, &mut ctrl_c))
+            let input = stream::select(&mut run, stream::select(&mut ctrl_c, &mut interval))
                 .next()
                 .await
                 .unwrap();
@@ -104,10 +99,13 @@ where
 
                     terminal.draw(|frame| program.draw(frame))?;
                 }
-                Input::Finished(t) => {
+                Input::Finished(handle) => {
+                    let ret = handle?;
+
                     terminal.show_cursor()?;
                     terminal.clear()?;
-                    return Ok(t);
+
+                    return Ok(ret);
                 }
                 Input::Term => {
                     terminal.show_cursor()?;
@@ -120,7 +118,7 @@ where
 }
 
 pub struct Handle<Message> {
-    sender: Sender<Event<Message>>,
+    sender: mpsc::UnboundedSender<Event<Message>>,
 }
 
 impl<Message> Clone for Handle<Message> {
@@ -133,11 +131,11 @@ impl<Message> Clone for Handle<Message> {
 
 impl<Message> Handle<Message> {
     pub fn print(&mut self, content: String) {
-        let _ = self.sender.send_blocking(Event::Print(content));
+        let _ = self.sender.send(Event::Print(content));
     }
 
     pub fn update(&mut self, message: Message) {
-        let _ = self.sender.send_blocking(Event::Message(message));
+        let _ = self.sender.send(Event::Message(message));
     }
 }
 

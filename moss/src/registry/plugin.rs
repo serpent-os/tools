@@ -15,7 +15,7 @@ use crate::Provider;
 
 mod active;
 mod cobble;
-mod remote;
+mod repository;
 
 /// A [`Registry`] plugin that enables querying [`Package`] information.
 ///
@@ -24,7 +24,7 @@ mod remote;
 pub enum Plugin {
     Active(active::Plugin),
     Cobble(cobble::Plugin),
-    Remote(remote::Plugin),
+    Repository(repository::Plugin),
 
     #[cfg(test)]
     Test(test::Plugin),
@@ -37,7 +37,7 @@ impl Plugin {
         match self {
             Plugin::Active(_) => None,
             Plugin::Cobble(_) => None,
-            Plugin::Remote(_) => None,
+            Plugin::Repository(_) => None,
 
             #[cfg(test)]
             Plugin::Test(plugin) => plugin.package(package),
@@ -49,7 +49,7 @@ impl Plugin {
         package::Sorted::new(match self {
             Plugin::Active(_) => vec![],
             Plugin::Cobble(_) => vec![],
-            Plugin::Remote(_) => vec![],
+            Plugin::Repository(_) => vec![],
 
             #[cfg(test)]
             Plugin::Test(plugin) => plugin.list(flags),
@@ -65,7 +65,7 @@ impl Plugin {
         package::Sorted::new(match self {
             Plugin::Active(_) => vec![],
             Plugin::Cobble(_) => vec![],
-            Plugin::Remote(_) => vec![],
+            Plugin::Repository(_) => vec![],
 
             #[cfg(test)]
             Plugin::Test(plugin) => plugin.query_provider(provider, flags),
@@ -81,7 +81,7 @@ impl Plugin {
         package::Sorted::new(match self {
             Plugin::Active(_) => vec![],
             Plugin::Cobble(_) => vec![],
-            Plugin::Remote(_) => vec![],
+            Plugin::Repository(_) => vec![],
 
             #[cfg(test)]
             Plugin::Test(plugin) => plugin.query_name(package_name, flags),
@@ -95,7 +95,7 @@ impl Plugin {
         match self {
             Plugin::Active(_) => todo!(),
             Plugin::Cobble(_) => todo!(),
-            Plugin::Remote(_) => todo!(),
+            Plugin::Repository(_) => todo!(),
 
             #[cfg(test)]
             Plugin::Test(plugin) => plugin.priority,

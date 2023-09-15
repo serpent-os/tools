@@ -74,6 +74,7 @@ impl Database {
 
         let options = sqlx::sqlite::SqliteConnectOptions::new()
             .filename(path)
+            .create_if_missing(true)
             .read_only(installation.read_only())
             .foreign_keys(true);
 
@@ -253,45 +254,42 @@ mod test {
     use std::str::FromStr;
 
     use chrono::Utc;
-    use futures::executor::block_on;
 
     use super::*;
 
-    #[test]
-    fn create_insert_select() {
-        block_on(async {
-            let database =
-                Database::connect(SqliteConnectOptions::from_str("sqlite::memory:").unwrap())
-                    .await
-                    .unwrap();
-
-            let packages = vec![
-                package::Id::from("pkg a".to_string()),
-                package::Id::from("pkg b".to_string()),
-                package::Id::from("pkg c".to_string()),
-            ];
-
-            let state = database
-                .add(
-                    &packages,
-                    Some("test".to_string()),
-                    Some("test".to_string()),
-                )
+    #[tokio::test]
+    async fn create_insert_select() {
+        let database =
+            Database::connect(SqliteConnectOptions::from_str("sqlite::memory:").unwrap())
                 .await
                 .unwrap();
 
-            // First record
-            assert_eq!(state.id.0, 1);
+        let packages = vec![
+            package::Id::from("pkg a".to_string()),
+            package::Id::from("pkg b".to_string()),
+            package::Id::from("pkg c".to_string()),
+        ];
 
-            // Check created
-            let elapsed = Utc::now().signed_duration_since(&state.created.0);
-            assert!(elapsed.num_seconds() == 0);
-            assert!(!elapsed.is_zero());
+        let state = database
+            .add(
+                &packages,
+                Some("test".to_string()),
+                Some("test".to_string()),
+            )
+            .await
+            .unwrap();
 
-            assert_eq!(state.summary.as_deref(), Some("test"));
-            assert_eq!(state.description.as_deref(), Some("test"));
+        // First record
+        assert_eq!(state.id.0, 1);
 
-            assert_eq!(state.packages, packages);
-        });
+        // Check created
+        let elapsed = Utc::now().signed_duration_since(&state.created.0);
+        assert!(elapsed.num_seconds() == 0);
+        assert!(!elapsed.is_zero());
+
+        assert_eq!(state.summary.as_deref(), Some("test"));
+        assert_eq!(state.description.as_deref(), Some("test"));
+
+        assert_eq!(state.packages, packages);
     }
 }
