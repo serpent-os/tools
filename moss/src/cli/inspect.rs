@@ -92,8 +92,8 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
 
             if !layouts.is_empty() {
                 println!("\n{:width$} :", "Layout entries", width = COLUMN_WIDTH);
-                for entry in layouts {
-                    match entry.entry {
+                for layout in layouts {
+                    match layout.entry {
                         LayoutEntry::Regular(hash, target) => {
                             println!("    - /usr/{} - [Regular] {:02x}", target, hash)
                         }
