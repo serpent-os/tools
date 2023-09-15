@@ -188,8 +188,12 @@ fn update_meta_db(
         };
 
         let metadata = package::Metadata::from_stone_payload(&payload)?;
+
         // Create id from hash of meta
-        let id = package::Id::from(metadata.hash.clone().ok_or(Error::MissingHash)?);
+        let hash = metadata.hash.clone().ok_or(Error::MissingMetaField(
+            stone::payload::meta::Tag::PackageHash,
+        ))?;
+        let id = package::Id::from(hash);
 
         // Take ownership, future needs 'static / owned data
         let db = db.clone();
@@ -218,8 +222,12 @@ pub enum Error {
     Database(#[from] meta::Error),
     #[error("failed to save config: {0}")]
     SaveConfig(config::SaveError),
-    #[error("missing metadata hash")]
-    MissingHash,
-    #[error("metadata error: {0}")]
-    MissingMeta(#[from] package::MissingMetadataError),
+    #[error("missing metadata field: {0:?}")]
+    MissingMetaField(stone::payload::meta::Tag),
+}
+
+impl From<package::MissingMetadataError> for Error {
+    fn from(error: package::MissingMetadataError) -> Self {
+        Self::MissingMetaField(error.0)
+    }
 }

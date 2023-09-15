@@ -184,4 +184,4 @@ fn meta_provider(meta: &payload::Meta) -> Option<Provider> {
 
 #[derive(Debug, Error)]
 #[error("Missing metadata field: {0:?}")]
-pub struct MissingMetadataError(payload::meta::Tag);
+pub struct MissingMetadataError(pub payload::meta::Tag);
