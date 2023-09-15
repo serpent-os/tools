@@ -187,10 +187,10 @@ fn update_meta_db(
             continue;
         };
 
-        let metadata = package::Metadata::from_stone_payload(&payload)?;
+        let meta = package::Meta::from_stone_payload(&payload)?;
 
         // Create id from hash of meta
-        let hash = metadata.hash.clone().ok_or(Error::MissingMetaField(
+        let hash = meta.hash.clone().ok_or(Error::MissingMetaField(
             stone::payload::meta::Tag::PackageHash,
         ))?;
         let id = package::Id::from(hash);
@@ -199,7 +199,7 @@ fn update_meta_db(
         let db = db.clone();
 
         // db is async, spawn task back on tokio runtime
-        handles.push(task::spawn(async move { db.add(id, metadata).await }));
+        handles.push(task::spawn(async move { db.add(id, meta).await }));
     }
 
     // return all db tasks
@@ -226,8 +226,8 @@ pub enum Error {
     MissingMetaField(stone::payload::meta::Tag),
 }
 
-impl From<package::MissingMetadataError> for Error {
-    fn from(error: package::MissingMetadataError) -> Self {
+impl From<package::MissingMetaError> for Error {
+    fn from(error: package::MissingMetaError) -> Self {
         Self::MissingMetaField(error.0)
     }
 }

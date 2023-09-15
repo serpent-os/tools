@@ -91,7 +91,7 @@ mod test {
 
         let package = |id: &str, release| Package {
             id: package::Id::from(id.to_string()),
-            metadata: package::Metadata {
+            meta: package::Meta {
                 name: package::Name::from(id.to_string()),
                 version_identifier: Default::default(),
                 source_release: release,
