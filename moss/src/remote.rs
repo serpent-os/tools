@@ -72,8 +72,7 @@ impl Remote {
     }
 
     pub async fn refresh_all(&self) -> Result<(), Error> {
-        // Fetch all index files and return the paths they
-        // were downloaded to
+        // Fetch index file + add to meta_db
         future::try_join_all(self.repositories.iter().map(|(id, state)| async {
             refresh_index_file(id, state, &self.installation)
                 .await
