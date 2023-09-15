@@ -15,6 +15,7 @@ use url::Url;
 
 use crate::Config;
 
+/// A unique [`Repository`] identifier
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Id(String);
 
@@ -35,6 +36,7 @@ impl fmt::Display for Id {
     }
 }
 
+/// Repository configuration data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Repository {
     pub description: String,
@@ -42,6 +44,7 @@ pub struct Repository {
     pub priority: u64,
 }
 
+/// A map of repositories
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Map(HashMap<Id, Repository>);
 
@@ -73,7 +76,7 @@ impl Config for Map {
     }
 }
 
-pub async fn fetch_index(url: Url, out_path: impl AsRef<Path>) -> Result<(), FetchError> {
+pub(super) async fn fetch_index(url: Url, out_path: impl AsRef<Path>) -> Result<(), FetchError> {
     let resp = reqwest::get(url).await?;
 
     let mut out = File::create(out_path).await?;
