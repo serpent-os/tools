@@ -34,6 +34,19 @@ pub enum FileType {
     Socket,
 }
 
+#[derive(Debug, Clone)]
+pub enum LayoutEntry {
+    Regular(u128, String),
+    Symlink(String, String),
+    Directory(String),
+
+    // not properly supported
+    CharacterDevice(String),
+    BlockDevice(String),
+    Fifo(String),
+    Socket(String),
+}
+
 // TODO: Strong types these fields
 #[derive(Debug, Clone)]
 pub struct Layout {
@@ -41,9 +54,7 @@ pub struct Layout {
     pub gid: u32,
     pub mode: u32,
     pub tag: u32,
-    pub source: Option<Vec<u8>>,
-    pub target: Vec<u8>,
-    pub file_type: FileType,
+    pub entry: LayoutEntry,
 }
 
 impl Record for Layout {
@@ -69,20 +80,35 @@ impl Record for Layout {
 
         let _padding = reader.read_array::<11>()?;
 
-        let source = (source_length > 0)
-            .then(|| reader.read_vec(source_length as usize))
-            .transpose()?;
-
-        let target = reader.read_vec(target_length as usize)?;
+        // Make the layout entry *usable*
+        let entry = match file_type {
+            // BUG: boulder stores xxh128 as le bytes not be
+            FileType::Regular => {
+                let source = reader.read_vec(source_length as usize)?;
+                let hash = u128::from_be_bytes(source.try_into().unwrap());
+                LayoutEntry::Regular(hash, reader.read_string(target_length as u64)?)
+            }
+            FileType::Symlink => LayoutEntry::Symlink(
+                reader.read_string(source_length as u64)?,
+                reader.read_string(target_length as u64)?,
+            ),
+            FileType::Directory => {
+                LayoutEntry::Directory(reader.read_string(target_length as u64)?)
+            }
+            _ => {
+                if source_length > 0 {
+                    let _ = reader.read_vec(source_length as usize);
+                }
+                unreachable!()
+            }
+        };
 
         Ok(Self {
             uid,
             gid,
             mode,
             tag,
-            source,
-            target,
-            file_type,
+            entry,
         })
     }
 }

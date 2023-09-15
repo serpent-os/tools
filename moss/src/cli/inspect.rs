@@ -5,6 +5,7 @@
 use clap::{arg, ArgMatches, Command};
 use std::fs::File;
 use std::path::PathBuf;
+use stone::payload::layout::LayoutEntry;
 use stone::payload::meta;
 use stone::read::Payload;
 use thiserror::Error;
@@ -91,11 +92,18 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
             if !layouts.is_empty() {
                 println!("\n{:width$} :", "Layout entries", width = COLUMN_WIDTH);
                 for entry in layouts {
-                    println!(
-                        "     - /usr/{} - [{:?}]",
-                        String::from_utf8_lossy(entry.target.as_slice()),
-                        entry.file_type
-                    );
+                    match entry.entry {
+                        LayoutEntry::Regular(hash, target) => {
+                            println!("    - /usr/{} - [Regular] {:02x}", target, hash)
+                        }
+                        LayoutEntry::Directory(target) => {
+                            println!("    - /usr/{} [Directory]", target)
+                        }
+                        LayoutEntry::Symlink(source, target) => {
+                            println!("    - /usr/{} -> {} [Symlink]", target, source)
+                        }
+                        _ => unreachable!(),
+                    };
                 }
             }
         }

@@ -206,7 +206,7 @@ pub enum Error {
 mod test {
     use xxhash_rust::xxh3::xxh3_128;
 
-    use crate::payload::layout::FileType;
+    use crate::payload::layout::LayoutEntry;
 
     use super::*;
 
@@ -248,13 +248,17 @@ mod test {
                 let digest = xxh3_128(content);
                 assert_eq!(digest, index.digest);
 
-                let layout = payloads
+                payloads
                     .iter()
                     .filter_map(Payload::layout)
                     .flatten()
-                    .find(|layout| layout.source.as_deref() == Some(&index.digest.to_be_bytes()))
+                    .find(|layout| {
+                        if let LayoutEntry::Regular(digest, _) = &layout.entry {
+                            return *digest == index.digest;
+                        }
+                        false
+                    })
                     .expect("layout exists");
-                assert_eq!(layout.file_type, FileType::Regular);
             }
         }
     }
