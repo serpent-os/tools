@@ -13,8 +13,7 @@ mod encoding {
 
     use sqlx::{Sqlite, Type};
 
-    use crate::registry::package;
-    use crate::{dependency, Dependency, Provider};
+    use crate::{dependency, package, Dependency, Provider};
 
     /// Decode from a database type using [`Encoding::decode`]
     #[derive(Debug, Clone, Copy)]
@@ -65,6 +64,20 @@ mod encoding {
 
         fn decode(encoded: Self::Encoded) -> Result<Self, Self::Error> {
             Ok(package::Id::from(encoded))
+        }
+
+        fn encode(self) -> Self::Encoded {
+            String::from(self)
+        }
+    }
+
+    /// Encoding of package name (String)
+    impl Encoding for package::Name {
+        type Encoded = String;
+        type Error = Infallible;
+
+        fn decode(encoded: Self::Encoded) -> Result<Self, Self::Error> {
+            Ok(package::Name::from(encoded))
         }
 
         fn encode(self) -> Self::Encoded {

@@ -10,7 +10,7 @@ use sqlx::{Acquire, Executor, Pool, Sqlite};
 use thiserror::Error;
 
 use crate::db::Encoding;
-use crate::registry::package;
+use crate::package;
 use crate::Installation;
 
 /// Unique identifier for [`State`]
@@ -190,7 +190,7 @@ mod encoding {
     use super::{Id, Kind};
     use crate::{
         db::{Decoder, Encoding},
-        registry::package,
+        package,
     };
 
     #[derive(FromRow)]

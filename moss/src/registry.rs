@@ -7,12 +7,11 @@
 
 use std::collections::BTreeSet;
 
+use crate::package::{self, Package};
 use crate::Provider;
 
-pub use self::package::Package;
 pub use self::plugin::Plugin;
 
-pub mod package;
 pub mod plugin;
 
 /// A registry is composed of multiple "query plugins" that
@@ -94,15 +93,21 @@ mod test {
             id: package::Id::from(id.to_string()),
             metadata: package::Metadata {
                 name: package::Name::from(id.to_string()),
-                summary: String::default(),
-                description: String::default(),
-                release_number: release,
-                version_id: String::default(),
-                homepage: String::default(),
-                licenses: vec![],
+                version_identifier: Default::default(),
+                source_release: release,
+                build_release: Default::default(),
+                architecture: Default::default(),
+                summary: Default::default(),
+                description: Default::default(),
+                source_id: Default::default(),
+                homepage: Default::default(),
+                licenses: Default::default(),
+                dependencies: Default::default(),
+                providers: Default::default(),
+                uri: Default::default(),
+                hash: Default::default(),
+                download_size: Default::default(),
             },
-            dependencies: vec![],
-            providers: vec![],
             flags: package::Flags::NONE,
         };
 

@@ -7,7 +7,7 @@ use std::{fmt, str::FromStr};
 use stone::payload;
 use thiserror::Error;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Kind {
     /// Name based dependency
     PackageName,
@@ -93,7 +93,7 @@ impl From<payload::meta::Dependency> for Kind {
 
 /// A Dependency in moss is simplistic in that it only contains
 /// a target and a Kind, ie. `pkgconfig(zlib)`
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Dependency {
     /// Tag for the table-type of dependency
     pub kind: Kind,
@@ -119,7 +119,7 @@ impl FromStr for Dependency {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Provider {
     pub kind: Kind,
     pub name: String,

@@ -11,7 +11,7 @@ use tokio::task::JoinHandle;
 use tokio::{fs, io, task};
 
 use crate::db::meta;
-use crate::{config, Installation};
+use crate::{config, package, Installation};
 
 use crate::repository::{self, Repository};
 
@@ -155,7 +155,7 @@ async fn refresh_index(
         .await
         .expect("join handle")
         .into_iter()
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<_, _>>()?;
 
     Ok(())
 }
@@ -171,7 +171,7 @@ async fn refresh_index(
 fn update_meta_db(
     path: PathBuf,
     db: meta::Database,
-) -> Result<Vec<JoinHandle<Result<meta::Entry, meta::Error>>>, Error> {
+) -> Result<Vec<JoinHandle<Result<(), meta::Error>>>, Error> {
     use std::fs::File;
 
     // Open file and read it
@@ -184,16 +184,22 @@ fn update_meta_db(
     for payload in reader.payloads()? {
         // We only care about meta payloads for index files
         let Ok(stone::read::Payload::Meta(payload)) = payload else {
-                continue;
-            };
+            continue;
+        };
+
+        let metadata = package::Metadata::from_stone_payload(&payload)?;
+
+        // Create id from hash of meta
+        let hash = metadata.hash.clone().ok_or(Error::MissingMetaField(
+            stone::payload::meta::Tag::PackageHash,
+        ))?;
+        let id = package::Id::from(hash);
 
         // Take ownership, future needs 'static / owned data
         let db = db.clone();
 
         // db is async, spawn task back on tokio runtime
-        handles.push(task::spawn(async move {
-            db.load_stone_metadata(&payload).await
-        }));
+        handles.push(task::spawn(async move { db.add(id, metadata).await }));
     }
 
     // return all db tasks
@@ -216,4 +222,12 @@ pub enum Error {
     Database(#[from] meta::Error),
     #[error("failed to save config: {0}")]
     SaveConfig(config::SaveError),
+    #[error("missing metadata field: {0:?}")]
+    MissingMetaField(stone::payload::meta::Tag),
+}
+
+impl From<package::MissingMetadataError> for Error {
+    fn from(error: package::MissingMetadataError) -> Self {
+        Self::MissingMetaField(error.0)
+    }
 }
