@@ -1201,6 +1201,7 @@ dependencies = [
  "stone",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tui",
  "url",
 ]

@@ -2,15 +2,16 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use futures::StreamExt;
 use std::{
     fmt,
-    fs::{self, File},
-    io,
     path::{Path, PathBuf},
 };
+use tokio::{fs, io};
 
 use serde::{de::DeserializeOwned, Serialize};
 use thiserror::Error;
+use tokio_stream::wrappers::ReadDirStream;
 
 const EXTENSION: &str = "conf";
 
@@ -20,22 +21,28 @@ pub trait Config: DeserializeOwned {
     fn merge(self, other: Self) -> Self;
 }
 
-pub fn load<T: Config>(root: impl AsRef<Path>) -> Option<T> {
+pub async fn load<T: Config>(root: impl AsRef<Path>) -> Option<T> {
     let domain = T::domain();
 
-    [
+    let mut configs = vec![];
+
+    for (base, search) in [
         (Base::Vendor, Search::File),
         (Base::Vendor, Search::Directory),
         (Base::Admin, Search::File),
         (Base::Admin, Search::Directory),
-    ]
-    .into_iter()
-    .flat_map(|(base, search)| enumerate_paths(search, &root, base, &domain))
-    .filter_map(read_config)
-    .reduce(T::merge)
+    ] {
+        for path in enumerate_paths(search, &root, base, &domain).await {
+            if let Some(config) = read_config(path).await {
+                configs.push(config);
+            }
+        }
+    }
+
+    configs.into_iter().reduce(T::merge)
 }
 
-pub fn save<T: Config + Serialize>(
+pub async fn save<T: Config + Serialize>(
     root: impl AsRef<Path>,
     name: impl fmt::Display,
     config: &T,
@@ -44,13 +51,17 @@ pub fn save<T: Config + Serialize>(
 
     let dir = domain_dir(root, Base::Admin, &domain);
 
-    fs::create_dir_all(&dir).map_err(|io| SaveError::CreateDir(dir.clone(), io))?;
+    fs::create_dir_all(&dir)
+        .await
+        .map_err(|io| SaveError::CreateDir(dir.clone(), io))?;
 
     let path = dir.join(format!("{name}.{EXTENSION}"));
 
     let serialized = serde_yaml::to_string(config)?;
 
-    fs::write(&path, serialized).map_err(|io| SaveError::Write(path, io))?;
+    fs::write(&path, serialized)
+        .await
+        .map_err(|io| SaveError::Write(path, io))?;
 
     Ok(())
 }
@@ -65,7 +76,7 @@ pub enum SaveError {
     Write(PathBuf, io::Error),
 }
 
-fn enumerate_paths(
+async fn enumerate_paths(
     search: Search,
     root: &impl AsRef<Path>,
     base: Base,
@@ -81,12 +92,11 @@ fn enumerate_paths(
                 vec![]
             }
         }
-        Search::Directory => fs::read_dir(domain_dir(root, base, domain))
-            .map(|read_dir| {
-                read_dir
-                    .into_iter()
-                    .flatten()
-                    .filter_map(|entry| {
+        Search::Directory => {
+            if let Ok(read_dir) = fs::read_dir(domain_dir(root, base, domain)).await {
+                ReadDirStream::new(read_dir)
+                    .filter_map(|entry| async {
+                        let entry = entry.ok()?;
                         let path = entry.path();
                         let extension = path
                             .extension()
@@ -100,8 +110,11 @@ fn enumerate_paths(
                         }
                     })
                     .collect()
-            })
-            .unwrap_or_default(),
+                    .await
+            } else {
+                vec![]
+            }
+        }
     }
 }
 
@@ -119,9 +132,9 @@ fn domain_dir(root: impl AsRef<Path>, base: Base, domain: &str) -> PathBuf {
         .join(format!("{domain}.{EXTENSION}.d"))
 }
 
-fn read_config<T: Config>(path: PathBuf) -> Option<T> {
-    let file = File::open(path).ok()?;
-    serde_yaml::from_reader(file).ok()
+async fn read_config<T: Config>(path: PathBuf) -> Option<T> {
+    let bytes = fs::read(path).await.ok()?;
+    serde_yaml::from_slice(&bytes).ok()
 }
 
 #[derive(Clone, Copy)]

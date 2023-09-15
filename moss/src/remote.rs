@@ -22,25 +22,23 @@ pub struct Remote {
 
 impl Remote {
     pub async fn new(installation: Installation) -> Result<Self, Error> {
-        let configs = config::load::<repository::Map>(&installation.root).unwrap_or_default();
+        // Load all configs, default if none exist
+        let configs = config::load::<repository::Map>(&installation.root)
+            .await
+            .unwrap_or_default();
 
         // Open all repo meta dbs and collect into hash map
-        let repositories = future::try_join_all(configs.iter().map(|(id, repository)| async {
-            let db = open_meta_db(id, &installation)
-                .await
-                .map_err(|error| Error::OpenDatabase(id.clone(), error))?;
+        let repositories =
+            future::try_join_all(configs.into_iter().map(|(id, repository)| async {
+                let db = open_meta_db(&id, &installation)
+                    .await
+                    .map_err(|error| Error::OpenDatabase(id.clone(), error))?;
 
-            Ok((
-                id.clone(),
-                State {
-                    repository: repository.clone(),
-                    db,
-                },
-            ))
-        }))
-        .await?
-        .into_iter()
-        .collect();
+                Ok((id, State { repository, db }))
+            }))
+            .await?
+            .into_iter()
+            .collect();
 
         Ok(Self {
             installation,
@@ -57,10 +55,10 @@ impl Remote {
         // We save it as a map for easy merging across
         // multiple configuration files
         {
-            let mut map = repository::Map::default();
-            map.add(id.clone(), repository.clone());
+            let map = repository::Map::with([(id.clone(), repository.clone())]);
 
             config::save(&self.installation.root, &id, &map)
+                .await
                 .map_err(|save| Error::SaveConfig(id.clone(), save))?;
         }
 

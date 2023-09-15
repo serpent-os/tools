@@ -46,6 +46,10 @@ pub struct Repository {
 pub struct Map(HashMap<Id, Repository>);
 
 impl Map {
+    pub fn with(items: impl IntoIterator<Item = (Id, Repository)>) -> Self {
+        Self(items.into_iter().collect())
+    }
+
     pub fn get(&self, id: &Id) -> Option<&Repository> {
         self.0.get(id)
     }
@@ -54,16 +58,8 @@ impl Map {
         self.0.insert(id, repo);
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&Id, &Repository)> {
-        self.0.iter()
-    }
-
-    pub fn keys(&self) -> impl Iterator<Item = &Id> {
-        self.0.keys()
-    }
-
-    pub fn values(&self) -> impl Iterator<Item = &Repository> {
-        self.0.values()
+    pub fn into_iter(self) -> impl Iterator<Item = (Id, Repository)> {
+        self.0.into_iter()
     }
 }
 
