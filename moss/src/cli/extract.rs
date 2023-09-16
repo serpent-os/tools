@@ -131,7 +131,7 @@ impl tui::Program for Program {
 
     fn update(&mut self, message: Self::Message) {
         match message {
-            Message::Progress(progess) => self.progress = progess as f32,
+            Message::Progress(progress) => self.progress = progress as f32,
         }
     }
 
