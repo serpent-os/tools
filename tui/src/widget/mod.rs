@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+//! Reusable widgets for moss terminal user interface
 pub use self::progress::progress;
 
 pub mod progress;

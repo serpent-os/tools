@@ -10,6 +10,7 @@ mod program;
 mod runtime;
 pub mod widget;
 
+/// Provide a standard approach to ratatui based TUI in moss
 mod reexport {
     use std::io::Stdout;
 

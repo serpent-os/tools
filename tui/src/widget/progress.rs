@@ -8,14 +8,17 @@ use ratatui::{
     widgets::Widget,
 };
 
+/// A lightly animated progress-bar with great VT support
 const SYMBOLS: &[char] = &[' ', '-', '=', '≡', '■'];
 const LEVELS: usize = SYMBOLS.len() - 1;
 
+/// Fill style
 pub enum Fill {
     UpAcross,
     AcrossUp,
 }
 
+/// Construct a new Progress widget
 pub fn progress(pct: f32, fill: Fill, num_bars: u16) -> impl Widget {
     Progress {
         pct,
@@ -24,12 +27,15 @@ pub fn progress(pct: f32, fill: Fill, num_bars: u16) -> impl Widget {
     }
 }
 
+/// A Progress is simply a horizontal bar rendering the progress of ongoing
+/// operations such as downloads, extractions, etc.
 pub struct Progress {
     pct: f32,
     fill: Fill,
     num_bars: u16,
 }
 
+/// Implement Progress as a ratatui Widget
 impl Widget for Progress {
     fn render(self, area: Rect, buf: &mut Buffer) {
         if area.height < 1 {

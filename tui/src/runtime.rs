@@ -19,6 +19,8 @@ use tokio_stream::wrappers::IntervalStream;
 
 use crate::Program;
 
+/// Run the TUI application within the async runtime and handle all
+/// events automatically, including rendering and signals.
 pub fn run<P: Program, T: Send>(
     mut program: P,
     f: impl FnOnce(Handle<P::Message>) -> T + Send + Sync + 'static,
