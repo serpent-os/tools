@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use futures::future;
+use itertools::Itertools;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 use tokio::{fs, io, task};
@@ -98,6 +99,14 @@ impl Manager {
     /// Get access to the [`meta::Database`] of the managed repository
     pub(crate) fn get_meta_db(&self, id: &repository::Id) -> Option<&meta::Database> {
         self.repositories.get(id).map(|state| &state.db)
+    }
+
+    /// List all of the known repositories
+    pub fn list(&self) -> Vec<(repository::Id, repository::Repository)> {
+        self.repositories
+            .iter()
+            .map(|(id, state)| (id.clone(), state.repository.clone()))
+            .collect_vec()
     }
 }
 
