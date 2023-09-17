@@ -10,6 +10,7 @@ use std::{
 };
 
 use clap::{arg, ArgMatches, Command};
+use moss::package::{self, MissingMetaError};
 use stone::{payload::layout, read::Payload};
 use thiserror::{self, Error};
 use tokio::task;
@@ -46,7 +47,6 @@ fn extract(paths: Vec<PathBuf>, mut handle: tui::Handle<Message>) -> Result<(), 
     create_dir_all(".stoneStore")?;
 
     let content_store = PathBuf::from(".stoneStore");
-    let extraction_root = PathBuf::from("extracted");
 
     for path in paths {
         handle.print(format!("Extract: {:?}", path));
@@ -57,6 +57,13 @@ fn extract(paths: Vec<PathBuf>, mut handle: tui::Handle<Message>) -> Result<(), 
         let payloads = reader.payloads()?.collect::<Result<Vec<_>, _>>()?;
         let content = payloads.iter().find_map(Payload::content);
         let layouts = payloads.iter().find_map(Payload::layout);
+        let meta = payloads
+            .iter()
+            .find_map(Payload::meta)
+            .ok_or(Error::MissingMeta)?;
+
+        let pkg = package::Meta::from_stone_payload(meta).map_err(Error::MalformedMeta)?;
+        let extraction_root = PathBuf::from(pkg.id());
 
         if let Some(content) = content {
             let size = content.plain_size;
@@ -126,6 +133,12 @@ fn extract(paths: Vec<PathBuf>, mut handle: tui::Handle<Message>) -> Result<(), 
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("Missing metadata")]
+    MissingMeta,
+
+    #[error("malformed meta {0}")]
+    MalformedMeta(#[from] MissingMetaError),
+
     #[error("Read failure")]
     IO(#[from] std::io::Error),
 
