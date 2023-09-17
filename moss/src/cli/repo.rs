@@ -10,6 +10,7 @@ use thiserror::Error;
 use tokio::runtime;
 use url::Url;
 
+/// Control flow for the subcommands
 enum Action {
     // Root
     List(PathBuf),
@@ -17,6 +18,7 @@ enum Action {
     Add(PathBuf, String, Url),
 }
 
+/// Return a command for handling `repo` subcommands
 pub fn command() -> Command {
     Command::new("repo")
         .about("Manage software repositories")
@@ -34,7 +36,7 @@ pub fn command() -> Command {
         )
 }
 
-/// Handle subcommands to `repo`
+/// Handle subcommands to `repo`, with async runtime setup
 pub fn handle(args: &ArgMatches, root: &PathBuf) -> Result<(), Error> {
     let handler = match args.subcommand() {
         Some(("add", cmd_args)) => Action::Add(
@@ -80,6 +82,7 @@ async fn add(root: &Path, name: String, uri: Url) -> Result<(), Error> {
     Ok(())
 }
 
+/// List the repositories and pretty print them
 async fn list(root: &Path) -> Result<(), Error> {
     let installation = Installation::open(root);
     let manager = repository::Manager::new(installation).await?;
