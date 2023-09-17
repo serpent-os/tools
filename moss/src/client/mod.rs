@@ -44,6 +44,11 @@ impl Client {
     pub fn system() -> Result<Client, Error> {
         Client::new_for_root("/")
     }
+
+    /// Borrow the registry
+    pub fn registry(&mut self) -> &Registry {
+        &self.registry
+    }
 }
 
 impl Drop for Client {
