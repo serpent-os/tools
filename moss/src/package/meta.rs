@@ -111,6 +111,14 @@ impl Meta {
             download_size,
         })
     }
+
+    /// Return a reusable ID
+    pub fn id(&self) -> String {
+        format!(
+            "{}-{}-{}.{}",
+            &self.name.0, &self.version_identifier, &self.source_release, &self.architecture
+        )
+    }
 }
 
 fn find_meta_string(
