@@ -3,15 +3,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::collections::HashMap;
-use std::path::PathBuf;
 
-use futures::future;
+use futures::{future, TryStreamExt};
 use itertools::Itertools;
 use thiserror::Error;
-use tokio::task::JoinHandle;
-use tokio::{fs, io, task};
+use tokio::{fs, io};
 
 use crate::db::meta;
+use crate::stone;
 use crate::{config, package, Installation};
 
 use crate::repository::{self, Repository};
@@ -152,67 +151,34 @@ async fn refresh_index(
     // Wipe db since we're refreshing from a new index file
     state.db.wipe().await?;
 
-    // Take ownership, thread needs 'static / owned data
-    let db = state.db.clone();
+    // Get a stream of payloads
+    let (_, payloads) = stone::stream_payloads(&out_path).await?;
 
-    let tasks = task::spawn_blocking(move || update_meta_db(out_path, db))
-        .await
-        .expect("join handle")?;
+    // Update each payload into the meta db
+    payloads
+        .map_err(Error::ReadStone)
+        .try_for_each(|payload| async {
+            // We only care about meta payloads for index files
+            let stone::read::Payload::Meta(payload) = payload else {
+                return Ok(());
+            };
 
-    // Run all db tasks to completion
-    future::try_join_all(tasks)
-        .await
-        .expect("join handle")
-        .into_iter()
-        .collect::<Result<_, _>>()?;
+            let meta = package::Meta::from_stone_payload(&payload)?;
+
+            // Create id from hash of meta
+            let hash = meta.hash.clone().ok_or(Error::MissingMetaField(
+                stone::payload::meta::Tag::PackageHash,
+            ))?;
+            let id = package::Id::from(hash);
+
+            // Update db
+            state.db.add(id, meta).await?;
+
+            Ok(())
+        })
+        .await?;
 
     Ok(())
-}
-
-/// Reads stone index file from `path` and streams each
-/// index payload into the provided `db`
-///
-/// This function is blocking for reading the stone file, but spawns
-/// an async task for each read payload for updating `db`.
-///
-/// This returns a vec of the handles to those async tasks, which can
-/// be awaited on to ensure all db updates are processed
-fn update_meta_db(
-    path: PathBuf,
-    db: meta::Database,
-) -> Result<Vec<JoinHandle<Result<(), meta::Error>>>, Error> {
-    use std::fs::File;
-
-    // Open file and read it
-    let index_file = File::open(path).map_err(Error::OpenIndex)?;
-    let mut reader = stone::read(index_file)?;
-
-    // async db task handles
-    let mut handles = vec![];
-
-    for payload in reader.payloads()? {
-        // We only care about meta payloads for index files
-        let Ok(stone::read::Payload::Meta(payload)) = payload else {
-            continue;
-        };
-
-        let meta = package::Meta::from_stone_payload(&payload)?;
-
-        // Create id from hash of meta
-        let hash = meta.hash.clone().ok_or(Error::MissingMetaField(
-            stone::payload::meta::Tag::PackageHash,
-        ))?;
-        let id = package::Id::from(hash);
-
-        // Take ownership, future needs 'static / owned data
-        let db = db.clone();
-
-        // db is async, spawn task back on tokio runtime
-        handles.push(task::spawn(async move { db.add(id, meta).await }));
-    }
-
-    // return all db tasks
-    Ok(handles)
 }
 
 #[derive(Debug, Error)]
@@ -223,8 +189,6 @@ pub enum Error {
     RemoveDir(io::Error),
     #[error("failed to fetch index file: {0}")]
     FetchIndex(#[from] repository::FetchError),
-    #[error("failed to open index file: {0}")]
-    OpenIndex(io::Error),
     #[error("failed to read index file: {0}")]
     ReadStone(#[from] stone::read::Error),
     #[error("meta database error: {0}")]

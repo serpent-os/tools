@@ -20,5 +20,6 @@ serde_yaml.workspace = true
 sqlx.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
+tokio-util.workspace = true
 thiserror.workspace = true 
 url.workspace = true

@@ -2,17 +2,18 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
+use tokio::time::{sleep, Instant};
 use tui::widget::progress;
 use tui::{Constraint, Direction, Frame, Handle, Layout};
 
-fn main() {
-    tui::run(Program::default(), run).unwrap();
+#[tokio::main]
+async fn main() {
+    tui::run(Program::default(), run).await.unwrap();
 }
 
-fn run(mut handle: Handle<Message>) {
+async fn run(mut handle: Handle<Message>) {
     let now = Instant::now();
 
     let mut progress = 0;
@@ -20,7 +21,7 @@ fn run(mut handle: Handle<Message>) {
     loop {
         handle.print(format!("{:?}", now.elapsed()));
 
-        sleep(Duration::from_millis(50));
+        sleep(Duration::from_millis(50)).await;
 
         progress = (progress + 1) % 100;
 

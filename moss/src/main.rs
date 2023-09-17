@@ -5,6 +5,7 @@
 mod cli;
 
 /// Main entry point
-fn main() -> Result<(), cli::Error> {
-    cli::process()
+#[tokio::main]
+async fn main() -> Result<(), cli::Error> {
+    cli::process().await
 }

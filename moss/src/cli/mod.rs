@@ -56,7 +56,7 @@ fn command() -> Command {
 }
 
 /// Process all CLI arguments
-pub fn process() -> Result<(), Error> {
+pub async fn process() -> Result<(), Error> {
     let matches = command().get_matches();
     if matches.get_flag("version") {
         version::print();
@@ -66,14 +66,14 @@ pub fn process() -> Result<(), Error> {
     let root = matches.get_one::<PathBuf>("root").unwrap();
 
     match command().get_matches().subcommand() {
-        Some(("extract", args)) => extract::handle(args).map_err(Error::Extract),
-        Some(("inspect", args)) => inspect::handle(args).map_err(Error::Inspect),
+        Some(("extract", args)) => extract::handle(args).await.map_err(Error::Extract),
+        Some(("inspect", args)) => inspect::handle(args).await.map_err(Error::Inspect),
         Some(("version", _)) => {
             version::print();
             Ok(())
         }
         Some(("list", a)) => list::handle(a).map_err(Error::List),
-        Some(("repo", a)) => repo::handle(a, root).map_err(Error::Repo),
+        Some(("repo", a)) => repo::handle(a, root).await.map_err(Error::Repo),
         _ => unreachable!(),
     }
 }

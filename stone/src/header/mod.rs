@@ -53,6 +53,7 @@ impl AgnosticHeader {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum Header {
     V1(v1::Header),
 }
