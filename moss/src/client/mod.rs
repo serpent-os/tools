@@ -6,6 +6,8 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
+use crate::Installation;
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Root is invalid")]
@@ -15,7 +17,7 @@ pub enum Error {
 /// A Client is a connection to the underlying package management systems
 pub struct Client {
     /// Root that we operate on
-    root: PathBuf,
+    installation: Installation,
 }
 
 impl Client {
@@ -26,7 +28,9 @@ impl Client {
         if !root.exists() || !root.is_dir() {
             Err(Error::RootInvalid)
         } else {
-            Ok(Client { root })
+            Ok(Client {
+                installation: Installation::open(root),
+            })
         }
     }
 
