@@ -2,10 +2,16 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::path::PathBuf;
+
 use clap::{ArgMatches, Command};
+use itertools::Itertools;
 use thiserror::Error;
 
-use moss::client::{self, Client};
+use moss::{
+    client::{self, Client},
+    package::Flags,
+};
 
 pub fn command() -> Command {
     Command::new("list")
@@ -26,18 +32,34 @@ pub fn command() -> Command {
 
 /// Handle listing by filter
 pub fn handle(args: &ArgMatches) -> Result<(), Error> {
-    match args.subcommand() {
-        Some(("available", _)) => {
-            let _ = Client::system()?;
-            Ok(())
-        }
-        Some(("installed", _)) => unimplemented!(),
+    let root = args.get_one::<PathBuf>("root").unwrap().clone();
+
+    let filter_flags = match args.subcommand() {
+        Some(("available", _)) => Flags::AVAILABLE,
+        Some(("installed", _)) => Flags::INSTALLED,
         _ => unreachable!(),
+    };
+
+    // Grab a client for the target, enumerate packages
+    let mut client = Client::new_for_root(root)?;
+    let pkgs = client.registry().list(filter_flags).collect_vec();
+    if pkgs.is_empty() {
+        return Err(Error::NoneFound);
     }
+
+    // Print em
+    for pkg in pkgs {
+        println!(" - {:?}", pkg);
+    }
+
+    Ok(())
 }
 
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("client error: {0}")]
     Client(#[from] client::Error),
+
+    #[error("no packages found")]
+    NoneFound,
 }
