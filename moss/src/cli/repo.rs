@@ -84,14 +84,16 @@ async fn list(root: &Path) -> Result<(), Error> {
     let installation = Installation::open(root);
     let manager = repository::Manager::new(installation).await?;
 
-    let configured_repos = manager.list();
+    let mut configured_repos = manager.list();
     if configured_repos.is_empty() {
         println!("No repositories have been configured yet");
         return Ok(());
     }
 
+    configured_repos.sort_by_key(|(_, repo)| repo.priority);
+
     for (id, repo) in configured_repos {
-        println!(" - {} = {:?}", id, repo);
+        println!(" - {} = {} [{}]", id, repo.uri, repo.priority);
     }
 
     Ok(())
