@@ -36,7 +36,7 @@ impl Client {
 
         Ok(Client {
             installation: install,
-            registry: registry,
+            registry,
         })
     }
 
