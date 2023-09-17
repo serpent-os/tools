@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
-use crate::Installation;
+use crate::{Installation, Registry};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -18,6 +18,7 @@ pub enum Error {
 pub struct Client {
     /// Root that we operate on
     installation: Installation,
+    registry: Registry,
 }
 
 impl Client {
@@ -26,12 +27,17 @@ impl Client {
         let root = root.into();
 
         if !root.exists() || !root.is_dir() {
-            Err(Error::RootInvalid)
-        } else {
-            Ok(Client {
-                installation: Installation::open(root),
-            })
+            return Err(Error::RootInvalid);
         }
+
+        let install = Installation::open(root);
+        let registry = Registry::default();
+        // TODO: Seed with plugins for the Installation
+
+        Ok(Client {
+            installation: install,
+            registry: registry,
+        })
     }
 
     /// Construct a new Client for the global installation
