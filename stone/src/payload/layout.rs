@@ -66,6 +66,7 @@ impl Record for Layout {
 
         let source_length = reader.read_u16()?;
         let target_length = reader.read_u16()?;
+        let sanitize = |s: String| s.trim_end_matches('\0').to_string();
 
         let file_type = match reader.read_u8()? {
             1 => FileType::Regular,
@@ -86,13 +87,15 @@ impl Record for Layout {
             FileType::Regular => {
                 let source = reader.read_vec(source_length as usize)?;
                 let hash = u128::from_be_bytes(source.try_into().unwrap());
-                Entry::Regular(hash, reader.read_string(target_length as u64)?)
+                Entry::Regular(hash, sanitize(reader.read_string(target_length as u64)?))
             }
             FileType::Symlink => Entry::Symlink(
-                reader.read_string(source_length as u64)?,
-                reader.read_string(target_length as u64)?,
+                sanitize(reader.read_string(source_length as u64)?),
+                sanitize(reader.read_string(target_length as u64)?),
             ),
-            FileType::Directory => Entry::Directory(reader.read_string(target_length as u64)?),
+            FileType::Directory => {
+                Entry::Directory(sanitize(reader.read_string(target_length as u64)?))
+            }
             _ => {
                 if source_length > 0 {
                     let _ = reader.read_vec(source_length as usize);
