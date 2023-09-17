@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
-use crate::{Installation, Registry};
+use crate::{registry::plugin, Installation, Registry};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -31,8 +31,11 @@ impl Client {
         }
 
         let install = Installation::open(root);
-        let registry = Registry::default();
+        let mut registry = Registry::default();
         // TODO: Seed with plugins for the Installation
+
+        let c: plugin::cobble::Plugin = plugin::cobble::Plugin::default();
+        registry.add_plugin(plugin::Plugin::Cobble(c));
 
         Ok(Client {
             installation: install,
