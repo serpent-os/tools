@@ -3,13 +3,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
-    fs::{create_dir_all, remove_file, File},
+    fs::{create_dir_all, hard_link, remove_dir_all, remove_file, File},
     io::{copy, Read, Seek, SeekFrom, Write},
+    os::unix::fs::symlink,
     path::PathBuf,
 };
 
 use clap::{arg, ArgMatches, Command};
-use stone::read::Payload;
+use stone::{payload::layout, read::Payload};
 use thiserror::{self, Error};
 use tui::{widget::progress, Constraint, Direction, Frame, Handle, Layout};
 
@@ -32,6 +33,10 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
     tui::run(Program::default(), move |mut handle| {
         // Begin unpack
         create_dir_all(".stoneStore")?;
+
+        let content_store = PathBuf::from(".stoneStore");
+        let extraction_root = PathBuf::from("extracted");
+
         for path in paths {
             handle.print(format!("Extract: {:?}", path));
 
@@ -40,6 +45,7 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
 
             let payloads = reader.payloads()?.collect::<Result<Vec<_>, _>>()?;
             let content = payloads.iter().find_map(Payload::content);
+            let layouts = payloads.iter().find_map(Payload::layout);
 
             if let Some(content) = content {
                 let size = content.plain_size;
@@ -64,7 +70,46 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
 
                 remove_file(".stoneContent")?;
             }
+
+            if let Some(layouts) = layouts {
+                for layout in layouts {
+                    match &layout.entry {
+                        layout::Entry::Regular(id, target) => {
+                            let store_path = content_store.join(format!("{:02x}", id));
+                            let target_disk = extraction_root.join("usr").join(target);
+
+                            // drop it into a valid dir
+                            // TODO: Fix the permissions & mask
+                            let directory_target = target_disk.parent().unwrap();
+                            create_dir_all(directory_target)?;
+
+                            // link from CA store
+                            hard_link(store_path, target_disk)?;
+                        }
+                        layout::Entry::Symlink(source, target) => {
+                            let target_disk = extraction_root.join("usr").join(target);
+                            let directory_target = target_disk.parent().unwrap();
+
+                            // ensure dumping ground exists
+                            create_dir_all(directory_target)?;
+
+                            // join the link path to the directory target for relative joinery
+                            symlink(source, target_disk)?;
+                        }
+                        layout::Entry::Directory(target) => {
+                            let target_disk = extraction_root.join("usr").join(target);
+                            // TODO: Fix perms!
+                            create_dir_all(target_disk)?;
+                        }
+                        _ => unreachable!(),
+                    }
+                    //let store_path content_store.join(format!"{:02x}", layout.)
+                }
+            }
         }
+
+        // Clean up.
+        remove_dir_all(content_store)?;
 
         Ok(()) as Result<(), Error>
     })??;
