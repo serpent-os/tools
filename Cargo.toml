@@ -26,3 +26,6 @@ tokio = { version = "1.32", features = ["full"] }
 tokio-stream = { version = "0.1.14", features = ["time"] }
 url = { version = "2.4.1", features = ["serde"] }
 zstd = "0.12.4"
+
+[profile.release]
+lto = 'thin'
