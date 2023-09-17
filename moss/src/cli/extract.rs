@@ -12,6 +12,7 @@ use std::{
 use clap::{arg, ArgMatches, Command};
 use stone::{payload::layout, read::Payload};
 use thiserror::{self, Error};
+use tokio::task;
 use tui::{widget::progress, Constraint, Direction, Frame, Handle, Layout};
 
 pub fn command() -> Command {
@@ -22,7 +23,7 @@ pub fn command() -> Command {
 }
 
 /// Handle the `extract` command
-pub fn handle(args: &ArgMatches) -> Result<(), Error> {
+pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     let paths = args
         .get_many::<PathBuf>("PATH")
         .into_iter()
@@ -30,88 +31,95 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
         .cloned()
         .collect::<Vec<_>>();
 
-    tui::run(Program::default(), move |mut handle| {
-        // Begin unpack
-        create_dir_all(".stoneStore")?;
+    tui::run(Program::default(), |handle| async move {
+        task::spawn_blocking(move || extract(paths, handle))
+            .await
+            .expect("join handle")
+    })
+    .await??;
 
-        let content_store = PathBuf::from(".stoneStore");
-        let extraction_root = PathBuf::from("extracted");
+    Ok(())
+}
 
-        for path in paths {
-            handle.print(format!("Extract: {:?}", path));
+fn extract(paths: Vec<PathBuf>, mut handle: tui::Handle<Message>) -> Result<(), Error> {
+    // Begin unpack
+    create_dir_all(".stoneStore")?;
 
-            let rdr = File::open(path).map_err(Error::IO)?;
-            let mut reader = stone::read(rdr).map_err(Error::Format)?;
+    let content_store = PathBuf::from(".stoneStore");
+    let extraction_root = PathBuf::from("extracted");
 
-            let payloads = reader.payloads()?.collect::<Result<Vec<_>, _>>()?;
-            let content = payloads.iter().find_map(Payload::content);
-            let layouts = payloads.iter().find_map(Payload::layout);
+    for path in paths {
+        handle.print(format!("Extract: {:?}", path));
 
-            if let Some(content) = content {
-                let size = content.plain_size;
+        let rdr = File::open(path).map_err(Error::IO)?;
+        let mut reader = stone::read(rdr).map_err(Error::Format)?;
 
-                let mut content_storage = File::options()
-                    .read(true)
-                    .write(true)
-                    .create(true)
-                    .open(".stoneContent")?;
-                let mut writer = ProgressWriter::new(&mut content_storage, size, handle.clone());
-                reader.unpack_content(content, &mut writer)?;
+        let payloads = reader.payloads()?.collect::<Result<Vec<_>, _>>()?;
+        let content = payloads.iter().find_map(Payload::content);
+        let layouts = payloads.iter().find_map(Payload::layout);
 
-                // Rewind.
-                content_storage.seek(SeekFrom::Start(0))?;
+        if let Some(content) = content {
+            let size = content.plain_size;
 
-                // Extract all indices from the `.stoneContent` into hash-indexed unique files
-                for idx in payloads.iter().filter_map(Payload::index).flatten() {
-                    let mut output = File::create(format!(".stoneStore/{:02x}", idx.digest))?;
-                    let mut split_file = (&mut content_storage).take(idx.end - idx.start);
-                    copy(&mut split_file, &mut output)?;
-                }
+            let mut content_storage = File::options()
+                .read(true)
+                .write(true)
+                .create(true)
+                .open(".stoneContent")?;
+            let mut writer = ProgressWriter::new(&mut content_storage, size, handle.clone());
+            reader.unpack_content(content, &mut writer)?;
 
-                remove_file(".stoneContent")?;
+            // Rewind.
+            content_storage.seek(SeekFrom::Start(0))?;
+
+            // Extract all indices from the `.stoneContent` into hash-indexed unique files
+            for idx in payloads.iter().filter_map(Payload::index).flatten() {
+                let mut output = File::create(format!(".stoneStore/{:02x}", idx.digest))?;
+                let mut split_file = (&mut content_storage).take(idx.end - idx.start);
+                copy(&mut split_file, &mut output)?;
             }
 
-            if let Some(layouts) = layouts {
-                for layout in layouts {
-                    match &layout.entry {
-                        layout::Entry::Regular(id, target) => {
-                            let store_path = content_store.join(format!("{:02x}", id));
-                            let target_disk = extraction_root.join("usr").join(target);
+            remove_file(".stoneContent")?;
+        }
 
-                            // drop it into a valid dir
-                            // TODO: Fix the permissions & mask
-                            let directory_target = target_disk.parent().unwrap();
-                            create_dir_all(directory_target)?;
+        if let Some(layouts) = layouts {
+            for layout in layouts {
+                match &layout.entry {
+                    layout::Entry::Regular(id, target) => {
+                        let store_path = content_store.join(format!("{:02x}", id));
+                        let target_disk = extraction_root.join("usr").join(target);
 
-                            // link from CA store
-                            hard_link(store_path, target_disk)?;
-                        }
-                        layout::Entry::Symlink(source, target) => {
-                            let target_disk = extraction_root.join("usr").join(target);
-                            let directory_target = target_disk.parent().unwrap();
+                        // drop it into a valid dir
+                        // TODO: Fix the permissions & mask
+                        let directory_target = target_disk.parent().unwrap();
+                        create_dir_all(directory_target)?;
 
-                            // ensure dumping ground exists
-                            create_dir_all(directory_target)?;
-
-                            // join the link path to the directory target for relative joinery
-                            symlink(source, target_disk)?;
-                        }
-                        layout::Entry::Directory(target) => {
-                            let target_disk = extraction_root.join("usr").join(target);
-                            // TODO: Fix perms!
-                            create_dir_all(target_disk)?;
-                        }
-                        _ => unreachable!(),
+                        // link from CA store
+                        hard_link(store_path, target_disk)?;
                     }
+                    layout::Entry::Symlink(source, target) => {
+                        let target_disk = extraction_root.join("usr").join(target);
+                        let directory_target = target_disk.parent().unwrap();
+
+                        // ensure dumping ground exists
+                        create_dir_all(directory_target)?;
+
+                        // join the link path to the directory target for relative joinery
+                        symlink(source, target_disk)?;
+                    }
+                    layout::Entry::Directory(target) => {
+                        let target_disk = extraction_root.join("usr").join(target);
+                        // TODO: Fix perms!
+                        create_dir_all(target_disk)?;
+                    }
+                    _ => unreachable!(),
                 }
             }
         }
+    }
 
-        // Clean up.
-        remove_dir_all(content_store)?;
-
-        Ok(()) as Result<(), Error>
-    })??;
+    // Clean up.
+    remove_dir_all(content_store)?;
 
     Ok(())
 }

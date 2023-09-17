@@ -3,11 +3,12 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use clap::{arg, ArgMatches, Command};
-use std::fs::File;
+use futures::StreamExt;
+use moss::stone;
+use moss::stone::payload::layout;
+use moss::stone::payload::meta;
+use moss::stone::read::Payload;
 use std::path::PathBuf;
-use stone::payload::layout::Entry as LayoutEntry;
-use stone::payload::meta;
-use stone::read::Payload;
 use thiserror::Error;
 
 const COLUMN_WIDTH: usize = 20;
@@ -22,25 +23,26 @@ pub fn command() -> Command {
 ///
 /// Inspect the given .stone files and print results
 ///
-pub fn handle(args: &ArgMatches) -> Result<(), Error> {
+pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     let paths = args
         .get_many::<PathBuf>("PATH")
         .into_iter()
         .flatten()
+        .cloned()
         .collect::<Vec<_>>();
 
+    inspect(paths).await
+}
+
+async fn inspect(paths: Vec<PathBuf>) -> Result<(), Error> {
     // Process each input path in order.
     for path in paths {
-        let rdr = File::open(path).map_err(Error::IO)?;
-        let mut reader = stone::read(rdr).map_err(Error::Format)?;
+        let (header, mut payloads) = stone::stream_payloads(&path).await?;
 
         // Grab the header version
-        print!(
-            "{path:?} = stone container version {:?}",
-            reader.header.version()
-        );
+        print!("{path:?} = stone container version {:?}", header.version());
 
-        for result in reader.payloads()? {
+        while let Some(result) = payloads.next().await {
             let payload = result?;
 
             let mut layouts = vec![];
@@ -69,7 +71,9 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
                             meta::Kind::Uint64(i) => {
                                 println!("{:width$} : {}", name, i, width = COLUMN_WIDTH)
                             }
-                            _ => println!("{:width$} : {:?}", name, record, width = COLUMN_WIDTH),
+                            _ => {
+                                println!("{:width$} : {:?}", name, record, width = COLUMN_WIDTH)
+                            }
                         }
                     }
                 }
@@ -93,13 +97,13 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
                 println!("\n{:width$} :", "Layout entries", width = COLUMN_WIDTH);
                 for layout in layouts {
                     match layout.entry {
-                        LayoutEntry::Regular(hash, target) => {
+                        layout::Entry::Regular(hash, target) => {
                             println!("    - /usr/{} - [Regular] {:02x}", target, hash)
                         }
-                        LayoutEntry::Directory(target) => {
+                        layout::Entry::Directory(target) => {
                             println!("    - /usr/{} [Directory]", target)
                         }
-                        LayoutEntry::Symlink(source, target) => {
+                        layout::Entry::Symlink(source, target) => {
                             println!("    - /usr/{} -> {} [Symlink]", target, source)
                         }
                         _ => unreachable!(),

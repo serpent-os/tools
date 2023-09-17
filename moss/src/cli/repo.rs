@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 use clap::{arg, ArgMatches, Command};
 use moss::{repository, Installation, Repository};
 use thiserror::Error;
-use tokio::runtime;
 use url::Url;
 
 /// Control flow for the subcommands
@@ -36,8 +35,8 @@ pub fn command() -> Command {
         )
 }
 
-/// Handle subcommands to `repo`, with async runtime setup
-pub fn handle(args: &ArgMatches, root: &PathBuf) -> Result<(), Error> {
+/// Handle subcommands to `repo`
+pub async fn handle(args: &ArgMatches, root: &PathBuf) -> Result<(), Error> {
     let handler = match args.subcommand() {
         Some(("add", cmd_args)) => Action::Add(
             root.clone(),
@@ -48,15 +47,10 @@ pub fn handle(args: &ArgMatches, root: &PathBuf) -> Result<(), Error> {
         _ => unreachable!(),
     };
 
-    let rt = runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
-
     // dispatch to runtime handler function
     match handler {
-        Action::List(root) => rt.block_on(list(&root)),
-        Action::Add(root, name, uri) => rt.block_on(add(&root, name, uri)),
+        Action::List(root) => list(&root).await,
+        Action::Add(root, name, uri) => add(&root, name, uri).await,
     }
 }
 
