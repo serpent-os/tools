@@ -103,7 +103,6 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
                         }
                         _ => unreachable!(),
                     }
-                    //let store_path content_store.join(format!"{:02x}", layout.)
                 }
             }
         }
