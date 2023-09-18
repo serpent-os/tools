@@ -55,7 +55,7 @@ impl Plugin {
     }
 
     fn query(&self, flags: package::Flags, filter: impl Fn(&Meta) -> bool) -> Vec<Package> {
-        if flags.contains(package::Flags::SOURCE) {
+        if flags.contains(package::Flags::AVAILABLE) {
             self.packages
                 .iter()
                 .filter(|(_, state)| filter(&state.meta))
@@ -95,7 +95,7 @@ impl State {
             id,
             meta: self.meta.clone(),
             // TODO: Is this correct flag?
-            flags: package::Flags::SOURCE,
+            flags: package::Flags::AVAILABLE,
         }
     }
 }
