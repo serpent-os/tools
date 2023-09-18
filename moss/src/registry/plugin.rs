@@ -156,7 +156,7 @@ pub mod test {
         pub fn query_provider(&self, provider: &Provider, flags: package::Flags) -> Vec<Package> {
             self.packages
                 .iter()
-                .filter(|p| p.meta.providers.contains(&provider) && p.flags.contains(flags))
+                .filter(|p| p.meta.providers.contains(provider) && p.flags.contains(flags))
                 .cloned()
                 .collect()
         }

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use clap::{arg, ArgMatches, Command};
 use moss::{repository, Installation, Repository};
@@ -10,11 +10,11 @@ use thiserror::Error;
 use url::Url;
 
 /// Control flow for the subcommands
-enum Action {
+enum Action<'a> {
     // Root
-    List(PathBuf),
+    List(&'a Path),
     // Root, Id, Url
-    Add(PathBuf, String, Url),
+    Add(&'a Path, String, Url),
 }
 
 /// Return a command for handling `repo` subcommands
@@ -36,21 +36,21 @@ pub fn command() -> Command {
 }
 
 /// Handle subcommands to `repo`
-pub async fn handle(args: &ArgMatches, root: &PathBuf) -> Result<(), Error> {
+pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     let handler = match args.subcommand() {
         Some(("add", cmd_args)) => Action::Add(
-            root.clone(),
+            root,
             cmd_args.get_one::<String>("NAME").cloned().unwrap(),
             cmd_args.get_one::<Url>("URI").cloned().unwrap(),
         ),
-        Some(("list", _)) => Action::List(root.clone()),
+        Some(("list", _)) => Action::List(root),
         _ => unreachable!(),
     };
 
     // dispatch to runtime handler function
     match handler {
-        Action::List(root) => list(&root).await,
-        Action::Add(root, name, uri) => add(&root, name, uri).await,
+        Action::List(root) => list(root).await,
+        Action::Add(root, name, uri) => add(root, name, uri).await,
     }
 }
 

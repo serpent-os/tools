@@ -71,16 +71,21 @@ bitflags! {
 /// Iterate packages in sorted order
 pub struct Sorted<I>(I);
 
-impl<I> Sorted<I>
-where
-    I: IntoIterator<Item = Package>,
-{
+impl<I> Sorted<I> {
     pub fn new(iter: I) -> Self {
         Self(iter)
     }
+}
 
-    /// Sort the iterator
-    pub fn into_iter(self) -> impl Iterator<Item = Package> {
+/// Iterate in sorted order
+impl<I> IntoIterator for Sorted<I>
+where
+    I: IntoIterator<Item = Package>,
+{
+    type Item = Package;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter().sorted()
     }
 }

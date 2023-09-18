@@ -70,9 +70,7 @@ impl Installation {
         ensure_dirs_exist(&root);
 
         // Root? Always RW. Otherwise, check access for W
-        let mutability = if Uid::effective().is_root() {
-            Mutability::ReadWrite
-        } else if access(&root, AccessFlags::W_OK).is_ok() {
+        let mutability = if Uid::effective().is_root() || access(&root, AccessFlags::W_OK).is_ok() {
             Mutability::ReadWrite
         } else {
             Mutability::ReadOnly
@@ -137,11 +135,11 @@ impl Installation {
 /// In older versions of moss, the `/usr` entry was a symlink
 /// to an active state. In newer versions, the state is recorded
 /// within the installation tree. (`/usr/.stateID`)
-fn read_state_id(root: &PathBuf) -> Option<db::state::Id> {
+fn read_state_id(root: &Path) -> Option<db::state::Id> {
     let usr_path = root.join("usr");
     let state_path = root.join("usr").join(".stateID");
 
-    if let Some(id) = fs::read_to_string(&state_path)
+    if let Some(id) = fs::read_to_string(state_path)
         .ok()
         .and_then(|s| s.parse::<i64>().ok())
     {
@@ -154,7 +152,7 @@ fn read_state_id(root: &PathBuf) -> Option<db::state::Id> {
 }
 
 // Legacy `/usr` link support
-fn read_legacy_state_id(usr_target: &PathBuf) -> Option<db::state::Id> {
+fn read_legacy_state_id(usr_target: &Path) -> Option<db::state::Id> {
     if usr_target.ends_with("usr") {
         let parent = usr_target.parent()?;
         let base = parent.file_name()?;
@@ -167,7 +165,7 @@ fn read_legacy_state_id(usr_target: &PathBuf) -> Option<db::state::Id> {
 }
 
 /// Ensures moss directories are created
-fn ensure_dirs_exist(root: &PathBuf) {
+fn ensure_dirs_exist(root: &Path) {
     let moss = root.join(".moss");
 
     for path in [

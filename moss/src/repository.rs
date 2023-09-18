@@ -64,8 +64,13 @@ impl Map {
     pub fn add(&mut self, id: Id, repo: Repository) {
         self.0.insert(id, repo);
     }
+}
 
-    pub fn into_iter(self) -> impl Iterator<Item = (Id, Repository)> {
+impl IntoIterator for Map {
+    type Item = (Id, Repository);
+    type IntoIter = std::collections::hash_map::IntoIter<Id, Repository>;
+
+    fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
 }

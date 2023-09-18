@@ -283,7 +283,7 @@ mod test {
         assert_eq!(state.id.0, 1);
 
         // Check created
-        let elapsed = Utc::now().signed_duration_since(&state.created.0);
+        let elapsed = Utc::now().signed_duration_since(state.created.0);
         assert!(elapsed.num_seconds() == 0);
         assert!(!elapsed.is_zero());
 

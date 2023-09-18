@@ -14,38 +14,43 @@ use thiserror::Error;
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct Plugin {
     // Storage of local packages
-    packages: HashMap<String, Meta>,
-    id_to_path: HashMap<String, String>,
+    packages: HashMap<String, State>,
 }
 
 impl Plugin {
     /// Add a package to the cobble set
     pub async fn add_package(&mut self, path: impl Into<PathBuf>) -> Result<(), Error> {
-        let path: PathBuf = path.into();
-        let (_, mut payloads) = stone::stream_payloads(&path).await?;
-
-        let mut metadata = vec![];
+        let path = path.into();
+        let (_, payloads) = stone::stream_payloads(&path).await?;
 
         // Grab the metapayload
-        while let Some(result) = payloads.next().await {
-            let payload = result?;
-            match payload {
-                Payload::Meta(m) => {
-                    metadata.extend(m);
-                    break;
+        let metadata = payloads
+            .filter_map(|result| async {
+                if let Ok(Payload::Meta(meta)) = result {
+                    Some(meta)
+                } else {
+                    None
                 }
-                _ => {}
-            }
-        }
+            })
+            .boxed()
+            .next()
+            .await
+            .ok_or(Error::MissingMetaPayload)?;
 
         // Whack it into the cobbler
-        let pkg = Meta::from_stone_payload(&metadata)?;
-        let id = pkg.id();
-        self.id_to_path.insert(id, path.display().to_string());
-        self.packages.insert(pkg.id(), pkg);
+        let meta = Meta::from_stone_payload(&metadata)?;
+        let id = meta.id();
+
+        self.packages.insert(id, State { path, meta });
 
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct State {
+    path: PathBuf,
+    meta: Meta,
 }
 
 #[derive(Debug, Error)]
@@ -55,6 +60,9 @@ pub enum Error {
 
     #[error("metadata: {0}")]
     Metadata(#[from] MissingMetaError),
+
+    #[error("missing metadata payload")]
+    MissingMetaPayload,
 
     #[error("unspecified error")]
     Unspecified,
