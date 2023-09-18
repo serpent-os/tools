@@ -5,6 +5,7 @@
 use std::path::Path;
 
 use clap::{arg, Arg, ArgAction, ArgMatches, Command};
+use itertools::Itertools;
 use moss::{repository, Installation, Repository};
 use thiserror::Error;
 use url::Url;
@@ -86,7 +87,7 @@ async fn add(root: &Path, name: String, uri: Url, comment: String) -> Result<(),
             Repository {
                 description: comment,
                 uri,
-                priority: 0,
+                priority: repository::Priority::new(0),
             },
         )
         .await?;
@@ -101,15 +102,15 @@ async fn list(root: &Path) -> Result<(), Error> {
     let installation = Installation::open(root);
     let manager = repository::Manager::new(installation).await?;
 
-    let mut configured_repos = manager.list();
-    if configured_repos.is_empty() {
+    let configured_repos = manager.list();
+    if configured_repos.len() == 0 {
         println!("No repositories have been configured yet");
         return Ok(());
     }
 
-    configured_repos.sort_by_key(|(_, repo)| repo.priority);
-
-    for (id, repo) in configured_repos {
+    for (id, repo) in
+        configured_repos.sorted_by(|(_, a), (_, b)| a.priority.cmp(&b.priority).reverse())
+    {
         println!(" - {} = {} [{}]", id, repo.uri, repo.priority);
     }
 

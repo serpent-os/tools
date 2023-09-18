@@ -35,6 +35,12 @@ impl From<Name> for String {
     }
 }
 
+impl fmt::Display for Name {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 /// The metadata of a [`Package`]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Meta {

@@ -12,12 +12,12 @@ use thiserror::Error;
 
 // TODO:
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
-pub struct Plugin {
+pub struct Cobble {
     // Storage of local packages
     packages: HashMap<meta::Id, State>,
 }
 
-impl Plugin {
+impl Cobble {
     /// Add a package to the cobble set
     pub async fn add_package(&mut self, path: impl Into<PathBuf>) -> Result<meta::Id, Error> {
         let path = path.into();

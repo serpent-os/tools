@@ -72,7 +72,7 @@ pub async fn process() -> Result<(), Error> {
             version::print();
             Ok(())
         }
-        Some(("list", a)) => list::handle(a).map_err(Error::List),
+        Some(("list", a)) => list::handle(a).await.map_err(Error::List),
         Some(("repo", a)) => repo::handle(a, root).await.map_err(Error::Repo),
         _ => unreachable!(),
     }
