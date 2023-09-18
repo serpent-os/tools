@@ -15,6 +15,8 @@ enum Action<'a> {
     List(&'a Path),
     // Root, Id, Url
     Add(&'a Path, String, Url),
+    // Root, Id
+    Remove(&'a Path, String),
 }
 
 /// Return a command for handling `repo` subcommands
@@ -33,6 +35,11 @@ pub fn command() -> Command {
                 .about("List system software repositories")
                 .long_about("List all of the system repositories and their status"),
         )
+        .subcommand(
+            Command::new("remove")
+                .about("Remove a repository for the system")
+                .arg(arg!(<NAME> "repo name").value_parser(clap::value_parser!(String))),
+        )
 }
 
 /// Handle subcommands to `repo`
@@ -44,6 +51,9 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
             cmd_args.get_one::<Url>("URI").cloned().unwrap(),
         ),
         Some(("list", _)) => Action::List(root),
+        Some(("remove", cmd_args)) => {
+            Action::Remove(root, cmd_args.get_one::<String>("NAME").cloned().unwrap())
+        }
         _ => unreachable!(),
     };
 
@@ -51,6 +61,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     match handler {
         Action::List(root) => list(root).await,
         Action::Add(root, name, uri) => add(root, name, uri).await,
+        Action::Remove(_, _) => unimplemented!(),
     }
 }
 
