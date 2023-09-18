@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-use clap::{arg, ArgMatches, Command};
+use clap::{arg, Arg, ArgAction, ArgMatches, Command};
 use moss::{repository, Installation, Repository};
 use thiserror::Error;
 use url::Url;
@@ -13,8 +13,8 @@ use url::Url;
 enum Action<'a> {
     // Root
     List(&'a Path),
-    // Root, Id, Url
-    Add(&'a Path, String, Url),
+    // Root, Id, Url, Comment
+    Add(&'a Path, String, Url, String),
     // Root, Id
     Remove(&'a Path, String),
 }
@@ -28,7 +28,15 @@ pub fn command() -> Command {
         .subcommand(
             Command::new("add")
                 .arg(arg!(<NAME> "repo name").value_parser(clap::value_parser!(String)))
-                .arg(arg!(<URI> "repo uri").value_parser(clap::value_parser!(Url))),
+                .arg(arg!(<URI> "repo uri").value_parser(clap::value_parser!(Url)))
+                .arg(
+                    Arg::new("comment")
+                        .short('c')
+                        .default_value("...")
+                        .action(ArgAction::Set)
+                        .help("Set the comment for the repository")
+                        .value_parser(clap::value_parser!(String)),
+                ),
         )
         .subcommand(
             Command::new("list")
@@ -49,6 +57,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
             root,
             cmd_args.get_one::<String>("NAME").cloned().unwrap(),
             cmd_args.get_one::<Url>("URI").cloned().unwrap(),
+            cmd_args.get_one::<String>("comment").cloned().unwrap(),
         ),
         Some(("list", _)) => Action::List(root),
         Some(("remove", cmd_args)) => {
@@ -60,13 +69,13 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     // dispatch to runtime handler function
     match handler {
         Action::List(root) => list(root).await,
-        Action::Add(root, name, uri) => add(root, name, uri).await,
+        Action::Add(root, name, uri, comment) => add(root, name, uri, comment).await,
         Action::Remove(_, _) => unimplemented!(),
     }
 }
 
 // Actual implementation of moss repo add, asynchronous
-async fn add(root: &Path, name: String, uri: Url) -> Result<(), Error> {
+async fn add(root: &Path, name: String, uri: Url, comment: String) -> Result<(), Error> {
     let installation = Installation::open(root);
 
     let mut manager = repository::Manager::new(installation).await?;
@@ -75,7 +84,7 @@ async fn add(root: &Path, name: String, uri: Url) -> Result<(), Error> {
         .add_repository(
             repository::Id::new(name),
             Repository {
-                description: "...".into(),
+                description: comment,
                 uri,
                 priority: 0,
             },
