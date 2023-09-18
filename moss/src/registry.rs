@@ -83,6 +83,8 @@ impl Registry {
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashSet;
+
     use super::*;
 
     #[test]
@@ -135,5 +137,65 @@ mod test {
                 _ => {}
             }
         }
+    }
+
+    #[test]
+    fn test_flags() {
+        let mut registry = Registry::default();
+
+        let package = |id: &str, flags| Package {
+            id: package::Id::from(id.to_string()),
+            meta: package::Meta {
+                name: package::Name::from(id.to_string()),
+                version_identifier: Default::default(),
+                source_release: Default::default(),
+                build_release: Default::default(),
+                architecture: Default::default(),
+                summary: Default::default(),
+                description: Default::default(),
+                source_id: Default::default(),
+                homepage: Default::default(),
+                licenses: Default::default(),
+                dependencies: Default::default(),
+                providers: Default::default(),
+                uri: Default::default(),
+                hash: Default::default(),
+                download_size: Default::default(),
+            },
+            flags,
+        };
+
+        registry.add_plugin(Plugin::Test(plugin::test::Plugin::new(
+            1,
+            vec![
+                package("a", package::Flags::INSTALLED),
+                package("b", package::Flags::AVAILABLE),
+                package("c", package::Flags::SOURCE),
+                package("d", package::Flags::SOURCE | package::Flags::INSTALLED),
+                package("e", package::Flags::SOURCE | package::Flags::AVAILABLE),
+            ],
+        )));
+
+        let installed = registry.list_installed(package::Flags::NONE);
+        let available = registry.list_available(package::Flags::NONE);
+        let installed_source = registry.list_installed(package::Flags::SOURCE);
+        let available_source = registry.list_available(package::Flags::SOURCE);
+
+        fn matches(iter: impl Iterator<Item = Package>, expected: &[&'static str]) -> bool {
+            let packages = iter
+                .map(|p| String::from(p.meta.name))
+                .collect::<HashSet<_>>();
+            let expected = expected
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<HashSet<_>>();
+
+            packages == expected
+        }
+
+        assert!(matches(installed, &["a", "d"]));
+        assert!(matches(available, &["b", "e"]));
+        assert!(matches(installed_source, &["d"]));
+        assert!(matches(available_source, &["e"]));
     }
 }
