@@ -19,7 +19,7 @@ pub struct Plugin {
 
 impl Plugin {
     /// Add a package to the cobble set
-    pub async fn add_package(&mut self, path: impl Into<PathBuf>) -> Result<(), Error> {
+    pub async fn add_package(&mut self, path: impl Into<PathBuf>) -> Result<meta::Id, Error> {
         let path = path.into();
         let (_, payloads) = stone::stream_payloads(&path).await?;
 
@@ -40,10 +40,11 @@ impl Plugin {
         // Whack it into the cobbler
         let meta = Meta::from_stone_payload(&metadata)?;
         let id = meta.id();
+        let ret = id.clone();
 
         self.packages.insert(id, State { path, meta });
 
-        Ok(())
+        Ok(ret)
     }
 
     pub fn package(&self, id: &package::Id) -> Option<Package> {
