@@ -67,6 +67,7 @@ pub async fn process() -> Result<(), Error> {
 
     match command().get_matches().subcommand() {
         Some(("extract", args)) => extract::handle(args).await.map_err(Error::Extract),
+        Some(("info", args)) => info::handle(args).await.map_err(Error::Info),
         Some(("inspect", args)) => inspect::handle(args).await.map_err(Error::Inspect),
         Some(("version", _)) => {
             version::print();
@@ -80,6 +81,9 @@ pub async fn process() -> Result<(), Error> {
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("error handling info: {0}")]
+    Info(#[from] info::Error),
+
     #[error("error handling list: {0}")]
     List(#[from] list::Error),
 
