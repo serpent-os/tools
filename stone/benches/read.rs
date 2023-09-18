@@ -28,7 +28,7 @@ fn read<R: Read + Seek>(reader: R) {
         .unwrap();
 
     if let Some(content) = payloads.iter().find_map(stone::read::Payload::content) {
-        stone.unpack_content(&content, &mut sink()).unwrap();
+        stone.unpack_content(content, &mut sink()).unwrap();
     }
 }
 

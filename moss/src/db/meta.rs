@@ -319,7 +319,7 @@ mod test {
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
         let meta_payload = payloads.iter().find_map(Payload::meta).unwrap();
-        let meta = Meta::from_stone_payload(&meta_payload).unwrap();
+        let meta = Meta::from_stone_payload(meta_payload).unwrap();
 
         let id = package::Id::from("test".to_string());
 

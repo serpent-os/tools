@@ -79,13 +79,10 @@ impl Meta {
             .iter()
             .filter_map(|meta| meta_string(meta, payload::meta::Tag::License))
             .collect();
-        let dependencies = payload
-            .iter()
-            .filter_map(|meta| meta_dependency(meta))
-            .collect();
+        let dependencies = payload.iter().filter_map(meta_dependency).collect();
         let providers = payload
             .iter()
-            .filter_map(|meta| meta_provider(meta))
+            .filter_map(meta_provider)
             // Add package name as provider
             .chain(Some(Provider {
                 kind: dependency::Kind::PackageName,
