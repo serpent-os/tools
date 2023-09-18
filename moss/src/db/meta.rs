@@ -41,10 +41,99 @@ impl Database {
         Ok(())
     }
 
+    // TODO: Replace with specialized query interfaces
+    pub async fn all(&self) -> Result<Vec<(package::Id, Meta)>, Error> {
+        let entry_query = sqlx::query_as::<_, encoding::Entry>(
+            "
+            SELECT package,
+                   name,
+                   version_identifier,
+                   source_release,
+                   build_release,
+                   architecture,
+                   summary,
+                   description,
+                   source_id,
+                   homepage,
+                   uri,
+                   hash,
+                   download_size
+            FROM meta;
+            ",
+        );
+
+        let licenses_query = sqlx::query_as::<_, encoding::License>(
+            "
+            SELECT package, license
+            FROM meta_licenses;
+            ",
+        );
+
+        let dependencies_query = sqlx::query_as::<_, encoding::Dependency>(
+            "
+            SELECT package, dependency
+            FROM meta_dependencies;
+            ",
+        );
+
+        let providers_query = sqlx::query_as::<_, encoding::Provider>(
+            "
+            SELECT package, provider
+            FROM meta_providers;
+            ",
+        );
+
+        let (entries, licenses, dependencies, providers) = futures::try_join!(
+            entry_query.fetch_all(&self.pool),
+            licenses_query.fetch_all(&self.pool),
+            dependencies_query.fetch_all(&self.pool),
+            providers_query.fetch_all(&self.pool),
+        )?;
+
+        Ok(entries
+            .into_iter()
+            .map(|entry| {
+                (
+                    entry.id.0.clone(),
+                    Meta {
+                        name: entry.name.0,
+                        version_identifier: entry.version_identifier,
+                        source_release: entry.source_release as u64,
+                        build_release: entry.build_release as u64,
+                        architecture: entry.architecture,
+                        summary: entry.summary,
+                        description: entry.description,
+                        source_id: entry.source_id,
+                        homepage: entry.homepage,
+                        licenses: licenses
+                            .iter()
+                            .filter(|l| l.id.0 == entry.id.0)
+                            .map(|l| l.license.clone())
+                            .collect(),
+                        dependencies: dependencies
+                            .iter()
+                            .filter(|l| l.id.0 == entry.id.0)
+                            .map(|d| d.dependency.0.clone())
+                            .collect(),
+                        providers: providers
+                            .iter()
+                            .filter(|l| l.id.0 == entry.id.0)
+                            .map(|p| p.provider.0.clone())
+                            .collect(),
+                        uri: entry.uri,
+                        hash: entry.hash,
+                        download_size: entry.download_size.map(|i| i as u64),
+                    },
+                )
+            })
+            .collect())
+    }
+
     pub async fn get(&self, package: &package::Id) -> Result<Meta, Error> {
         let entry_query = sqlx::query_as::<_, encoding::Entry>(
             "
-            SELECT name,
+            SELECT package, 
+                   name,
                    version_identifier,
                    source_release,
                    build_release,
@@ -64,7 +153,7 @@ impl Database {
 
         let licenses_query = sqlx::query_as::<_, encoding::License>(
             "
-            SELECT license
+            SELECT package, license
             FROM meta_licenses
             WHERE package = ?;
             ",
@@ -73,7 +162,7 @@ impl Database {
 
         let dependencies_query = sqlx::query_as::<_, encoding::Dependency>(
             "
-            SELECT dependency
+            SELECT package, dependency
             FROM meta_dependencies
             WHERE package = ?;
             ",
@@ -82,7 +171,7 @@ impl Database {
 
         let providers_query = sqlx::query_as::<_, encoding::Provider>(
             "
-            SELECT provider
+            SELECT package, provider
             FROM meta_providers
             WHERE package = ?;
             ",
@@ -245,10 +334,21 @@ async fn remove(package: package::Id, connection: &mut SqliteConnection) -> Resu
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("row not found")]
+    RowNotFound,
     #[error("database error: {0}")]
-    Sqlx(#[from] sqlx::Error),
+    Sqlx(sqlx::Error),
     #[error("migration error: {0}")]
     Migrate(#[from] sqlx::migrate::MigrateError),
+}
+
+impl From<sqlx::Error> for Error {
+    fn from(error: sqlx::Error) -> Self {
+        match error {
+            sqlx::Error::RowNotFound => Error::RowNotFound,
+            error => Error::Sqlx(error),
+        }
+    }
 }
 
 mod encoding {
@@ -259,6 +359,8 @@ mod encoding {
 
     #[derive(FromRow)]
     pub struct Entry {
+        #[sqlx(rename = "package")]
+        pub id: Decoder<package::Id>,
         pub name: Decoder<package::Name>,
         pub version_identifier: String,
         pub source_release: i64,
@@ -275,16 +377,22 @@ mod encoding {
 
     #[derive(FromRow)]
     pub struct License {
+        #[sqlx(rename = "package")]
+        pub id: Decoder<package::Id>,
         pub license: String,
     }
 
     #[derive(FromRow)]
     pub struct Dependency {
+        #[sqlx(rename = "package")]
+        pub id: Decoder<package::Id>,
         pub dependency: Decoder<crate::Dependency>,
     }
 
     #[derive(FromRow)]
     pub struct Provider {
+        #[sqlx(rename = "package")]
+        pub id: Decoder<package::Id>,
         pub provider: Decoder<crate::Provider>,
     }
 

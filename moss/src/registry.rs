@@ -7,6 +7,8 @@
 
 use std::collections::BTreeSet;
 
+use futures::{stream, Future, Stream, StreamExt};
+
 use crate::package::{self, Package};
 use crate::Provider;
 
@@ -28,55 +30,62 @@ impl Registry {
         self.plugins.insert(plugin::PriorityOrdered(plugin));
     }
 
-    /// Remove a [`Plugin`] from the [`Registry`].
-    pub fn remove_plugin(&mut self, plugin: &Plugin) {
-        self.plugins.retain(|p| p.0 != *plugin);
+    fn query<'a: 'b, 'b, F, I>(
+        &'a self,
+        query: impl Fn(&'b Plugin) -> F + Copy + 'b,
+    ) -> impl Stream<Item = Package> + 'b
+    where
+        F: Future<Output = I>,
+        I: IntoIterator<Item = Package>,
+    {
+        stream::iter(self.plugins.iter().map(move |p| {
+            stream::once(async move {
+                let packages = query(&p.0).await;
+
+                stream::iter(packages.into_iter())
+            })
+            .flatten()
+        }))
+        .flatten()
     }
 
-    /// Return a sorted iterator of [`Package`] by provider
+    /// Return a sorted stream of [`Package`] by provider
     pub fn by_provider<'a: 'b, 'b>(
         &'a self,
         provider: &'b Provider,
         flags: package::Flags,
-    ) -> impl Iterator<Item = Package> + 'b {
-        // Returns an iterator of packages sorted by plugin priority (BTreeSet) then package ordering
-        self.plugins
-            .iter()
-            .flat_map(move |p| p.0.query_provider(provider, flags).into_iter())
+    ) -> impl Stream<Item = Package> + 'b {
+        self.query(move |plugin| plugin.query_provider(provider, flags))
     }
 
-    /// Return a sorted iterator of [`Package`] by name
+    /// Return a sorted stream of [`Package`] by name
     pub fn by_name<'a: 'b, 'b>(
         &'a self,
         package_name: &'b package::Name,
         flags: package::Flags,
-    ) -> impl Iterator<Item = Package> + 'b {
-        self.plugins
-            .iter()
-            .flat_map(move |p| p.0.query_name(package_name, flags).into_iter())
+    ) -> impl Stream<Item = Package> + 'b {
+        self.query(move |plugin| plugin.query_name(package_name, flags))
     }
 
-    /// Return a sorted iterator of [`Package`] by id
-    pub fn by_id<'a: 'b, 'b>(&'a self, id: &'b package::Id) -> impl Iterator<Item = Package> + 'b {
-        self.plugins.iter().flat_map(|p| p.0.package(id))
+    /// Return a sorted stream of [`Package`] by id
+    pub fn by_id<'a: 'b, 'b>(&'a self, id: &'b package::Id) -> impl Stream<Item = Package> + 'b {
+        self.query(move |plugin| plugin.package(id))
     }
 
-    /// Return a sorted iterator of [`Package`] matching the given [`Flags`]
+    /// Return a sorted stream of [`Package`] matching the given [`Flags`]
     ///
     /// [`Flags`]: package::Flags
-    pub fn list(&self, flags: package::Flags) -> impl Iterator<Item = Package> + '_ {
-        self.plugins
-            .iter()
-            .flat_map(move |p| p.0.list(flags).into_iter())
+    pub fn list(&self, flags: package::Flags) -> impl Stream<Item = Package> + '_ {
+        self.query(move |plugin| plugin.list(flags))
     }
 
-    /// Return a sorted iterator of installed [`Package`]
-    pub fn list_installed(&self, flags: package::Flags) -> impl Iterator<Item = Package> + '_ {
+    /// Return a sorted stream of installed [`Package`]
+    pub fn list_installed(&self, flags: package::Flags) -> impl Stream<Item = Package> + '_ {
         self.list(flags | package::Flags::INSTALLED)
     }
 
-    /// Return a sorted iterator of available [`Package`]
-    pub fn list_available(&self, flags: package::Flags) -> impl Iterator<Item = Package> + '_ {
+    /// Return a sorted stream of available [`Package`]
+    pub fn list_available(&self, flags: package::Flags) -> impl Stream<Item = Package> + '_ {
         self.list(flags | package::Flags::AVAILABLE)
     }
 }
@@ -87,8 +96,8 @@ mod test {
 
     use super::*;
 
-    #[test]
-    fn test_ordering() {
+    #[tokio::test]
+    async fn test_ordering() {
         let mut registry = Registry::default();
 
         let package = |id: &str, release| Package {
@@ -113,20 +122,22 @@ mod test {
             flags: package::Flags::NONE,
         };
 
-        registry.add_plugin(Plugin::Test(plugin::test::Plugin::new(
+        registry.add_plugin(Plugin::Test(plugin::Test::new(
             // Priority
             1,
             // Id / release number
             vec![package("a", 0), package("b", 100)],
         )));
 
-        registry.add_plugin(Plugin::Test(plugin::test::Plugin::new(
+        registry.add_plugin(Plugin::Test(plugin::Test::new(
             50,
             vec![package("c", 50), package("d", 1)],
         )));
 
+        let mut query = registry.list(package::Flags::NONE).enumerate().boxed();
+
         // Packages are sorted by plugin priority, desc -> release number, desc
-        for (idx, package) in registry.list(package::Flags::NONE).enumerate() {
+        while let Some((idx, package)) = query.next().await {
             let id = |id: &str| package::Id::from(id.to_string());
 
             match idx {
@@ -139,8 +150,8 @@ mod test {
         }
     }
 
-    #[test]
-    fn test_flags() {
+    #[tokio::test]
+    async fn test_flags() {
         let mut registry = Registry::default();
 
         let package = |id: &str, flags| Package {
@@ -165,7 +176,7 @@ mod test {
             flags,
         };
 
-        registry.add_plugin(Plugin::Test(plugin::test::Plugin::new(
+        registry.add_plugin(Plugin::Test(plugin::test::Test::new(
             1,
             vec![
                 package("a", package::Flags::INSTALLED),
@@ -176,13 +187,26 @@ mod test {
             ],
         )));
 
-        let installed = registry.list_installed(package::Flags::NONE);
-        let available = registry.list_available(package::Flags::NONE);
-        let installed_source = registry.list_installed(package::Flags::SOURCE);
-        let available_source = registry.list_available(package::Flags::SOURCE);
+        let installed = registry
+            .list_installed(package::Flags::NONE)
+            .collect()
+            .await;
+        let available = registry
+            .list_available(package::Flags::NONE)
+            .collect()
+            .await;
+        let installed_source = registry
+            .list_installed(package::Flags::SOURCE)
+            .collect()
+            .await;
+        let available_source = registry
+            .list_available(package::Flags::SOURCE)
+            .collect()
+            .await;
 
-        fn matches(iter: impl Iterator<Item = Package>, expected: &[&'static str]) -> bool {
-            let packages = iter
+        fn matches(actual: Vec<Package>, expected: &[&'static str]) -> bool {
+            let actual = actual
+                .into_iter()
                 .map(|p| String::from(p.meta.name))
                 .collect::<HashSet<_>>();
             let expected = expected
@@ -190,7 +214,7 @@ mod test {
                 .map(|s| s.to_string())
                 .collect::<HashSet<_>>();
 
-            packages == expected
+            actual == expected
         }
 
         assert!(matches(installed, &["a", "d"]));

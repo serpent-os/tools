@@ -13,7 +13,7 @@ use tokio::{
 };
 use url::Url;
 
-use crate::Config;
+use crate::{db::meta, Config};
 
 pub use self::manager::Manager;
 
@@ -45,7 +45,50 @@ impl fmt::Display for Id {
 pub struct Repository {
     pub description: String,
     pub uri: Url,
-    pub priority: u64,
+    pub priority: Priority,
+}
+
+/// An active repository that has been
+/// fetched and cached to a meta database
+#[derive(Debug, Clone)]
+pub struct Active {
+    pub id: Id,
+    pub repository: Repository,
+    pub db: meta::Database,
+}
+
+/// The selection priority of a [`Repository`]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Priority(u64);
+
+impl Priority {
+    pub fn new(priority: u64) -> Self {
+        Self(priority)
+    }
+}
+
+impl fmt::Display for Priority {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl From<Priority> for u64 {
+    fn from(priority: Priority) -> Self {
+        priority.0
+    }
+}
+
+impl PartialOrd for Priority {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Priority {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0).reverse()
+    }
 }
 
 /// A map of repositories

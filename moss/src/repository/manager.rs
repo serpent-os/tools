@@ -5,7 +5,6 @@
 use std::collections::HashMap;
 
 use futures::{future, TryStreamExt};
-use itertools::Itertools;
 use thiserror::Error;
 use tokio::{fs, io};
 
@@ -18,7 +17,7 @@ use crate::repository::{self, Repository};
 /// Manage a bunch of repositories
 pub struct Manager {
     installation: Installation,
-    repositories: HashMap<repository::Id, State>,
+    repositories: HashMap<repository::Id, repository::Active>,
 }
 
 impl Manager {
@@ -34,7 +33,7 @@ impl Manager {
             future::try_join_all(configs.into_iter().map(|(id, repository)| async {
                 let db = open_meta_db(&id, &installation).await?;
 
-                Ok::<_, Error>((id, State { repository, db }))
+                Ok::<_, Error>((id.clone(), repository::Active { id, repository, db }))
             }))
             .await?
             .into_iter()
@@ -65,7 +64,8 @@ impl Manager {
 
         let db = open_meta_db(&id, &self.installation).await?;
 
-        self.repositories.insert(id, State { repository, db });
+        self.repositories
+            .insert(id.clone(), repository::Active { id, repository, db });
 
         Ok(())
     }
@@ -95,23 +95,17 @@ impl Manager {
         Ok(())
     }
 
-    /// Get access to the [`meta::Database`] of the managed repository
-    pub(crate) fn get_meta_db(&self, id: &repository::Id) -> Option<&meta::Database> {
-        self.repositories.get(id).map(|state| &state.db)
+    /// Returns the active repositories held by this manager
+    pub(crate) fn active(&self) -> impl Iterator<Item = repository::Active> + '_ {
+        self.repositories.values().cloned()
     }
 
     /// List all of the known repositories
-    pub fn list(&self) -> Vec<(repository::Id, repository::Repository)> {
+    pub fn list(&self) -> impl ExactSizeIterator<Item = (&repository::Id, &Repository)> {
         self.repositories
             .iter()
-            .map(|(id, state)| (id.clone(), state.repository.clone()))
-            .collect_vec()
+            .map(|(id, state)| (id, &state.repository))
     }
-}
-
-struct State {
-    repository: Repository,
-    db: meta::Database,
 }
 
 /// Open the meta db file, ensuring it's
@@ -134,7 +128,7 @@ async fn open_meta_db(
 /// loads it's metadata into the meta db
 async fn refresh_index(
     id: &repository::Id,
-    state: &State,
+    state: &repository::Active,
     installation: &Installation,
 ) -> Result<(), Error> {
     let out_dir = installation.repo_path(id.to_string());

@@ -4,4 +4,4 @@
 
 // TODO:
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Plugin;
+pub struct Active;

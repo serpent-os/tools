@@ -5,6 +5,7 @@
 use std::path::PathBuf;
 
 use clap::{ArgMatches, Command};
+use futures::StreamExt;
 use itertools::Itertools;
 use thiserror::Error;
 
@@ -31,7 +32,7 @@ pub fn command() -> Command {
 }
 
 /// Handle listing by filter
-pub fn handle(args: &ArgMatches) -> Result<(), Error> {
+pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     let root = args.get_one::<PathBuf>("root").unwrap().clone();
 
     let filter_flags = match args.subcommand() {
@@ -41,15 +42,19 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
     };
 
     // Grab a client for the target, enumerate packages
-    let mut client = Client::new_for_root(root)?;
-    let pkgs = client.registry().list(filter_flags).collect_vec();
+    let client = Client::new_for_root(root).await?;
+    let pkgs = client.registry.list(filter_flags).collect::<Vec<_>>().await;
+
     if pkgs.is_empty() {
         return Err(Error::NoneFound);
     }
 
     // Print em
-    for pkg in pkgs {
-        println!(" - {:?}", pkg);
+    for pkg in pkgs
+        .into_iter()
+        .sorted_by_key(|pkg| pkg.meta.name.to_string())
+    {
+        println!(" - {} v{}", pkg.meta.name, pkg.meta.version_identifier);
     }
 
     Ok(())

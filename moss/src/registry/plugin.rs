@@ -13,31 +13,37 @@
 use crate::registry::package::{self, Package};
 use crate::Provider;
 
+pub use self::active::Active;
+pub use self::cobble::Cobble;
+pub use self::repository::Repository;
+#[cfg(test)]
+pub use self::test::Test;
+
 mod active;
-pub mod cobble;
+mod cobble;
 mod repository;
 
 /// A [`Registry`] plugin that enables querying [`Package`] information.
 ///
 /// [`Registry`]: super::Registry
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Plugin {
-    Active(active::Plugin),
-    Cobble(cobble::Plugin),
-    Repository(repository::Plugin),
+    Active(Active),
+    Cobble(Cobble),
+    Repository(Repository),
 
     #[cfg(test)]
-    Test(test::Plugin),
+    Test(Test),
 }
 
 impl Plugin {
     /// Return a package for the given [`package::Id`]. Returns `None` if
     /// the `package` cannot be located.
-    pub fn package(&self, id: &package::Id) -> Option<Package> {
+    pub async fn package(&self, id: &package::Id) -> Option<Package> {
         match self {
             Plugin::Active(_) => None,
             Plugin::Cobble(plugin) => plugin.package(id),
-            Plugin::Repository(_) => None,
+            Plugin::Repository(plugin) => plugin.package(id).await,
 
             #[cfg(test)]
             Plugin::Test(plugin) => plugin.package(id),
@@ -45,11 +51,11 @@ impl Plugin {
     }
 
     /// List all packages with matching `flags`
-    pub fn list(&self, flags: package::Flags) -> package::Sorted<Vec<Package>> {
+    pub async fn list(&self, flags: package::Flags) -> package::Sorted<Vec<Package>> {
         package::Sorted::new(match self {
             Plugin::Active(_) => vec![],
             Plugin::Cobble(plugin) => plugin.list(flags),
-            Plugin::Repository(_) => vec![],
+            Plugin::Repository(plugin) => plugin.list(flags).await,
 
             #[cfg(test)]
             Plugin::Test(plugin) => plugin.list(flags),
@@ -57,7 +63,7 @@ impl Plugin {
     }
 
     /// Returns a list of packages with matching `provider` and `flags`
-    pub fn query_provider(
+    pub async fn query_provider(
         &self,
         provider: &Provider,
         flags: package::Flags,
@@ -65,7 +71,7 @@ impl Plugin {
         package::Sorted::new(match self {
             Plugin::Active(_) => vec![],
             Plugin::Cobble(plugin) => plugin.query_provider(provider, flags),
-            Plugin::Repository(_) => vec![],
+            Plugin::Repository(plugin) => plugin.query_provider(provider, flags).await,
 
             #[cfg(test)]
             Plugin::Test(plugin) => plugin.query_provider(provider, flags),
@@ -73,7 +79,7 @@ impl Plugin {
     }
 
     /// Returns a list of packages with matching `package_name` and `flags`
-    pub fn query_name(
+    pub async fn query_name(
         &self,
         package_name: &package::Name,
         flags: package::Flags,
@@ -81,7 +87,7 @@ impl Plugin {
         package::Sorted::new(match self {
             Plugin::Active(_) => vec![],
             Plugin::Cobble(plugin) => plugin.query_name(package_name, flags),
-            Plugin::Repository(_) => vec![],
+            Plugin::Repository(plugin) => plugin.query_name(package_name, flags).await,
 
             #[cfg(test)]
             Plugin::Test(plugin) => plugin.query_name(package_name, flags),
@@ -95,7 +101,7 @@ impl Plugin {
         match self {
             Plugin::Active(_) => todo!(),
             Plugin::Cobble(plugin) => plugin.priority(),
-            Plugin::Repository(_) => todo!(),
+            Plugin::Repository(plugin) => plugin.priority(),
 
             #[cfg(test)]
             Plugin::Test(plugin) => plugin.priority,
@@ -111,7 +117,7 @@ impl Plugin {
 
 /// Defines a [`Plugin`] ordering based on "priority", sorted
 /// highest to lowest
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub(super) struct PriorityOrdered(pub Plugin);
 
 impl PartialOrd for PriorityOrdered {
@@ -131,12 +137,12 @@ pub mod test {
     use super::*;
 
     #[derive(Debug, Clone, PartialEq, Eq)]
-    pub struct Plugin {
+    pub struct Test {
         pub priority: u64,
         packages: Vec<Package>,
     }
 
-    impl Plugin {
+    impl Test {
         pub fn new(priority: u64, packages: Vec<Package>) -> Self {
             Self { priority, packages }
         }
