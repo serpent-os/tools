@@ -33,14 +33,14 @@ pub enum Plugin {
 impl Plugin {
     /// Return a package for the given [`package::Id`]. Returns `None` if
     /// the `package` cannot be located.
-    pub fn package(&self, package: &package::Id) -> Option<Package> {
+    pub fn package(&self, id: &package::Id) -> Option<Package> {
         match self {
             Plugin::Active(_) => None,
-            Plugin::Cobble(_) => None,
+            Plugin::Cobble(plugin) => plugin.package(id),
             Plugin::Repository(_) => None,
 
             #[cfg(test)]
-            Plugin::Test(plugin) => plugin.package(package),
+            Plugin::Test(plugin) => plugin.package(id),
         }
     }
 
@@ -48,7 +48,7 @@ impl Plugin {
     pub fn list(&self, flags: package::Flags) -> package::Sorted<Vec<Package>> {
         package::Sorted::new(match self {
             Plugin::Active(_) => vec![],
-            Plugin::Cobble(_) => vec![],
+            Plugin::Cobble(plugin) => plugin.list(flags),
             Plugin::Repository(_) => vec![],
 
             #[cfg(test)]
@@ -64,7 +64,7 @@ impl Plugin {
     ) -> package::Sorted<Vec<Package>> {
         package::Sorted::new(match self {
             Plugin::Active(_) => vec![],
-            Plugin::Cobble(_) => vec![],
+            Plugin::Cobble(plugin) => plugin.query_provider(provider, flags),
             Plugin::Repository(_) => vec![],
 
             #[cfg(test)]
@@ -80,7 +80,7 @@ impl Plugin {
     ) -> package::Sorted<Vec<Package>> {
         package::Sorted::new(match self {
             Plugin::Active(_) => vec![],
-            Plugin::Cobble(_) => vec![],
+            Plugin::Cobble(plugin) => plugin.query_name(package_name, flags),
             Plugin::Repository(_) => vec![],
 
             #[cfg(test)]
@@ -94,7 +94,7 @@ impl Plugin {
     pub fn priority(&self) -> u64 {
         match self {
             Plugin::Active(_) => todo!(),
-            Plugin::Cobble(_) => todo!(),
+            Plugin::Cobble(plugin) => plugin.priority(),
             Plugin::Repository(_) => todo!(),
 
             #[cfg(test)]

@@ -63,7 +63,7 @@ fn extract(paths: Vec<PathBuf>, mut handle: tui::Handle<Message>) -> Result<(), 
             .ok_or(Error::MissingMeta)?;
 
         let pkg = package::Meta::from_stone_payload(meta).map_err(Error::MalformedMeta)?;
-        let extraction_root = PathBuf::from(pkg.id());
+        let extraction_root = PathBuf::from(pkg.id().to_string());
 
         if let Some(content) = content {
             let size = content.plain_size;

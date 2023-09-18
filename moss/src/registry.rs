@@ -72,12 +72,12 @@ impl Registry {
 
     /// Return a sorted iterator of installed [`Package`]
     pub fn list_installed(&self, flags: package::Flags) -> impl Iterator<Item = Package> + '_ {
-        self.list((flags & !package::Flags::INSTALLED) | package::Flags::INSTALLED)
+        self.list(flags | package::Flags::INSTALLED)
     }
 
     /// Return a sorted iterator of available [`Package`]
     pub fn list_available(&self, flags: package::Flags) -> impl Iterator<Item = Package> + '_ {
-        self.list((flags & !package::Flags::AVAILABLE) | package::Flags::AVAILABLE)
+        self.list(flags | package::Flags::AVAILABLE)
     }
 }
 

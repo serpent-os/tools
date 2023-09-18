@@ -2,12 +2,22 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::collections::HashSet;
+use std::{collections::HashSet, fmt};
 
 use stone::payload;
 use thiserror::Error;
 
 use crate::{dependency, Dependency, Provider};
+
+/// A package identifier constructed from metadata fields
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Id(pub(super) String);
+
+impl fmt::Display for Id {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 /// The name of a [`Package`]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -110,11 +120,11 @@ impl Meta {
     }
 
     /// Return a reusable ID
-    pub fn id(&self) -> String {
-        format!(
+    pub fn id(&self) -> Id {
+        Id(format!(
             "{}-{}-{}.{}",
             &self.name.0, &self.version_identifier, &self.source_release, &self.architecture
-        )
+        ))
     }
 }
 

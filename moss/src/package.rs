@@ -7,7 +7,7 @@ use itertools::Itertools;
 
 pub use self::meta::{Meta, MissingMetaError, Name};
 
-mod meta;
+pub mod meta;
 
 /// Unique ID of a [`Package`]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,6 +22,18 @@ impl From<String> for Id {
 impl From<Id> for String {
     fn from(id: Id) -> Self {
         id.0
+    }
+}
+
+impl From<Id> for meta::Id {
+    fn from(id: Id) -> Self {
+        meta::Id(id.0)
+    }
+}
+
+impl From<meta::Id> for Id {
+    fn from(id: meta::Id) -> Self {
+        Self(id.0)
     }
 }
 
