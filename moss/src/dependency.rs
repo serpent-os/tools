@@ -149,7 +149,8 @@ fn parse(s: &str) -> Result<(Kind, String), ParseError> {
     }
 
     let kind = kind.parse()?;
-    let name = rest.trim_matches(')').to_string();
+    // Safe since we checked `ends_with(')')`
+    let name = rest[0..rest.len() - 1].to_string();
 
     Ok((kind, name))
 }
