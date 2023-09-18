@@ -42,7 +42,7 @@ impl Registry {
             stream::once(async move {
                 let packages = query(&p.0).await;
 
-                stream::iter(packages.into_iter())
+                stream::iter(packages)
             })
             .flatten()
         }))

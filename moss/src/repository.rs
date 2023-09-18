@@ -124,7 +124,7 @@ impl Config for Map {
     }
 
     fn merge(self, other: Self) -> Self {
-        Self(self.0.into_iter().chain(other.0.into_iter()).collect())
+        Self(self.0.into_iter().chain(other.0).collect())
     }
 }
 
