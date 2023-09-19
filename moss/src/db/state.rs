@@ -157,7 +157,7 @@ impl Database {
                 )
                 .push_values(packages, |mut b, package| {
                     b.push_bind(id.0.encode())
-                        .push_bind(package.clone().encode())
+                        .push_bind(package.encode())
                         .push_bind(Option::<String>::None);
                 })
                 .build(),
@@ -213,7 +213,7 @@ mod encoding {
         pub package_id: Decoder<package::Id>,
     }
 
-    impl Encoding for Id {
+    impl<'a> Encoding<'a> for Id {
         type Encoded = i64;
         type Error = Infallible;
 
@@ -221,25 +221,25 @@ mod encoding {
             Ok(Self(value))
         }
 
-        fn encode(self) -> i64 {
+        fn encode(&self) -> i64 {
             self.0
         }
     }
 
-    impl Encoding for Kind {
-        type Encoded = String;
+    impl<'a> Encoding<'a> for Kind {
+        type Encoded = &'a str;
         type Error = DecodeKindError;
 
-        fn decode(value: String) -> Result<Self, Self::Error> {
-            match value.as_str() {
+        fn decode(value: &'a str) -> Result<Self, Self::Error> {
+            match value {
                 "transaction" => Ok(Self::Transaction),
-                _ => Err(DecodeKindError(value)),
+                _ => Err(DecodeKindError(value.to_string())),
             }
         }
 
-        fn encode(self) -> Self::Encoded {
+        fn encode(&self) -> Self::Encoded {
             match self {
-                Kind::Transaction => "transaction".into(),
+                Kind::Transaction => "transaction",
             }
         }
     }

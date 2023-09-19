@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use futures::{future, TryStreamExt};
+use futures::{future, StreamExt, TryStreamExt};
 use thiserror::Error;
 use tokio::{fs, io};
 
@@ -13,6 +13,8 @@ use crate::stone;
 use crate::{config, package, Installation};
 
 use crate::repository::{self, Repository};
+
+const DB_BATCH_SIZE: usize = 1_000;
 
 /// Manage a bunch of repositories
 pub struct Manager {
@@ -151,24 +153,41 @@ async fn refresh_index(
     // Update each payload into the meta db
     payloads
         .map_err(Error::ReadStone)
-        .try_for_each(|payload| async {
-            // We only care about meta payloads for index files
-            let stone::read::Payload::Meta(payload) = payload else {
-                return Ok(());
-            };
+        // Batch up to `DB_BATCH_SIZE` payloads
+        .chunks(DB_BATCH_SIZE)
+        // Transpose error for early bail
+        .map(|results| results.into_iter().collect::<Result<Vec<_>, _>>())
+        .try_for_each(|payloads| async {
+            // Construct Meta for each payload
+            let packages = payloads
+                .into_iter()
+                .filter_map(|payload| {
+                    if let stone::read::Payload::Meta(meta) = payload {
+                        Some(meta)
+                    } else {
+                        None
+                    }
+                })
+                .map(|payload| {
+                    let meta = package::Meta::from_stone_payload(&payload)?;
 
-            let meta = package::Meta::from_stone_payload(&payload)?;
+                    // Create id from hash of meta
+                    let hash = meta.hash.clone().ok_or(Error::MissingMetaField(
+                        stone::payload::meta::Tag::PackageHash,
+                    ))?;
+                    let id = package::Id::from(hash);
 
-            // Create id from hash of meta
-            let hash = meta.hash.clone().ok_or(Error::MissingMetaField(
-                stone::payload::meta::Tag::PackageHash,
-            ))?;
-            let id = package::Id::from(hash);
+                    Ok((id, meta))
+                })
+                .collect::<Result<Vec<_>, Error>>()?;
 
-            // Update db
-            state.db.add(id, meta).await?;
-
-            Ok(())
+            // Batch add to db
+            //
+            // Sqlite supports up to 32k parametized query binds. Adding a
+            // package has 13 binds x 1k batch size = 17k. This leaves us
+            // overhead to add more binds in the future, otherwise we can
+            // lower the `DB_BATCH_SIZE`.
+            state.db.batch_add(packages).await.map_err(Error::Database)
         })
         .await?;
 
