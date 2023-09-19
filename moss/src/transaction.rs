@@ -17,7 +17,7 @@ pub struct Transaction {
     id: Option<Id>,
 
     // Package set
-    packages: Vec<package::Id>
+    packages: Vec<package::Id>,
 }
 
 impl Transaction {
