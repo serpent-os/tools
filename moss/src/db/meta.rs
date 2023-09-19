@@ -281,8 +281,8 @@ impl Database {
         if !licenses.is_empty() {
             sqlx::QueryBuilder::new(
                 "
-            INSERT INTO meta_licenses (package, license)
-            ",
+                INSERT INTO meta_licenses (package, license)
+                ",
             )
             .push_values(licenses, |mut b, (id, license)| {
                 b.push_bind(id.encode()).push_bind(license);
@@ -304,8 +304,8 @@ impl Database {
         if !dependencies.is_empty() {
             sqlx::QueryBuilder::new(
                 "
-            INSERT INTO meta_dependencies (package, dependency)
-            ",
+                INSERT INTO meta_dependencies (package, dependency)
+                ",
             )
             .push_values(dependencies, |mut b, (id, dependency)| {
                 b.push_bind(id.encode()).push_bind(dependency.encode());
@@ -323,8 +323,8 @@ impl Database {
         if !providers.is_empty() {
             sqlx::QueryBuilder::new(
                 "
-            INSERT INTO meta_providers (package, provider)
-            ",
+                INSERT INTO meta_providers (package, provider)
+                ",
             )
             .push_values(providers, |mut b, (id, provider)| {
                 b.push_bind(id.encode()).push_bind(provider.encode());
