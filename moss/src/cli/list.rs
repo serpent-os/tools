@@ -5,6 +5,7 @@
 use std::path::PathBuf;
 
 use clap::{ArgMatches, Command};
+use crossterm::style::Stylize;
 use futures::StreamExt;
 use itertools::Itertools;
 use thiserror::Error;
@@ -73,9 +74,9 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
         let width = (max_length - (st.name.len() + st.version.len())) + 2;
         println!(
             "{} {:width$} {} - {}",
-            st.name,
+            st.name.bold(),
             " ",
-            st.version,
+            st.version.magenta(),
             st.summary,
             width = width
         );
