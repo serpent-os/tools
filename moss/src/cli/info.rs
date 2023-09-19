@@ -38,7 +38,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
             .by_name(&nom, Flags::AVAILABLE)
             .collect::<Vec<_>>()
             .await;
-        if resolved.len() == 0 {
+        if resolved.is_empty() {
             return Err(Error::NotFound(pkg));
         }
         for candidate in resolved {

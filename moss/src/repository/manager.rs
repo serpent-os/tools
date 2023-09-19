@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use futures::{future, TryStreamExt};
+use futures::{future, StreamExt, TryStreamExt};
 use thiserror::Error;
 use tokio::{fs, io};
 
@@ -151,24 +151,36 @@ async fn refresh_index(
     // Update each payload into the meta db
     payloads
         .map_err(Error::ReadStone)
-        .try_for_each(|payload| async {
-            // We only care about meta payloads for index files
-            let stone::read::Payload::Meta(payload) = payload else {
-                return Ok(());
-            };
+        // Batch up to N payloads
+        .chunks(1000)
+        // Transpose error
+        .map(|results| results.into_iter().collect::<Result<Vec<_>, _>>())
+        // Bail if any payload error occured, else add batch to db
+        .try_for_each(|payloads| async {
+            let packages = payloads
+                .into_iter()
+                .filter_map(|payload| {
+                    if let stone::read::Payload::Meta(meta) = payload {
+                        Some(meta)
+                    } else {
+                        None
+                    }
+                })
+                .map(|payload| {
+                    let meta = package::Meta::from_stone_payload(&payload)?;
 
-            let meta = package::Meta::from_stone_payload(&payload)?;
+                    // Create id from hash of meta
+                    let hash = meta.hash.clone().ok_or(Error::MissingMetaField(
+                        stone::payload::meta::Tag::PackageHash,
+                    ))?;
+                    let id = package::Id::from(hash);
 
-            // Create id from hash of meta
-            let hash = meta.hash.clone().ok_or(Error::MissingMetaField(
-                stone::payload::meta::Tag::PackageHash,
-            ))?;
-            let id = package::Id::from(hash);
+                    Ok((id, meta))
+                })
+                .collect::<Result<Vec<_>, Error>>()?;
 
             // Update db
-            state.db.add(id, meta).await?;
-
-            Ok(())
+            state.db.batch_add(packages).await.map_err(Error::Database)
         })
         .await?;
 

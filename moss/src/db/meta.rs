@@ -205,31 +205,21 @@ impl Database {
     }
 
     pub async fn add(&self, id: package::Id, meta: Meta) -> Result<(), Error> {
-        let Meta {
-            name,
-            version_identifier,
-            source_release,
-            build_release,
-            architecture,
-            summary,
-            description,
-            source_id,
-            homepage,
-            licenses,
-            dependencies,
-            providers,
-            uri,
-            hash,
-            download_size,
-        } = meta;
+        self.batch_add(vec![(id, meta)]).await
+    }
 
+    pub async fn batch_add(&self, packages: Vec<(package::Id, Meta)>) -> Result<(), Error> {
         let mut transaction = self.pool.begin().await?;
 
         // Remove package (other tables cascade)
-        remove(id.clone(), transaction.acquire().await?).await?;
+        batch_remove(
+            packages.iter().map(|(id, _)| id).cloned(),
+            transaction.acquire().await?,
+        )
+        .await?;
 
         // Create entry
-        sqlx::query(
+        sqlx::QueryBuilder::new(
             "
             INSERT INTO meta (
                 package,
@@ -246,33 +236,55 @@ impl Database {
                 hash,
                 download_size                
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ",
         )
-        .bind(id.clone().encode())
-        .bind(name.encode())
-        .bind(version_identifier)
-        .bind(source_release as i64)
-        .bind(build_release as i64)
-        .bind(architecture)
-        .bind(summary)
-        .bind(description)
-        .bind(source_id)
-        .bind(homepage)
-        .bind(uri)
-        .bind(hash)
-        .bind(download_size.map(|i| i as i64))
+        .push_values(&packages, |mut b, (id, meta)| {
+            let Meta {
+                name,
+                version_identifier,
+                source_release,
+                build_release,
+                architecture,
+                summary,
+                description,
+                source_id,
+                homepage,
+                uri,
+                hash,
+                download_size,
+                ..
+            } = meta;
+
+            b.push_bind(id.clone().encode())
+                .push_bind(name.clone().encode())
+                .push_bind(version_identifier)
+                .push_bind(*source_release as i64)
+                .push_bind(*build_release as i64)
+                .push_bind(architecture)
+                .push_bind(summary)
+                .push_bind(description)
+                .push_bind(source_id)
+                .push_bind(homepage)
+                .push_bind(uri)
+                .push_bind(hash)
+                .push_bind(download_size.map(|i| i as i64));
+        })
+        .build()
         .execute(transaction.acquire().await?)
         .await?;
 
         // Licenses
+        let licenses = packages
+            .iter()
+            .flat_map(|(id, meta)| meta.licenses.iter().map(move |license| (id, license)))
+            .collect::<Vec<_>>();
         if !licenses.is_empty() {
             sqlx::QueryBuilder::new(
                 "
-                INSERT INTO meta_licenses (package, license)
-                ",
+            INSERT INTO meta_licenses (package, license)
+            ",
             )
-            .push_values(licenses, |mut b, license| {
+            .push_values(licenses, |mut b, (id, license)| {
                 b.push_bind(id.clone().encode()).push_bind(license);
             })
             .build()
@@ -281,15 +293,23 @@ impl Database {
         }
 
         // Dependencies
+        let dependencies = packages
+            .iter()
+            .flat_map(|(id, meta)| {
+                meta.dependencies
+                    .iter()
+                    .map(move |dependency| (id, dependency))
+            })
+            .collect::<Vec<_>>();
         if !dependencies.is_empty() {
             sqlx::QueryBuilder::new(
                 "
-                INSERT INTO meta_dependencies (package, dependency)
-                ",
+            INSERT INTO meta_dependencies (package, dependency)
+            ",
             )
-            .push_values(dependencies, |mut b, dependency| {
+            .push_values(dependencies, |mut b, (id, dependency)| {
                 b.push_bind(id.clone().encode())
-                    .push_bind(dependency.encode());
+                    .push_bind(dependency.clone().encode());
             })
             .build()
             .execute(transaction.acquire().await?)
@@ -297,15 +317,19 @@ impl Database {
         }
 
         // Providers
+        let providers = packages
+            .iter()
+            .flat_map(|(id, meta)| meta.providers.iter().map(move |provider| (id, provider)))
+            .collect::<Vec<_>>();
         if !providers.is_empty() {
             sqlx::QueryBuilder::new(
                 "
-                INSERT INTO meta_providers (package, provider)
-                ",
+            INSERT INTO meta_providers (package, provider)
+            ",
             )
-            .push_values(providers, |mut b, provider| {
+            .push_values(providers, |mut b, (id, provider)| {
                 b.push_bind(id.clone().encode())
-                    .push_bind(provider.encode());
+                    .push_bind(provider.clone().encode());
             })
             .build()
             .execute(transaction.acquire().await?)
@@ -318,16 +342,24 @@ impl Database {
     }
 }
 
-async fn remove(package: package::Id, connection: &mut SqliteConnection) -> Result<(), Error> {
-    sqlx::query(
+async fn batch_remove(
+    packages: impl Iterator<Item = package::Id>,
+    connection: &mut SqliteConnection,
+) -> Result<(), Error> {
+    let mut query_builder = sqlx::QueryBuilder::new(
         "
         DELETE FROM meta
-        WHERE package = ?;
+        WHERE package IN (
         ",
-    )
-    .bind(package.encode())
-    .execute(connection)
-    .await?;
+    );
+
+    let mut separated = query_builder.separated(", ");
+    packages.for_each(|package| {
+        separated.push_bind(package.encode());
+    });
+    separated.push_unseparated(");");
+
+    query_builder.build().execute(connection).await?;
 
     Ok(())
 }
@@ -435,9 +467,12 @@ mod test {
 
         assert_eq!(&meta.name, &"bash-completion".to_string().into());
 
-        remove(id.clone(), &mut database.pool.acquire().await.unwrap())
-            .await
-            .unwrap();
+        batch_remove(
+            [id.clone()].into_iter(),
+            &mut database.pool.acquire().await.unwrap(),
+        )
+        .await
+        .unwrap();
 
         let result = database.get(&id).await;
 
