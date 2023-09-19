@@ -20,18 +20,18 @@ mod encoding {
     pub struct Decoder<T>(pub T);
 
     /// A trait to define an encoding between a sql type and rust type
-    pub trait Encoding: Sized {
-        type Encoded;
+    pub trait Encoding<'a>: Sized {
+        type Encoded: ToOwned;
         type Error;
 
         fn decode(encoded: Self::Encoded) -> Result<Self, Self::Error>;
-        fn encode(self) -> Self::Encoded;
+        fn encode(&'a self) -> Self::Encoded;
     }
 
     impl<'r, T, U, E> sqlx::Decode<'r, Sqlite> for Decoder<T>
     where
-        T: Encoding<Encoded = U, Error = E>,
-        U: sqlx::Decode<'r, Sqlite>,
+        T: Encoding<'r, Encoded = U, Error = E>,
+        U: sqlx::Decode<'r, Sqlite> + ToOwned,
         E: std::error::Error + Send + Sync + 'static,
     {
         fn decode(
@@ -43,8 +43,8 @@ mod encoding {
 
     impl<T, U, E> Type<Sqlite> for Decoder<T>
     where
-        T: Encoding<Encoded = U, Error = E>,
-        U: Type<Sqlite>,
+        T: Encoding<'static, Encoded = U, Error = E>,
+        U: ToOwned + Type<Sqlite>,
     {
         fn type_info() -> <Sqlite as sqlx::Database>::TypeInfo {
             U::type_info()
@@ -58,57 +58,57 @@ mod encoding {
     /** Encoding on external types */
 
     /// Encoding of package identity (String)
-    impl Encoding for package::Id {
-        type Encoded = String;
+    impl<'a> Encoding<'a> for package::Id {
+        type Encoded = &'a str;
         type Error = Infallible;
 
-        fn decode(encoded: Self::Encoded) -> Result<Self, Self::Error> {
-            Ok(package::Id::from(encoded))
+        fn decode(encoded: &'a str) -> Result<Self, Self::Error> {
+            Ok(package::Id::from(encoded.to_owned()))
         }
 
-        fn encode(self) -> Self::Encoded {
-            String::from(self)
+        fn encode(&'a self) -> &'a str {
+            self.as_ref()
         }
     }
 
     /// Encoding of package name (String)
-    impl Encoding for package::Name {
-        type Encoded = String;
+    impl<'a> Encoding<'a> for package::Name {
+        type Encoded = &'a str;
         type Error = Infallible;
 
-        fn decode(encoded: Self::Encoded) -> Result<Self, Self::Error> {
-            Ok(package::Name::from(encoded))
+        fn decode(encoded: &'a str) -> Result<Self, Self::Error> {
+            Ok(package::Name::from(encoded.to_owned()))
         }
 
-        fn encode(self) -> Self::Encoded {
-            String::from(self)
+        fn encode(&'a self) -> &'a str {
+            self.as_ref()
         }
     }
 
     /// Encoding of Dependency type
-    impl Encoding for Dependency {
+    impl<'a> Encoding<'a> for Dependency {
         type Encoded = String;
         type Error = dependency::ParseError;
 
-        fn decode(encoded: Self::Encoded) -> Result<Self, Self::Error> {
+        fn decode(encoded: String) -> Result<Self, Self::Error> {
             encoded.parse()
         }
 
-        fn encode(self) -> Self::Encoded {
+        fn encode(&self) -> String {
             self.to_string()
         }
     }
 
     /// Encoding of Provider type
-    impl Encoding for Provider {
+    impl<'a> Encoding<'a> for Provider {
         type Encoded = String;
         type Error = dependency::ParseError;
 
-        fn decode(encoded: Self::Encoded) -> Result<Self, Self::Error> {
+        fn decode(encoded: String) -> Result<Self, Self::Error> {
             encoded.parse()
         }
 
-        fn encode(self) -> Self::Encoded {
+        fn encode(&self) -> String {
             self.to_string()
         }
     }

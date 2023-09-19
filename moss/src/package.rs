@@ -25,6 +25,12 @@ impl From<Id> for String {
     }
 }
 
+impl AsRef<str> for Id {
+    fn as_ref(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
 impl From<Id> for meta::Id {
     fn from(id: Id) -> Self {
         meta::Id(id.0)

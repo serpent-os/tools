@@ -149,7 +149,7 @@ impl Database {
             WHERE package = ?;
             ",
         )
-        .bind(package.clone().encode());
+        .bind(package.encode());
 
         let licenses_query = sqlx::query_as::<_, encoding::License>(
             "
@@ -158,7 +158,7 @@ impl Database {
             WHERE package = ?;
             ",
         )
-        .bind(package.clone().encode());
+        .bind(package.encode());
 
         let dependencies_query = sqlx::query_as::<_, encoding::Dependency>(
             "
@@ -167,7 +167,7 @@ impl Database {
             WHERE package = ?;
             ",
         )
-        .bind(package.clone().encode());
+        .bind(package.encode());
 
         let providers_query = sqlx::query_as::<_, encoding::Provider>(
             "
@@ -176,7 +176,7 @@ impl Database {
             WHERE package = ?;
             ",
         )
-        .bind(package.clone().encode());
+        .bind(package.encode());
 
         let (entry, licenses, dependencies, providers) = futures::try_join!(
             entry_query.fetch_one(&self.pool),
@@ -213,7 +213,7 @@ impl Database {
 
         // Remove package (other tables cascade)
         batch_remove(
-            packages.iter().map(|(id, _)| id).cloned(),
+            packages.iter().map(|(id, _)| id),
             transaction.acquire().await?,
         )
         .await?;
@@ -255,8 +255,8 @@ impl Database {
                 ..
             } = meta;
 
-            b.push_bind(id.clone().encode())
-                .push_bind(name.clone().encode())
+            b.push_bind(id.encode())
+                .push_bind(name.encode())
                 .push_bind(version_identifier)
                 .push_bind(*source_release as i64)
                 .push_bind(*build_release as i64)
@@ -285,7 +285,7 @@ impl Database {
             ",
             )
             .push_values(licenses, |mut b, (id, license)| {
-                b.push_bind(id.clone().encode()).push_bind(license);
+                b.push_bind(id.encode()).push_bind(license);
             })
             .build()
             .execute(transaction.acquire().await?)
@@ -308,8 +308,7 @@ impl Database {
             ",
             )
             .push_values(dependencies, |mut b, (id, dependency)| {
-                b.push_bind(id.clone().encode())
-                    .push_bind(dependency.clone().encode());
+                b.push_bind(id.encode()).push_bind(dependency.encode());
             })
             .build()
             .execute(transaction.acquire().await?)
@@ -328,8 +327,7 @@ impl Database {
             ",
             )
             .push_values(providers, |mut b, (id, provider)| {
-                b.push_bind(id.clone().encode())
-                    .push_bind(provider.clone().encode());
+                b.push_bind(id.encode()).push_bind(provider.encode());
             })
             .build()
             .execute(transaction.acquire().await?)
@@ -343,7 +341,7 @@ impl Database {
 }
 
 async fn batch_remove(
-    packages: impl Iterator<Item = package::Id>,
+    packages: impl IntoIterator<Item = &package::Id>,
     connection: &mut SqliteConnection,
 ) -> Result<(), Error> {
     let mut query_builder = sqlx::QueryBuilder::new(
@@ -354,7 +352,7 @@ async fn batch_remove(
     );
 
     let mut separated = query_builder.separated(", ");
-    packages.for_each(|package| {
+    packages.into_iter().for_each(|package| {
         separated.push_bind(package.encode());
     });
     separated.push_unseparated(");");
@@ -467,12 +465,9 @@ mod test {
 
         assert_eq!(&meta.name, &"bash-completion".to_string().into());
 
-        batch_remove(
-            [id.clone()].into_iter(),
-            &mut database.pool.acquire().await.unwrap(),
-        )
-        .await
-        .unwrap();
+        batch_remove([&id], &mut database.pool.acquire().await.unwrap())
+            .await
+            .unwrap();
 
         let result = database.get(&id).await;
 
