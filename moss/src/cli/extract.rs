@@ -11,6 +11,7 @@ use std::{
 
 use clap::{arg, ArgMatches, Command};
 use moss::package::{self, MissingMetaError};
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use stone::{payload::layout, read::Payload};
 use thiserror::{self, Error};
 use tokio::task;
@@ -65,26 +66,41 @@ fn extract(paths: Vec<PathBuf>, mut handle: tui::Handle<Message>) -> Result<(), 
         let pkg = package::Meta::from_stone_payload(meta).map_err(Error::MalformedMeta)?;
         let extraction_root = PathBuf::from(pkg.id().to_string());
 
+        // Cleanup old extraction root
+        if extraction_root.exists() {
+            remove_dir_all(&extraction_root)?;
+        }
+
         if let Some(content) = content {
             let size = content.plain_size;
 
-            let mut content_storage = File::options()
+            let content_file = File::options()
                 .read(true)
                 .write(true)
                 .create(true)
                 .open(".stoneContent")?;
-            let mut writer = ProgressWriter::new(&mut content_storage, size, handle.clone());
+
+            let mut writer = ProgressWriter::new(&content_file, size, handle.clone());
             reader.unpack_content(content, &mut writer)?;
 
-            // Rewind.
-            content_storage.seek(SeekFrom::Start(0))?;
-
             // Extract all indices from the `.stoneContent` into hash-indexed unique files
-            for idx in payloads.iter().filter_map(Payload::index).flatten() {
-                let mut output = File::create(format!(".stoneStore/{:02x}", idx.digest))?;
-                let mut split_file = (&mut content_storage).take(idx.end - idx.start);
-                copy(&mut split_file, &mut output)?;
-            }
+            payloads
+                .par_iter()
+                .filter_map(Payload::index)
+                .flatten()
+                .map(|idx| {
+                    // Split file reader over index range
+                    let mut file = &content_file;
+                    file.seek(SeekFrom::Start(idx.start))?;
+                    let mut split_file = (&mut file).take(idx.end - idx.start);
+
+                    let mut output = File::create(format!(".stoneStore/{:02x}", idx.digest))?;
+
+                    copy(&mut split_file, &mut output)?;
+
+                    Ok(())
+                })
+                .collect::<Result<Vec<_>, Error>>()?;
 
             remove_file(".stoneContent")?;
         }
