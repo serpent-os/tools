@@ -10,7 +10,6 @@ tui = { path = "../tui" }
 bitflags.workspace = true
 chrono.workspace = true
 clap.workspace = true
-crossterm.workspace = true
 itertools.workspace = true
 futures.workspace = true
 log.workspace = true

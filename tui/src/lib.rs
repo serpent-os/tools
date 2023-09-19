@@ -16,6 +16,7 @@ mod reexport {
 
     use ratatui::prelude::CrosstermBackend;
     pub use ratatui::prelude::{Constraint, Direction, Layout, Rect};
+    pub use crossterm::style::Stylize;
 
     pub type Frame<'a> = ratatui::Frame<'a, CrosstermBackend<Stdout>>;
 }

@@ -5,7 +5,6 @@
 use std::path::PathBuf;
 
 use clap::{ArgMatches, Command};
-use crossterm::style::Stylize;
 use futures::StreamExt;
 use itertools::Itertools;
 use thiserror::Error;
@@ -14,6 +13,7 @@ use moss::{
     client::{self, Client},
     package::Flags,
 };
+use tui::Stylize;
 
 pub fn command() -> Command {
     Command::new("list")
