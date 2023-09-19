@@ -49,15 +49,46 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
         return Err(Error::NoneFound);
     }
 
-    // Print em
-    for pkg in pkgs
+    // map to renderable state
+    let mut set = pkgs
         .into_iter()
-        .sorted_by_key(|pkg| pkg.meta.name.to_string())
-    {
-        println!(" - {} v{}", pkg.meta.name, pkg.meta.version_identifier);
+        .map(|p| State {
+            name: p.meta.name.to_string(),
+            version: format!("{}-{}", p.meta.version_identifier, p.meta.source_release),
+            summary: p.meta.summary,
+        })
+        .collect_vec();
+    // sort alpha
+    set.sort_by(|x, y| x.cmp(y));
+
+    // Grab maximum field
+    let max_element = set
+        .iter()
+        .max_by_key(|p| p.name.len() + p.version.len())
+        .unwrap();
+    let max_length = max_element.name.len() + max_element.version.len();
+
+    // render
+    for st in set {
+        let width = (max_length - (st.name.len() + st.version.len())) + 2;
+        println!(
+            "{} {:width$} {} - {}",
+            st.name,
+            " ",
+            st.version,
+            st.summary,
+            width = width
+        );
     }
 
     Ok(())
+}
+
+#[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
+struct State {
+    name: String,
+    version: String,
+    summary: String,
 }
 
 #[derive(Debug, Error)]
