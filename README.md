@@ -19,7 +19,7 @@ Progress:
 
  - [x] Read support for `.stone`
  - [x] Repository manipulation
- - [-] Plugin system for layered graph of dependencies
+ - [x] Plugin system for layered graph of dependencies
  - [ ] Search support
  - [ ] Transactions
  - [ ] Installation support
