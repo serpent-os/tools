@@ -69,6 +69,7 @@ pub async fn process() -> Result<(), Error> {
         Some(("extract", args)) => extract::handle(args).await.map_err(Error::Extract),
         Some(("info", args)) => info::handle(args).await.map_err(Error::Info),
         Some(("inspect", args)) => inspect::handle(args).await.map_err(Error::Inspect),
+        Some(("install", args)) => install::handle(args).await.map_err(Error::Install),
         Some(("version", _)) => {
             version::print();
             Ok(())
@@ -83,6 +84,9 @@ pub async fn process() -> Result<(), Error> {
 pub enum Error {
     #[error("error handling info: {0}")]
     Info(#[from] info::Error),
+
+    #[error("error handling install: {0}")]
+    Install(#[from] install::Error),
 
     #[error("error handling list: {0}")]
     List(#[from] list::Error),
