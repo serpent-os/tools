@@ -2,9 +2,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::path::PathBuf;
+use std::{path::PathBuf, str::FromStr};
 
 use clap::{Arg, ArgAction, Command};
+use moss::Provider;
 use thiserror::Error;
 
 mod extract;
@@ -15,6 +16,18 @@ mod list;
 mod remove;
 mod repo;
 mod version;
+
+/// Convert the name to a lookup provider
+pub(crate) fn name_to_provider(name: &str) -> Provider {
+    if name.contains('(') {
+        Provider::from_str(name).unwrap()
+    } else {
+        Provider {
+            kind: moss::dependency::Kind::PackageName,
+            name: name.to_owned(),
+        }
+    }
+}
 
 /// Generate the CLI command structure
 fn command() -> Command {

@@ -2,16 +2,17 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{path::PathBuf, str::FromStr};
+use std::path::PathBuf;
 
 use clap::{arg, ArgMatches, Command};
 use futures::StreamExt;
 use moss::{
     client::{self, Client},
     package::Flags,
-    Provider,
 };
 use thiserror::Error;
+
+use crate::cli::name_to_provider;
 
 pub fn command() -> Command {
     Command::new("install")
@@ -36,14 +37,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     let mut requested = vec![];
 
     for pkg in pkgs {
-        let lookup = if pkg.contains('(') {
-            Provider::from_str(pkg.as_str()).unwrap()
-        } else {
-            Provider {
-                kind: moss::dependency::Kind::PackageName,
-                name: pkg.clone(),
-            }
-        };
+        let lookup = name_to_provider(&pkg);
 
         let result = client
             .registry

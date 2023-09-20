@@ -9,11 +9,13 @@ use futures::StreamExt;
 use itertools::Itertools;
 use moss::{
     client::{self, Client},
-    package::{Flags, Name},
+    package::Flags,
     Package,
 };
 use thiserror::Error;
 use tui::Stylize;
+
+use super::name_to_provider;
 
 const COLUMN_WIDTH: usize = 20;
 
@@ -37,10 +39,10 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     let client = Client::new_for_root(root).await?;
 
     for pkg in pkgs {
-        let nom = Name::from(pkg.clone());
+        let lookup = name_to_provider(&pkg);
         let resolved = client
             .registry
-            .by_name(&nom, Flags::AVAILABLE)
+            .by_provider(&lookup, Flags::AVAILABLE)
             .collect::<Vec<_>>()
             .await;
         if resolved.is_empty() {
