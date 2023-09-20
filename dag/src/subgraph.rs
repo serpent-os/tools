@@ -12,9 +12,7 @@ where
     for starting_node in starting_nodes {
         dfs.move_to(starting_node);
         while let Some(node) = dfs.next(&graph) {
-            for adj in graph.neighbors(node) {
-                res.add_edge(node, adj, E::default());
-            }
+            res.extend(graph.neighbors(node).map(|adj| (node, adj)));
         }
     }
 
