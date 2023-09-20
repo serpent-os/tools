@@ -15,6 +15,20 @@ as the Rust version of `boulder` (`.stone` build tooling).
 
 It is recommended to use an up to date version of Rust via `rustup`.
 
+Progress:
+
+ - [x] Read support for `.stone`
+ - [x] Repository manipulation
+ - [-] Plugin system for layered graph of dependencies
+ - [ ] Search support
+ - [ ] Transactions
+ - [ ] Installation support
+ - [ ] Removal support
+ - [ ] Upgrade support
+ - [ ] Trigger integration (usysconf-rs)
+ - [ ] GC / cleanups of latent states
+ - [ ] Features (previously: Subscriptions)
+
 ## Test libstone
 
 ```bash
