@@ -43,6 +43,20 @@ $ cargo build -p moss
 $ cargo run -p moss -- $args
 ```
 
+## Contributing changes
+
+Please ensure all tests are running locally without issue:
+
+```bash
+$ cargo test
+
+# Prior to commiting a change:
+$ cargo fmt
+
+# Prior to pushing anything, check:
+$ cargo clippy
+```
+
 ## License
 
 `moss-rs` is available under the terms of the [MPL-2.0](https://spdx.org/licenses/MPL-2.0.html)
