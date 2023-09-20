@@ -1,10 +1,10 @@
 use ::petgraph::visit::VisitMap;
 use petgraph::{
     visit::{
-        Dfs, GraphRef, IntoNeighbors, IntoNeighborsDirected, IntoNodeIdentifiers, Reversed,
-        Visitable,
+        Dfs, GraphRef, IntoNeighbors, IntoNeighborsDirected, IntoNodeIdentifiers,
+        Reversed, Visitable, Walker,
     },
-    Direction::Incoming,
+    Direction::{Incoming},
 };
 
 /// A topological order traversal for a graph.
@@ -74,7 +74,7 @@ where
         }
 
         for node in g.node_identifiers() {
-            if !self.ordered.is_visited(&node) {
+            if !dfs.discovered.is_visited(&node) {
                 assert!(!self.ordered.visit(node));
             }
         }
@@ -135,5 +135,33 @@ where
             return Some(nix);
         }
         None
+    }
+}
+
+impl<G> Walker<G> for Topo<G::NodeId, G::Map>
+where
+    G: IntoNeighborsDirected + Visitable,
+{
+    type Item = G::NodeId;
+    fn walk_next(&mut self, context: G) -> Option<Self::Item> {
+        self.next(context)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use petgraph::{
+        prelude::{DiGraphMap},
+    };
+
+    use super::*;
+
+    #[test]
+    fn basic_topo() {
+        let graph: DiGraphMap<i32, ()> = DiGraphMap::from_edges(&[(1, 2), (1, 3), (2, 3)]);
+        let topo = Topo::new(&graph, Some(vec![1]));
+        let order: Vec<i32> = topo.iter(&graph).collect();
+
+        assert_eq!(order, vec![1, 2, 3]);
     }
 }
