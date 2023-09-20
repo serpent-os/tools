@@ -77,12 +77,12 @@ fn print_package(pkg: &Package) {
     println!("{}", pkg.meta.name);
     print_titled("Version");
     println!("{}", pkg.meta.version_identifier);
+    print_titled("Homepage");
+    println!("{}", pkg.meta.homepage);
     print_titled("Summary");
     println!("{}", pkg.meta.summary);
     print_titled("Description");
     print_paragraph(&pkg.meta.description);
-    print_titled("Homepage");
-    println!("{}", pkg.meta.homepage);
     if !pkg.meta.dependencies.is_empty() {
         print_titled("Dependencies");
         let deps = pkg
