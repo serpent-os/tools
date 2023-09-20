@@ -4,6 +4,7 @@
 
 pub use self::encoding::{Decoder, Encoding};
 
+pub mod layout;
 pub mod meta;
 pub mod state;
 
