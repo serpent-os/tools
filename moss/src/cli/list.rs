@@ -60,7 +60,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
         })
         .collect_vec();
     // sort alpha
-    set.sort_by(|x, y| x.cmp(y));
+    set.sort();
 
     // Grab maximum field
     let max_element = set
