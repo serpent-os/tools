@@ -5,10 +5,11 @@
 use std::path::PathBuf;
 
 use clap::{arg, ArgMatches, Command};
-use futures::StreamExt;
+use futures::{future::join_all, StreamExt};
 use moss::{
     client::{self, Client},
     package::Flags,
+    Package,
 };
 use thiserror::Error;
 
@@ -19,6 +20,21 @@ pub fn command() -> Command {
         .about("Install packages")
         .long_about("Install the requested software to the local system")
         .arg(arg!(<NAME> ... "packages to install").value_parser(clap::value_parser!(String)))
+}
+
+/// Resolve a package ID into either an error or a set of packages matching
+/// TODO: Collapse to .first() for installation selection
+async fn find_packages(id: &str, client: &Client) -> Result<Vec<Package>, Error> {
+    let provider = name_to_provider(id);
+    let result = client
+        .registry
+        .by_provider(&provider, Flags::AVAILABLE)
+        .collect::<Vec<_>>()
+        .await;
+    if result.is_empty() {
+        return Err(Error::NoCandidate(id.to_string()));
+    }
+    Ok(result)
 }
 
 /// Handle execution of `moss install`
@@ -34,26 +50,22 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
 
     // Grab a client for the target, enumerate packages
     let client = Client::new_for_root(root).await?;
-    let mut requested = vec![];
 
-    for pkg in pkgs {
-        let lookup = name_to_provider(&pkg);
+    let queried = join_all(pkgs.iter().map(|p| find_packages(p, &client))).await;
+    let (good_list, bad_list): (Vec<_>, Vec<_>) = queried.into_iter().partition(Result::is_ok);
+    let bad: Vec<_> = bad_list.into_iter().map(Result::unwrap_err).collect();
+    let mut good: Vec<_> = good_list.into_iter().map(Result::unwrap).collect();
 
-        let result = client
-            .registry
-            .by_provider(&lookup, Flags::AVAILABLE)
-            .collect::<Vec<_>>()
-            .await;
-        if result.is_empty() {
-            return Err(Error::NoCandidate(pkg));
-        }
-        let front = result.first().unwrap();
-        requested.push(front.meta.id().clone());
+    // TODO: Add error hookups
+    if !bad.is_empty() {
+        println!("Missing packages in lookup: {:?}", bad);
+        return Err(Error::NotImplemented);
     }
-    requested.sort_by_key(|i| i.to_string());
-    requested.dedup();
 
-    println!("Candidates: {:?}", requested);
+    good.sort();
+    good.dedup();
+
+    println!("Good: {:?}", good);
 
     Err(Error::NotImplemented)
 }
