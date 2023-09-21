@@ -15,6 +15,8 @@ use thiserror::Error;
 
 use crate::cli::name_to_provider;
 
+use super::pretty::print_to_columns;
+
 pub fn command() -> Command {
     Command::new("install")
         .about("Install packages")
@@ -54,7 +56,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     let queried = join_all(pkgs.iter().map(|p| find_packages(p, &client))).await;
     let (good_list, bad_list): (Vec<_>, Vec<_>) = queried.into_iter().partition(Result::is_ok);
     let bad: Vec<_> = bad_list.into_iter().map(Result::unwrap_err).collect();
-    let mut good: Vec<_> = good_list.into_iter().map(Result::unwrap).collect();
+    let mut good: Vec<_> = good_list.into_iter().flat_map(Result::unwrap).collect();
 
     // TODO: Add error hookups
     if !bad.is_empty() {
@@ -65,7 +67,9 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     good.sort();
     good.dedup();
 
-    println!("Good: {:?}", good);
+    println!("The following package(s) will be installed:");
+    println!();
+    print_to_columns(good);
 
     Err(Error::NotImplemented)
 }
