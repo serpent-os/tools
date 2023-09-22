@@ -4,7 +4,7 @@
 
 //! Pretty printing for moss CLI
 
-use std::{cmp::max, iter::zip};
+use std::cmp::max;
 
 use itertools::Itertools;
 use moss::Package;
@@ -18,6 +18,7 @@ where
     // TODO: Get real constraints
     const TERMINAL_WIDTH: usize = 80;
 
+    // Map into something simple
     let mut mapped = items
         .into_iter()
         .map(|p| State {
@@ -27,33 +28,39 @@ where
         .collect_vec();
     mapped.sort();
 
+    // Figure render constraints
     let largest_element = mapped
         .iter()
         .max_by_key(|p| p.name.len() + p.version.len() + 3)
         .unwrap();
     let largest_width = largest_element.name.len() + largest_element.version.len() + 6;
     let num_columns = max(1, TERMINAL_WIDTH / largest_width);
+    let height = ((mapped.len() as f32) / (num_columns as f32)).ceil() as usize;
 
-    let mut cleared = false;
-    let screen_wide = (0..num_columns).cycle();
-    for (state, x) in zip(mapped, screen_wide) {
-        let our_width = state.name.len() + state.version.len() + 3;
-        let print_width = largest_width - our_width;
-        if x == num_columns - 1 {
-            cleared = true;
-            println!("{} - {}", state.name.bold(), state.version.magenta())
-        } else {
-            print!(
-                "{} - {}{:width$}",
-                state.name.bold(),
-                state.version.magenta(),
-                " ",
-                width = print_width
-            );
-            cleared = false;
+    for y in 0..height {
+        for x in 0..num_columns {
+            let idx = y + (x * height);
+            let state = mapped.get(idx);
+            if let Some(state) = state {
+                let our_width = state.name.len() + state.version.len() + 3;
+                let print_width = largest_width - our_width;
+                if x == num_columns - 1 {
+                    print!(
+                        "{} - {}",
+                        state.name.clone().bold(),
+                        state.version.clone().magenta()
+                    )
+                } else {
+                    print!(
+                        "{} - {}{:width$}   ",
+                        state.name.clone().bold(),
+                        state.version.clone().magenta(),
+                        " ",
+                        width = print_width
+                    );
+                }
+            }
         }
-    }
-    if !cleared {
         println!();
     }
 }
