@@ -23,7 +23,7 @@ where
         .into_iter()
         .map(|p| State {
             name: p.meta.name.to_string(),
-            version: p.meta.version_identifier,
+            version: format!("{}-{}", p.meta.version_identifier, p.meta.source_release),
         })
         .collect_vec();
     mapped.sort();
@@ -46,16 +46,18 @@ where
                 let print_width = largest_width - our_width;
                 if x == num_columns - 1 {
                     print!(
-                        "{} - {}",
+                        "{} {:width$}{}",
                         state.name.clone().bold(),
-                        state.version.clone().magenta()
+                        " ",
+                        state.version.clone().magenta(),
+                        width = print_width
                     )
                 } else {
                     print!(
-                        "{} - {}{:width$}   ",
+                        "{} {:width$}{}   ",
                         state.name.clone().bold(),
-                        state.version.clone().magenta(),
                         " ",
+                        state.version.clone().magenta(),
                         width = print_width
                     );
                 }
