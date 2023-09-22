@@ -8,15 +8,14 @@ use std::cmp::max;
 
 use itertools::Itertools;
 use moss::Package;
-use tui::Stylize;
+use tui::{term_size, Stylize};
 
 /// Print packages as column output
 pub fn print_to_columns<T>(items: T)
 where
     T: IntoIterator<Item = Package>,
 {
-    // TODO: Get real constraints
-    const TERMINAL_WIDTH: usize = 80;
+    let terminal_width = term_size().width;
 
     // Map into something simple
     let mut mapped = items
@@ -34,7 +33,7 @@ where
         .max_by_key(|p| p.name.len() + p.version.len() + 3)
         .unwrap();
     let largest_width = largest_element.name.len() + largest_element.version.len() + 6;
-    let num_columns = max(1, TERMINAL_WIDTH / largest_width);
+    let num_columns = max(1, terminal_width / largest_width);
     let height = ((mapped.len() as f32) / (num_columns as f32)).ceil() as usize;
 
     for y in 0..height {
