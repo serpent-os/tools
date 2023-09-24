@@ -68,9 +68,3 @@ pub fn print_to_columns<T: ColumnDisplay>(items: Vec<T>) {
         println!();
     }
 }
-
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
-struct State {
-    name: String,
-    version: String,
-}
