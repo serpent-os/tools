@@ -8,8 +8,6 @@ use clap::{Arg, ArgAction, Command};
 use moss::Provider;
 use thiserror::Error;
 
-mod pretty;
-
 mod extract;
 mod info;
 mod inspect;

@@ -6,6 +6,7 @@ pub use self::program::Program;
 pub use self::reexport::*;
 pub use self::runtime::{run, Handle};
 
+pub mod pretty;
 mod program;
 mod runtime;
 pub mod widget;

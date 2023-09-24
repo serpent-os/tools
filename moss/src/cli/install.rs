@@ -12,10 +12,9 @@ use moss::{
     Package,
 };
 use thiserror::Error;
+use tui::pretty::print_to_columns;
 
 use crate::cli::name_to_provider;
-
-use super::pretty::print_to_columns;
 
 pub fn command() -> Command {
     Command::new("install")
@@ -64,7 +63,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
         return Err(Error::NotImplemented);
     }
 
-    good.sort();
+    good.sort_by_key(|p| p.meta.name.to_string());
     good.dedup();
 
     println!("The following package(s) will be installed:");

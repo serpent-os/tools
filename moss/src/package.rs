@@ -8,6 +8,7 @@ use itertools::Itertools;
 pub use self::meta::{Meta, MissingMetaError, Name};
 
 pub mod meta;
+pub mod render;
 
 /// Unique ID of a [`Package`]
 #[derive(Debug, Clone, PartialEq, Eq)]
