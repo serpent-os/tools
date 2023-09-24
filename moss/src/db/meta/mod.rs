@@ -447,7 +447,7 @@ mod test {
                 .await
                 .unwrap();
 
-        let bash_completion = include_bytes!("../../../test/bash-completion-2.11-1-1-x86_64.stone");
+        let bash_completion = include_bytes!("../../../../test/bash-completion-2.11-1-1-x86_64.stone");
 
         let mut stone = stone::read_bytes(bash_completion).unwrap();
 
