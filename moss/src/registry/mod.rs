@@ -13,8 +13,10 @@ use crate::package::{self, Package};
 use crate::Provider;
 
 pub use self::plugin::Plugin;
+pub use self::transaction::Transaction;
 
 pub mod plugin;
+pub mod transaction;
 
 /// A registry is composed of multiple "query plugins" that
 /// provide [`Package`] information
@@ -87,6 +89,11 @@ impl Registry {
     /// Return a sorted stream of available [`Package`]
     pub fn list_available(&self, flags: package::Flags) -> impl Stream<Item = Package> + '_ {
         self.list(flags | package::Flags::AVAILABLE)
+    }
+
+    /// Return a new transaction for this registry
+    pub fn transaction(&self) -> Result<Transaction<'_>, transaction::Error> {
+        transaction::new(self)
     }
 }
 

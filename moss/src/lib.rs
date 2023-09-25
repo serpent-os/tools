@@ -11,7 +11,6 @@ pub use self::installation::Installation;
 pub use self::package::Package;
 pub use self::registry::Registry;
 pub use self::repository::Repository;
-pub use self::transaction::Transaction;
 
 pub mod client;
 pub mod config;
@@ -22,4 +21,3 @@ pub mod package;
 pub mod registry;
 pub mod repository;
 pub mod stone;
-pub mod transaction;
