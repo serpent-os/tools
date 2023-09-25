@@ -3,7 +3,7 @@ members = [
     "moss",
     "stone",
     "tui",
-	"dag",
+    "dag",
 ]
 resolver = "2"
 
