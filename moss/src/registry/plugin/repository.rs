@@ -70,9 +70,26 @@ impl Repository {
         self.query(flags, |_| true).await
     }
 
+    /// Query all packages that match the given provider identity
     pub async fn query_provider(&self, provider: &Provider, flags: package::Flags) -> Vec<Package> {
-        self.query(flags, |meta| meta.providers.contains(provider))
-            .await
+        if !flags.contains(package::Flags::AVAILABLE) {
+            return vec![];
+        }
+
+        let packages = self.active.db.get_providers(provider).await;
+        if packages.is_err() {
+            vec![]
+        } else {
+            packages
+                .unwrap()
+                .into_iter()
+                .map(|(id, meta)| Package {
+                    id,
+                    meta,
+                    flags: package::Flags::AVAILABLE,
+                })
+                .collect()
+        }
     }
 
     pub async fn query_name(

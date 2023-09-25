@@ -10,6 +10,7 @@ use thiserror::Error;
 
 use crate::db::Encoding;
 use crate::package::{self, Meta};
+use crate::Provider;
 
 #[derive(Debug, Clone)]
 pub struct Database {
@@ -127,6 +128,29 @@ impl Database {
                 )
             })
             .collect())
+    }
+
+    /// Firstly find all matching providers - then map them back via .get() to the full package
+    pub async fn get_providers(
+        &self,
+        provider: &Provider,
+    ) -> Result<Vec<(package::Id, Meta)>, Error> {
+        let entry_query = sqlx::query_as::<_, encoding::Provider>(
+            "SELECT package, provider
+            FROM meta_providers
+            WHERE provider = ?;
+        ",
+        )
+        .bind(provider.encode());
+
+        let entries = entry_query.fetch_all(&self.pool).await?;
+        let mut results = vec![];
+        for entry in entries {
+            let id = entry.id.0;
+            let lookup = self.get(&id).await?;
+            results.push((id, lookup));
+        }
+        Ok(results)
     }
 
     pub async fn get(&self, package: &package::Id) -> Result<Meta, Error> {
@@ -438,6 +462,8 @@ mod test {
 
     use stone::read::Payload;
 
+    use crate::dependency::Kind;
+
     use super::*;
 
     #[tokio::test]
@@ -447,7 +473,8 @@ mod test {
                 .await
                 .unwrap();
 
-        let bash_completion = include_bytes!("../../../../test/bash-completion-2.11-1-1-x86_64.stone");
+        let bash_completion =
+            include_bytes!("../../../../test/bash-completion-2.11-1-1-x86_64.stone");
 
         let mut stone = stone::read_bytes(bash_completion).unwrap();
 
@@ -464,6 +491,14 @@ mod test {
         database.add(id.clone(), meta.clone()).await.unwrap();
 
         assert_eq!(&meta.name, &"bash-completion".to_string().into());
+
+        // Now retrieve by provider.
+        let lookup = Provider {
+            kind: Kind::PackageName,
+            name: "bash-completion".to_string(),
+        };
+        let fetched = database.get_providers(&lookup).await.unwrap();
+        assert_eq!(fetched.len(), 1);
 
         batch_remove([&id], &mut database.pool.acquire().await.unwrap())
             .await
