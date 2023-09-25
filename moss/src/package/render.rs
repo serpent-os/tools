@@ -17,24 +17,29 @@ const COLUMN_PADDING: usize = 3;
 /// Allow display packages in column form
 impl ColumnDisplay for Package {
     fn get_display_width(&self) -> usize {
-        self.meta.name.to_string().len() + self.meta.version_identifier.len() + COLUMN_PADDING
+        self.meta.name.to_string().len()
+            + self.meta.version_identifier.len()
+            + self.meta.source_release.to_string().len()
+            + COLUMN_PADDING
     }
 
     fn display_column(&self, writer: &mut impl Write, col: Column, width: usize) {
         let _ = match col {
             Column::Last => write!(
                 writer,
-                "{} {:width$}{}",
+                "{} {:width$}{}-{}",
                 self.meta.name.to_string().bold(),
                 " ",
-                self.meta.version_identifier.clone().magenta()
+                self.meta.version_identifier.clone().magenta(),
+                self.meta.source_release.to_string().dim(),
             ),
             _ => write!(
                 writer,
-                "{} {:width$}{}   ",
+                "{} {:width$}{}-{}   ",
                 self.meta.name.to_string().bold(),
                 " ",
-                self.meta.version_identifier.clone().magenta()
+                self.meta.version_identifier.clone().magenta(),
+                self.meta.source_release.to_string().dim(),
             ),
         };
     }
