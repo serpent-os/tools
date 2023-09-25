@@ -3,6 +3,7 @@ members = [
     "moss",
     "stone",
     "tui",
+    "dag",
 ]
 resolver = "2"
 
@@ -18,6 +19,7 @@ itertools = "0.11.0"
 futures = "0.3.28"
 log = "0.4"
 nix = { version = "0.27.1", features = ["user", "fs"] }
+petgraph = "0.6.4"
 ratatui = "0.23.1-alpha.1"
 rayon = "1.7"
 reqwest = { version = "0.11.20", default-features = false, features = ["rustls-tls", "stream"] }
