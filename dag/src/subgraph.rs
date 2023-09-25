@@ -4,6 +4,8 @@
 
 use petgraph::{prelude::GraphMap, visit::Dfs, EdgeType};
 
+/// Given an input [GraphMap] and the start nodes, construct a subgraph
+/// Used largely in transposed form for reverse dependency calculation
 pub fn subgraph<V, E, Ty>(graph: &GraphMap<V, E, Ty>, starting_nodes: Vec<V>) -> GraphMap<V, E, Ty>
 where
     V: Eq + std::hash::Hash + Ord + Copy,
