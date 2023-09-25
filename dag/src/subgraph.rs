@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: Copyright © 2020-2023 Serpent OS Developers
+//
+// SPDX-License-Identifier: MPL-2.0
+
 use petgraph::{prelude::GraphMap, visit::Dfs, EdgeType};
 
 pub fn subgraph<V, E, Ty>(graph: &GraphMap<V, E, Ty>, starting_nodes: Vec<V>) -> GraphMap<V, E, Ty>
