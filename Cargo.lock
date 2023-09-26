@@ -1144,6 +1144,7 @@ dependencies = [
  "bitflags 2.4.0",
  "chrono",
  "clap",
+ "dag",
  "futures",
  "itertools 0.11.0",
  "log",
