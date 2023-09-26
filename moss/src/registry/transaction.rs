@@ -10,7 +10,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{package, Package, Provider, Registry};
+use crate::{package, Provider, Registry};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Id(u64);
@@ -138,17 +138,17 @@ impl<'a> Transaction<'a> {
             ProviderFilter::All(provider) => self
                 .registry
                 .by_provider(&provider, package::Flags::AVAILABLE)
-                .collect::<Vec<_>>()
+                .boxed()
+                .next()
                 .await
-                .first()
                 .map(|p| p.id.clone())
                 .ok_or(Error::NoCandidate(provider.to_string())),
             ProviderFilter::InstalledOnly(provider) => self
                 .registry
                 .by_provider(&provider, package::Flags::INSTALLED)
-                .collect::<Vec<_>>()
+                .boxed()
+                .next()
                 .await
-                .first()
                 .map(|p| p.id.clone())
                 .ok_or(Error::NoCandidate(provider.to_string())),
             ProviderFilter::Selections(provider) => self
@@ -161,9 +161,9 @@ impl<'a> Transaction<'a> {
                         None
                     }
                 })
-                .collect::<Vec<Package>>()
+                .boxed()
+                .next()
                 .await
-                .first()
                 .map(|p| p.id.clone())
                 .ok_or(Error::NoCandidate(provider.to_string())),
         }
