@@ -5,12 +5,12 @@
 use std::collections::HashSet;
 
 use dag::{toposort, DiGraph};
-use futures::{executor::block_on, StreamExt, TryFutureExt};
+use futures::{StreamExt, TryFutureExt};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{db::meta::Database, package, Package, Provider, Registry};
+use crate::{package, Package, Provider, Registry};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Id(u64);
@@ -35,9 +35,6 @@ pub struct Transaction<'a> {
     // Bound to a registry
     registry: &'a Registry,
 
-    /// Memory bound database for resolution
-    db: Database,
-
     // unique set of package ids
     packages: HashSet<package::Id>,
 }
@@ -49,7 +46,6 @@ pub(super) fn new(registry: &Registry) -> Result<Transaction<'_>, Error> {
     Ok(Transaction {
         id: None,
         registry,
-        db: block_on(Database::new("sqlite::memory:", false))?,
         packages: HashSet::new(),
     })
 }
