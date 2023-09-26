@@ -4,7 +4,9 @@
 
 use std::collections::HashSet;
 
+use dag::{toposort, DiGraph};
 use futures::{executor::block_on, StreamExt, TryFutureExt};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -65,8 +67,8 @@ impl<'a> Transaction<'a> {
     }
 
     /// Return the package IDs in the fully baked configuration
-    pub fn finalize(&self) -> Result<Vec<package::Id>, Error> {
-        Err(Error::NotImplemented)
+    pub fn finalize(&self) -> Vec<package::Id> {
+        self.packages.iter().cloned().collect_vec()
     }
 
     /// Return all of the dependencies for input ID
@@ -74,7 +76,64 @@ impl<'a> Transaction<'a> {
         let lookup = self.registry.by_id(&id).collect::<Vec<_>>().await;
         let candidate = lookup.first().ok_or(Error::NoCandidate(id.into()))?;
 
-        Ok(vec![candidate.id.clone()])
+        let mut graph = DiGraph::new();
+        let mut items = vec![candidate.id.clone()];
+
+        loop {
+            if items.is_empty() {
+                break;
+            }
+            let mut next = vec![];
+            for check_id in items.iter() {
+                // See if the node exists yet..
+                let check_node = graph
+                    .node_indices()
+                    .find(|i| graph[*i] == *check_id)
+                    .unwrap_or_else(|| graph.add_node(check_id.clone()));
+
+                // Grab this package in question
+                let matches = self.registry.by_id(check_id).collect::<Vec<_>>().await;
+                let package = matches
+                    .first()
+                    .ok_or(Error::NoCandidate(check_id.clone().into()))?;
+                for dependency in package.meta.dependencies.iter() {
+                    let provider = Provider {
+                        kind: dependency.kind.clone(),
+                        name: dependency.name.clone(),
+                    };
+
+                    // Now get it resolved
+                    let search = self.resolve_installation_provider(provider).await?;
+
+                    // Grab dependency node
+                    let mut need_search = false;
+                    let dep_node = graph
+                        .node_indices()
+                        .find(|i| graph[*i] == search)
+                        .unwrap_or_else(|| {
+                            need_search = true;
+                            graph.add_node(search.clone())
+                        });
+
+                    // No dag node for it previously
+                    if need_search {
+                        next.push(search.clone());
+                    }
+
+                    // Connect w/ edges
+                    graph.add_edge(check_node, dep_node, 1);
+                }
+            }
+            items = next;
+        }
+
+        // topologically sort, returning a mapped cylical error if necessary
+        // TODO: Handle emission of the cyclical error better and the chain involved
+        Ok(toposort(&graph, None)
+            .map_err(|e| Error::Cyclical(graph[e.node_id()].clone()))?
+            .into_iter()
+            .map(|i| graph[i].clone())
+            .collect_vec())
     }
 
     /// Attempt to resolve the filterered provider
@@ -136,6 +195,9 @@ impl<'a> Transaction<'a> {
 pub enum Error {
     #[error("database error: {0}")]
     Database(#[from] crate::db::meta::Error),
+
+    #[error("cyclical dependencies")]
+    Cyclical(package::Id),
 
     #[error("no such name: {0}")]
     NoCandidate(String),
