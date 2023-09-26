@@ -6,7 +6,6 @@ pub mod subgraph;
 
 pub use self::reexport::*;
 
-pub mod reexport
-{
+pub mod reexport {
     pub use petgraph::graph::DiGraph;
 }
