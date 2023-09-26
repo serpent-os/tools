@@ -13,15 +13,15 @@ edition = "2021"
 [workspace.dependencies]
 bitflags = "2.4.0"
 chrono = "0.4.30"
-clap = "4.4.4"
+clap = "4.4.5"
 crossterm = "0.27.0"
 itertools = "0.11.0"
 futures = "0.3.28"
 log = "0.4"
 nix = { version = "0.27.1", features = ["user", "fs"] }
 petgraph = "0.6.4"
-ratatui = "0.23.1-alpha.1"
-rayon = "1.7"
+ratatui = "0.23.1-alpha.3"
+rayon = "1.8"
 reqwest = { version = "0.11.20", default-features = false, features = ["rustls-tls", "stream"] }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
