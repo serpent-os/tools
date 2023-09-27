@@ -6,7 +6,7 @@ use log::warn;
 
 use crate::{
     db,
-    package::{self, Meta, Package},
+    package::{self, Package},
     repository, Provider,
 };
 
@@ -41,10 +41,10 @@ impl Repository {
         }
     }
 
-    async fn query(&self, flags: package::Flags, filter: impl Fn(&Meta) -> bool) -> Vec<Package> {
+    async fn query(&self, flags: package::Flags, filter: Option<db::meta::Filter>) -> Vec<Package> {
         if flags.contains(package::Flags::AVAILABLE) {
             // TODO: Error handling
-            let packages = match self.active.db.all().await {
+            let packages = match self.active.db.query(filter).await {
                 Ok(packages) => packages,
                 Err(error) => {
                     warn!("failed to query repository packages: {error}");
@@ -54,7 +54,6 @@ impl Repository {
 
             packages
                 .into_iter()
-                .filter(|(_, meta)| filter(meta))
                 .map(|(id, meta)| Package {
                     id,
                     meta,
@@ -67,29 +66,13 @@ impl Repository {
     }
 
     pub async fn list(&self, flags: package::Flags) -> Vec<Package> {
-        self.query(flags, |_| true).await
+        self.query(flags, None).await
     }
 
     /// Query all packages that match the given provider identity
     pub async fn query_provider(&self, provider: &Provider, flags: package::Flags) -> Vec<Package> {
-        if !flags.contains(package::Flags::AVAILABLE) {
-            return vec![];
-        }
-
-        let packages = self.active.db.get_providers(provider).await;
-        if packages.is_err() {
-            vec![]
-        } else {
-            packages
-                .unwrap()
-                .into_iter()
-                .map(|(id, meta)| Package {
-                    id,
-                    meta,
-                    flags: package::Flags::AVAILABLE,
-                })
-                .collect()
-        }
+        self.query(flags, Some(db::meta::Filter::Provider(provider.clone())))
+            .await
     }
 
     pub async fn query_name(
@@ -97,7 +80,8 @@ impl Repository {
         package_name: &package::Name,
         flags: package::Flags,
     ) -> Vec<Package> {
-        self.query(flags, |meta| meta.name == *package_name).await
+        self.query(flags, Some(db::meta::Filter::Name(package_name.clone())))
+            .await
     }
 }
 
