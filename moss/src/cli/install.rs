@@ -6,9 +6,11 @@ use std::path::PathBuf;
 
 use clap::{arg, ArgMatches, Command};
 use futures::{future::join_all, StreamExt};
+use itertools::Itertools;
 use moss::{
     client::{self, Client},
     package::Flags,
+    registry::transaction,
     Package,
 };
 use thiserror::Error;
@@ -55,7 +57,6 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     let queried = join_all(pkgs.iter().map(|p| find_packages(p, &client))).await;
     let (good_list, bad_list): (Vec<_>, Vec<_>) = queried.into_iter().partition(Result::is_ok);
     let bad: Vec<_> = bad_list.into_iter().map(Result::unwrap_err).collect();
-    let mut good: Vec<_> = good_list.into_iter().flat_map(Result::unwrap).collect();
 
     // TODO: Add error hookups
     if !bad.is_empty() {
@@ -63,12 +64,36 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
         return Err(Error::NotImplemented);
     }
 
-    good.sort_by_key(|p| p.meta.name.to_string());
-    good.dedup();
+    // The initial ids they want installed..
+    let input = good_list
+        .into_iter()
+        .flat_map(Result::unwrap)
+        .map(|r| (r.id.clone()))
+        .collect::<Vec<_>>();
+
+    // Try stuffing everything into the transaction now
+    let mut tx = client.registry.transaction()?;
+    for id in input {
+        tx.add(id).await?;
+    }
+
+    // Resolve and map it. Remove any installed items. OK to unwrap here because they're resolved already
+    let mut results = join_all(
+        tx.finalize()
+            .iter()
+            .map(|p| async { client.registry.by_id(p).boxed().next().await.unwrap() }),
+    )
+    .await
+    .into_iter()
+    .filter(|p| !p.flags.contains(Flags::INSTALLED))
+    .collect_vec();
+
+    results.sort_by_key(|p| p.meta.name.to_string());
+    results.dedup_by_key(|p| p.meta.name.to_string());
 
     println!("The following package(s) will be installed:");
     println!();
-    print_to_columns(good);
+    print_to_columns(results);
 
     Err(Error::NotImplemented)
 }
@@ -83,4 +108,7 @@ pub enum Error {
 
     #[error("not yet implemented")]
     NotImplemented,
+
+    #[error("transaction error: {0}")]
+    Transaction(#[from] transaction::Error),
 }
