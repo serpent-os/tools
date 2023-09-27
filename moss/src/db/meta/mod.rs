@@ -23,6 +23,7 @@ enum Table {
 #[derive(Debug)]
 pub enum Filter {
     Provider(Provider),
+    Name(package::Name),
 }
 
 impl Filter {
@@ -46,6 +47,27 @@ impl Filter {
                             ",
                         )
                         .push_bind(p.encode())
+                        .push(")");
+                }
+            }
+            Filter::Name(n) => {
+                if let Table::Meta = table {
+                    query
+                        .push(
+                            "
+                            where name = 
+                            ",
+                        )
+                        .push_bind(n.encode().to_string());
+                } else {
+                    query
+                        .push(
+                            "
+                            where package in 
+                                (select distinct package from meta where name = 
+                            ",
+                        )
+                        .push_bind(n.encode().to_string())
                         .push(")");
                 }
             }
@@ -83,7 +105,7 @@ impl Database {
         Ok(())
     }
 
-    pub async fn all(&self, filter: Option<Filter>) -> Result<Vec<(package::Id, Meta)>, Error> {
+    pub async fn query(&self, filter: Option<Filter>) -> Result<Vec<(package::Id, Meta)>, Error> {
         let mut entry_query = sqlx::QueryBuilder::new(
             "
             SELECT package,
@@ -529,7 +551,7 @@ mod test {
             kind: Kind::PackageName,
             name: "bash-completion".to_string(),
         });
-        let fetched = database.all(Some(lookup)).await.unwrap();
+        let fetched = database.query(Some(lookup)).await.unwrap();
         assert_eq!(fetched.len(), 1);
 
         batch_remove([&id], &mut database.pool.acquire().await.unwrap())
