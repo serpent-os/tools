@@ -4,7 +4,7 @@
 
 use std::collections::HashSet;
 
-use dag::{toposort, DiGraph};
+use dag::{toposort, Dfs, DiGraph};
 use futures::{StreamExt, TryFutureExt};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -116,8 +116,18 @@ impl<'a> Transaction<'a> {
                         next.push(search.clone());
                     }
 
-                    // Connect w/ edges
-                    graph.add_edge(check_node, dep_node, 1);
+                    // Connect w/ edges if non cyclical
+                    let mut dfs = Dfs::new(&graph, dep_node);
+                    let mut add_edge = true;
+                    while let Some(item) = dfs.next(&graph) {
+                        if item == dep_node {
+                            add_edge = false;
+                            break;
+                        }
+                    }
+                    if graph.find_edge_undirected(check_node, dep_node).is_none() && add_edge {
+                        graph.add_edge(check_node, dep_node, 1);
+                    }
                 }
             }
             items = next;

@@ -9,4 +9,5 @@ pub use self::reexport::*;
 pub mod reexport {
     pub use petgraph::algo::{toposort, Cycle};
     pub use petgraph::graph::DiGraph;
+    pub use petgraph::visit::Dfs;
 }
