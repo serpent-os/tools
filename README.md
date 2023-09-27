@@ -21,7 +21,7 @@ Progress:
  - [x] Repository manipulation
  - [x] Plugin system for layered graph of dependencies
  - [ ] Search support
- - [ ] Transactions
+ - [x] Transactions
  - [ ] Installation support
  - [ ] Removal support
  - [ ] Upgrade support
