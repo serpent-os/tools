@@ -4,13 +4,54 @@
 
 use std::path::Path;
 
-use sqlx::SqliteConnection;
 use sqlx::{sqlite::SqliteConnectOptions, Acquire, Pool, Sqlite};
+use sqlx::{QueryBuilder, SqliteConnection};
 use thiserror::Error;
 
 use crate::db::Encoding;
 use crate::package::{self, Meta};
 use crate::Provider;
+
+#[derive(Debug, Clone, Copy)]
+enum Table {
+    Meta,
+    Licenses,
+    Dependencies,
+    Providers,
+}
+
+#[derive(Debug)]
+pub enum Filter {
+    Provider(Provider),
+}
+
+impl Filter {
+    fn append(&self, table: Table, query: &mut QueryBuilder<Sqlite>) {
+        match self {
+            Filter::Provider(p) => {
+                if let Table::Providers = table {
+                    query
+                        .push(
+                            "
+                            where provider = 
+                            ",
+                        )
+                        .push_bind(p.encode());
+                } else {
+                    query
+                        .push(
+                            "
+                            where package in 
+                                (select distinct package from meta_providers where provider = 
+                            ",
+                        )
+                        .push_bind(p.encode())
+                        .push(")");
+                }
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Database {
@@ -42,9 +83,8 @@ impl Database {
         Ok(())
     }
 
-    // TODO: Replace with specialized query interfaces
-    pub async fn all(&self) -> Result<Vec<(package::Id, Meta)>, Error> {
-        let entry_query = sqlx::query_as::<_, encoding::Entry>(
+    pub async fn all(&self, filter: Option<Filter>) -> Result<Vec<(package::Id, Meta)>, Error> {
+        let mut entry_query = sqlx::QueryBuilder::new(
             "
             SELECT package,
                    name,
@@ -59,36 +99,51 @@ impl Database {
                    uri,
                    hash,
                    download_size
-            FROM meta;
+            FROM meta
             ",
         );
 
-        let licenses_query = sqlx::query_as::<_, encoding::License>(
+        let mut licenses_query = sqlx::QueryBuilder::new(
             "
             SELECT package, license
-            FROM meta_licenses;
+            FROM meta_licenses
             ",
         );
 
-        let dependencies_query = sqlx::query_as::<_, encoding::Dependency>(
+        let mut dependencies_query = sqlx::QueryBuilder::new(
             "
             SELECT package, dependency
-            FROM meta_dependencies;
+            FROM meta_dependencies
             ",
         );
 
-        let providers_query = sqlx::query_as::<_, encoding::Provider>(
+        let mut providers_query = sqlx::QueryBuilder::new(
             "
             SELECT package, provider
-            FROM meta_providers;
+            FROM meta_providers
             ",
         );
 
+        if let Some(filter) = filter {
+            filter.append(Table::Meta, &mut entry_query);
+            filter.append(Table::Licenses, &mut licenses_query);
+            filter.append(Table::Dependencies, &mut dependencies_query);
+            filter.append(Table::Providers, &mut providers_query);
+        }
+
         let (entries, licenses, dependencies, providers) = futures::try_join!(
-            entry_query.fetch_all(&self.pool),
-            licenses_query.fetch_all(&self.pool),
-            dependencies_query.fetch_all(&self.pool),
-            providers_query.fetch_all(&self.pool),
+            entry_query
+                .build_query_as::<encoding::Entry>()
+                .fetch_all(&self.pool),
+            licenses_query
+                .build_query_as::<encoding::License>()
+                .fetch_all(&self.pool),
+            dependencies_query
+                .build_query_as::<encoding::Dependency>()
+                .fetch_all(&self.pool),
+            providers_query
+                .build_query_as::<encoding::Provider>()
+                .fetch_all(&self.pool),
         )?;
 
         Ok(entries
@@ -128,29 +183,6 @@ impl Database {
                 )
             })
             .collect())
-    }
-
-    /// Firstly find all matching providers - then map them back via .get() to the full package
-    pub async fn get_providers(
-        &self,
-        provider: &Provider,
-    ) -> Result<Vec<(package::Id, Meta)>, Error> {
-        let entry_query = sqlx::query_as::<_, encoding::Provider>(
-            "SELECT package, provider
-            FROM meta_providers
-            WHERE provider = ?;
-        ",
-        )
-        .bind(provider.encode());
-
-        let entries = entry_query.fetch_all(&self.pool).await?;
-        let mut results = vec![];
-        for entry in entries {
-            let id = entry.id.0;
-            let lookup = self.get(&id).await?;
-            results.push((id, lookup));
-        }
-        Ok(results)
     }
 
     pub async fn get(&self, package: &package::Id) -> Result<Meta, Error> {
@@ -493,11 +525,11 @@ mod test {
         assert_eq!(&meta.name, &"bash-completion".to_string().into());
 
         // Now retrieve by provider.
-        let lookup = Provider {
+        let lookup = Filter::Provider(Provider {
             kind: Kind::PackageName,
             name: "bash-completion".to_string(),
-        };
-        let fetched = database.get_providers(&lookup).await.unwrap();
+        });
+        let fetched = database.all(Some(lookup)).await.unwrap();
         assert_eq!(fetched.len(), 1);
 
         batch_remove([&id], &mut database.pool.acquire().await.unwrap())

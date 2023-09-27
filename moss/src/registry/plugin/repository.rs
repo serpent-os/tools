@@ -44,7 +44,7 @@ impl Repository {
     async fn query(&self, flags: package::Flags, filter: impl Fn(&Meta) -> bool) -> Vec<Package> {
         if flags.contains(package::Flags::AVAILABLE) {
             // TODO: Error handling
-            let packages = match self.active.db.all().await {
+            let packages = match self.active.db.all(None).await {
                 Ok(packages) => packages,
                 Err(error) => {
                     warn!("failed to query repository packages: {error}");
@@ -76,7 +76,9 @@ impl Repository {
             return vec![];
         }
 
-        let packages = self.active.db.get_providers(provider).await;
+        let filter = db::meta::Filter::Provider(provider.clone());
+        let packages = self.active.db.all(Some(filter)).await;
+
         if packages.is_err() {
             vec![]
         } else {
