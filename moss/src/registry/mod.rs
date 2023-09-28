@@ -15,6 +15,7 @@ use crate::Provider;
 pub use self::plugin::Plugin;
 pub use self::transaction::Transaction;
 
+pub mod job;
 pub mod plugin;
 pub mod transaction;
 
