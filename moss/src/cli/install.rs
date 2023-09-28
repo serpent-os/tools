@@ -73,9 +73,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
 
     // Try stuffing everything into the transaction now
     let mut tx = client.registry.transaction()?;
-    for id in input {
-        tx.add(id).await?;
-    }
+    tx.add(input).await?;
 
     // Resolve and map it. Remove any installed items. OK to unwrap here because they're resolved already
     let mut results = join_all(

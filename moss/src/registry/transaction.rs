@@ -52,8 +52,8 @@ pub(super) fn new(registry: &Registry) -> Result<Transaction<'_>, Error> {
 
 impl<'a> Transaction<'a> {
     /// Add a package to this transaction
-    pub async fn add(&mut self, id: package::Id) -> Result<(), Error> {
-        self.packages.extend(self.compute_deps(id).await?);
+    pub async fn add(&mut self, incoming: Vec<package::Id>) -> Result<(), Error> {
+        self.packages.extend(self.compute_deps(incoming).await?);
         Ok(())
     }
 
@@ -68,12 +68,9 @@ impl<'a> Transaction<'a> {
     }
 
     /// Return all of the dependencies for input ID
-    async fn compute_deps(&self, id: package::Id) -> Result<Vec<package::Id>, Error> {
-        let lookup = self.registry.by_id(&id).collect::<Vec<_>>().await;
-        let candidate = lookup.first().ok_or(Error::NoCandidate(id.into()))?;
-
+    async fn compute_deps(&self, incoming: Vec<package::Id>) -> Result<Vec<package::Id>, Error> {
         let mut graph = DiGraph::new();
-        let mut items = vec![candidate.id.clone()];
+        let mut items = incoming.clone();
 
         loop {
             if items.is_empty() {
