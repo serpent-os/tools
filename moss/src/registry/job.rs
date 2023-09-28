@@ -26,10 +26,10 @@ pub enum CheckType {
 #[derive(Clone, Debug)]
 pub enum Origin {
     /// Locally available
-    LocalArchive(PathBuf),
+    LocalFile(PathBuf),
 
     /// Must be fetched from a remote URI
-    RemoteURI(Url),
+    RemoteFile(Url),
 }
 
 /// A job is used to describe the operation required to get some pkgID installed locally

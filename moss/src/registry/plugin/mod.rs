@@ -193,7 +193,7 @@ pub mod test {
         pub fn fetch_item(&self, id: &package::Id) -> Job {
             Job {
                 domain: crate::registry::job::Domain::Package(id.clone()),
-                origin: crate::registry::job::Origin::LocalArchive(PathBuf::from(
+                origin: crate::registry::job::Origin::LocalFile(PathBuf::from(
                     "test/bash-completion-2.11-1-1-x86_64.stone",
                 )),
                 check: None,
