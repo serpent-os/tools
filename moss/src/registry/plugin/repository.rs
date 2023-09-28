@@ -7,6 +7,7 @@ use log::warn;
 use crate::{
     db,
     package::{self, Package},
+    registry::job::Job,
     repository, Provider,
 };
 
@@ -82,6 +83,10 @@ impl Repository {
     ) -> Vec<Package> {
         self.query(flags, Some(db::meta::Filter::Name(package_name.clone())))
             .await
+    }
+
+    pub fn fetch_item(&self, id: &package::Id) -> Job {
+        todo!()
     }
 }
 

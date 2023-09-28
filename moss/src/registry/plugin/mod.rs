@@ -19,6 +19,8 @@ pub use self::repository::Repository;
 #[cfg(test)]
 pub use self::test::Test;
 
+use super::job::Job;
+
 mod active;
 mod cobble;
 mod repository;
@@ -108,11 +110,18 @@ impl Plugin {
         }
     }
 
-    // /// Request that the item is fetched from its location into a storage
-    // /// medium.
-    // pub fn fetch_item(&self, package: &package::Id) -> package::Job {
-    //     todo!();
-    // }
+    /// Request that the item is fetched from its location into a storage
+    /// medium.
+    pub fn fetch_item(&self, id: &package::Id) -> Job {
+        match self {
+            Plugin::Active(_) => panic!("Active plugin queried for fetch"),
+            Plugin::Cobble(plugin) => plugin.fetch_item(id),
+            Plugin::Repository(plugin) => plugin.fetch_item(id),
+
+            #[cfg(test)]
+            Plugin::Test(plugin) => plugin.fetch_item(id),
+        }
+    }
 }
 
 /// Defines a [`Plugin`] ordering based on "priority", sorted
@@ -134,6 +143,8 @@ impl Ord for PriorityOrdered {
 
 #[cfg(test)]
 pub mod test {
+    use std::path::PathBuf;
+
     use super::*;
 
     #[derive(Debug, Clone, PartialEq, Eq)]
@@ -177,6 +188,17 @@ pub mod test {
                 .filter(|p| p.meta.name == *package_name && p.flags.contains(flags))
                 .cloned()
                 .collect()
+        }
+
+        pub fn fetch_item(&self, id: &package::Id) -> Job {
+            Job {
+                domain: crate::registry::job::Domain::Package(id.clone()),
+                origin: crate::registry::job::Origin::LocalArchive(PathBuf::from(
+                    "test/bash-completion-2.11-1-1-x86_64.stone",
+                )),
+                check: None,
+                size: 168864,
+            }
         }
     }
 }

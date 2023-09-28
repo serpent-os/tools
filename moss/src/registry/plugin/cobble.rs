@@ -5,6 +5,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use crate::package::{self, meta, Meta, MissingMetaError, Package};
+use crate::registry::job::Job;
 use crate::{stone, Provider};
 use ::stone::read::Payload;
 use futures::StreamExt;
@@ -81,6 +82,10 @@ impl Cobble {
 
     pub fn priority(&self) -> u64 {
         u64::MAX
+    }
+
+    pub fn fetch_item(&self, id: &package::Id) -> Job {
+        todo!()
     }
 }
 
