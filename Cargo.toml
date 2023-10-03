@@ -13,19 +13,19 @@ edition = "2021"
 [workspace.dependencies]
 bitflags = "2.4.0"
 chrono = "0.4.30"
-clap = "4.4.5"
+clap = "4.4.6"
 crossterm = "0.27.0"
 itertools = "0.11.0"
 futures = "0.3.28"
 log = "0.4"
 nix = { version = "0.27.1", features = ["user", "fs"] }
 petgraph = "0.6.4"
-ratatui = "0.23.1-alpha.3"
+ratatui = "0.23.1-alpha.4"
 rayon = "1.8"
-reqwest = { version = "0.11.20", default-features = false, features = ["rustls-tls", "stream"] }
+reqwest = { version = "0.11.21", default-features = false, features = ["rustls-tls", "stream"] }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
-sqlx = { version = "0.7.1", features = ["sqlite", "chrono", "runtime-tokio"] }
+sqlx = { version = "0.7.2", features = ["sqlite", "chrono", "runtime-tokio"] }
 thiserror = "1"
 tokio = { version = "1.32", features = ["full"] }
 tokio-stream = { version = "0.1.14", features = ["time"] }
