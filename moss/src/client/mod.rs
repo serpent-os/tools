@@ -22,7 +22,7 @@ pub enum Error {
 /// A Client is a connection to the underlying package management systems
 pub struct Client {
     /// Root that we operate on
-    installation: Installation,
+    pub installation: Installation,
     repositories: repository::Manager,
     pub registry: Registry,
 }

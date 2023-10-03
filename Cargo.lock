@@ -1132,6 +1132,7 @@ name = "moss"
 version = "0.1.0"
 dependencies = [
  "bitflags 2.4.0",
+ "bytes",
  "chrono",
  "clap",
  "dag",
@@ -1139,6 +1140,7 @@ dependencies = [
  "itertools 0.11.0",
  "log",
  "nix",
+ "once_cell",
  "rayon",
  "reqwest",
  "serde",

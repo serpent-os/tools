@@ -13,7 +13,7 @@ async fn main() {
     tui::run(Program::default(), run).await.unwrap();
 }
 
-async fn run(mut handle: Handle<Message>) {
+async fn run(handle: Handle<Message>) {
     let now = Instant::now();
 
     let mut progress = 0;

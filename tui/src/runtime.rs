@@ -121,11 +121,11 @@ impl<Message> Clone for Handle<Message> {
 }
 
 impl<Message> Handle<Message> {
-    pub fn print(&mut self, content: String) {
+    pub fn print(&self, content: String) {
         let _ = self.sender.send(Event::Print(content));
     }
 
-    pub fn update(&mut self, message: Message) {
+    pub fn update(&self, message: Message) {
         let _ = self.sender.send(Event::Message(message));
     }
 }

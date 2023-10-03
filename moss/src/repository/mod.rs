@@ -13,7 +13,7 @@ use tokio::{
 };
 use url::Url;
 
-use crate::{db::meta, Config};
+use crate::{db::meta, request, Config};
 
 pub use self::manager::Manager;
 
@@ -129,11 +129,9 @@ impl Config for Map {
 }
 
 async fn fetch_index(url: Url, out_path: impl AsRef<Path>) -> Result<(), FetchError> {
-    let resp = reqwest::get(url).await?;
+    let mut stream = request::get(url).await?;
 
     let mut out = File::create(out_path).await?;
-
-    let mut stream = resp.bytes_stream();
 
     while let Some(chunk) = stream.next().await {
         out.write_all(&chunk?).await?;

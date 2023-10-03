@@ -43,7 +43,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     Ok(())
 }
 
-fn extract(paths: Vec<PathBuf>, mut handle: tui::Handle<Message>) -> Result<(), Error> {
+fn extract(paths: Vec<PathBuf>, handle: tui::Handle<Message>) -> Result<(), Error> {
     // Begin unpack
     create_dir_all(".stoneStore")?;
 

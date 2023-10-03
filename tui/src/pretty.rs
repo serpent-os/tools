@@ -32,7 +32,7 @@ pub trait ColumnDisplay: Sized {
 /// Print a vec of items that implement the ColumnDisplay trait.
 /// These will be printed in individual columns assuming that the input order is
 /// alphabetically sorted, to give each column an ascending alpha sort.
-pub fn print_to_columns<T: ColumnDisplay>(items: Vec<T>) {
+pub fn print_to_columns<T: ColumnDisplay>(items: &[T]) {
     let terminal_width = term_size().width;
 
     // Figure render constraints

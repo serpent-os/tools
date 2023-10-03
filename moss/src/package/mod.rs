@@ -5,8 +5,10 @@
 use bitflags::bitflags;
 use itertools::Itertools;
 
+pub use self::fetch::{fetch, Download};
 pub use self::meta::{Meta, MissingMetaError, Name};
 
+pub mod fetch;
 pub mod meta;
 pub mod render;
 

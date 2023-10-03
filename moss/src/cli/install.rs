@@ -5,16 +5,19 @@
 use std::path::PathBuf;
 
 use clap::{arg, ArgMatches, Command};
-use futures::{future::join_all, StreamExt};
+use futures::{
+    future::{join_all, try_join_all},
+    StreamExt,
+};
 use itertools::Itertools;
 use moss::{
     client::{self, Client},
-    package::Flags,
+    package::{self, Flags},
     registry::transaction,
     Package,
 };
 use thiserror::Error;
-use tui::pretty::print_to_columns;
+use tui::{pretty::print_to_columns, widget::progress, Constraint, Direction, Layout};
 
 use crate::cli::name_to_provider;
 
@@ -91,7 +94,26 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
 
     println!("The following package(s) will be installed:");
     println!();
-    print_to_columns(results);
+    print_to_columns(&results);
+
+    tui::run(Program::new(results.len()), |handle| async move {
+        // Download and unpack each package
+        try_join_all(results.iter().map(|package| async {
+            let download = package::fetch(&package.meta, &client.installation).await?;
+
+            handle.update(Message::Downloaded);
+
+            download.unpack().await?;
+
+            handle.update(Message::Unpacked);
+
+            Ok(()) as Result<(), Error>
+        }))
+        .await?;
+
+        Ok(()) as Result<(), Error>
+    })
+    .await??;
 
     Err(Error::NotImplemented)
 }
@@ -109,4 +131,73 @@ pub enum Error {
 
     #[error("transaction error: {0}")]
     Transaction(#[from] transaction::Error),
+
+    #[error("package fetch error: {0}")]
+    Package(#[from] package::fetch::Error),
+
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
+}
+
+struct Program {
+    total: usize,
+    downloaded: usize,
+    unpacked: usize,
+}
+
+impl Program {
+    fn new(total: usize) -> Self {
+        Self {
+            total,
+            downloaded: 0,
+            unpacked: 0,
+        }
+    }
+}
+
+enum Message {
+    Downloaded,
+    Unpacked,
+}
+
+impl tui::Program for Program {
+    type Message = Message;
+
+    const LINES: u16 = 5;
+
+    fn update(&mut self, message: Self::Message) {
+        match message {
+            Message::Downloaded => self.downloaded += 1,
+            Message::Unpacked => self.unpacked += 1,
+        }
+    }
+
+    fn draw(&self, frame: &mut tui::Frame) {
+        let layout = Layout::new()
+            .direction(Direction::Vertical)
+            .vertical_margin(1)
+            .constraints([
+                Constraint::Length(1),
+                Constraint::Length(1),
+                Constraint::Length(1),
+            ])
+            .split(frame.size());
+
+        frame.render_widget(
+            progress(
+                self.downloaded as f32 / self.total as f32,
+                progress::Fill::UpAcross,
+                20,
+            ),
+            layout[0],
+        );
+        frame.render_widget(
+            progress(
+                self.unpacked as f32 / self.total as f32,
+                progress::Fill::UpAcross,
+                20,
+            ),
+            layout[2],
+        );
+    }
 }

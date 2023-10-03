@@ -20,4 +20,5 @@ pub mod installation;
 pub mod package;
 pub mod registry;
 pub mod repository;
+mod request;
 pub mod stone;
