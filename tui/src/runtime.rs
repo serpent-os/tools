@@ -67,33 +67,35 @@ where
             .await
             .unwrap();
 
+        let mut update = || {
+            let mut lines = vec![];
+
+            while let Ok(event) = receiver.try_recv() {
+                match event {
+                    Event::Message(message) => program.update(message),
+                    Event::Print(line) => lines.push(line),
+                }
+            }
+
+            if !lines.is_empty() {
+                let num_lines = lines.len();
+                let paragraph = Paragraph::new(lines);
+
+                terminal.insert_before(num_lines as u16, |buf| paragraph.render(buf.area, buf))?;
+            }
+
+            terminal.draw(|frame| program.draw(frame))?;
+
+            Ok(()) as Result<()>
+        };
+
         match input {
             Input::Render => {
-                let mut print = vec![];
-
-                while let Ok(event) = receiver.try_recv() {
-                    match event {
-                        Event::Message(message) => program.update(message),
-                        Event::Print(content) => print.push(content),
-                    }
-                }
-
-                if !print.is_empty() {
-                    let lines = print
-                        .iter()
-                        .flat_map(|content| content.lines())
-                        .collect::<Vec<_>>();
-                    let num_lines = lines.len();
-                    let paragraph =
-                        Paragraph::new(lines.into_iter().map(Line::from).collect::<Vec<_>>());
-
-                    terminal
-                        .insert_before(num_lines as u16, |buf| paragraph.render(buf.area, buf))?;
-                }
-
-                terminal.draw(|frame| program.draw(frame))?;
+                update()?;
             }
             Input::Finished(ret) => {
+                update()?;
+
                 terminal.show_cursor()?;
                 terminal.clear()?;
 
@@ -121,8 +123,8 @@ impl<Message> Clone for Handle<Message> {
 }
 
 impl<Message> Handle<Message> {
-    pub fn print(&self, content: String) {
-        let _ = self.sender.send(Event::Print(content));
+    pub fn print(&self, line: impl Into<Line<'static>>) {
+        let _ = self.sender.send(Event::Print(line.into()));
     }
 
     pub fn update(&self, message: Message) {
@@ -132,5 +134,5 @@ impl<Message> Handle<Message> {
 
 pub enum Event<Message> {
     Message(Message),
-    Print(String),
+    Print(Line<'static>),
 }

@@ -2,13 +2,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::path::PathBuf;
+use std::{collections::BTreeMap, path::PathBuf, time::Instant};
 
 use clap::{arg, ArgMatches, Command};
-use futures::{
-    future::{join_all, try_join_all},
-    StreamExt,
-};
+use futures::{future::join_all, stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use moss::{
     client::{self, Client},
@@ -17,9 +14,15 @@ use moss::{
     Package,
 };
 use thiserror::Error;
-use tui::{pretty::print_to_columns, widget::progress, Constraint, Direction, Layout};
+use tui::{
+    pretty::print_to_columns,
+    widget::{progress, Line, Paragraph},
+    Constraint, Direction, Layout, TuiStylize,
+};
 
 use crate::cli::name_to_provider;
+
+const CONCURRENT_TASKS: usize = 8;
 
 pub fn command() -> Command {
     Command::new("install")
@@ -98,17 +101,26 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
 
     tui::run(Program::new(results.len()), |handle| async move {
         // Download and unpack each package
-        try_join_all(results.iter().map(|package| async {
+        stream::iter(results.into_iter().map(|package| async {
+            handle.update(Message::Downloading(package.meta.name.to_string()));
             let download = package::fetch(&package.meta, &client.installation).await?;
 
-            handle.update(Message::Downloaded);
-
+            handle.update(Message::Unpacking(package.meta.name.to_string()));
             download.unpack().await?;
 
-            handle.update(Message::Unpacked);
+            handle.update(Message::Finished(package.meta.name.to_string()));
+            handle.print(vec![
+                "Installed ".green(),
+                package.meta.name.to_string().bold(),
+            ]);
+
+            // Get smarter borrow checker
+            drop(package);
 
             Ok(()) as Result<(), Error>
         }))
+        .buffer_unordered(CONCURRENT_TASKS)
+        .try_collect()
         .await?;
 
         Ok(()) as Result<(), Error>
@@ -139,65 +151,104 @@ pub enum Error {
     Io(#[from] std::io::Error),
 }
 
+enum Status {
+    Downloading,
+    Unpacking,
+}
+
+#[derive(PartialEq, Eq)]
+struct Key {
+    package: String,
+    added: Instant,
+}
+
+impl PartialOrd for Key {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.added.partial_cmp(&other.added)
+    }
+}
+
+impl Ord for Key {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.added.cmp(&other.added)
+    }
+}
+
 struct Program {
     total: usize,
-    downloaded: usize,
-    unpacked: usize,
+    finished: usize,
+    in_progress: BTreeMap<String, Status>,
 }
 
 impl Program {
     fn new(total: usize) -> Self {
         Self {
             total,
-            downloaded: 0,
-            unpacked: 0,
+            finished: 0,
+            in_progress: BTreeMap::default(),
         }
     }
 }
 
 enum Message {
-    Downloaded,
-    Unpacked,
+    Downloading(String),
+    Unpacking(String),
+    Finished(String),
 }
 
 impl tui::Program for Program {
     type Message = Message;
 
-    const LINES: u16 = 5;
+    const LINES: u16 = CONCURRENT_TASKS as u16 + 1;
 
     fn update(&mut self, message: Self::Message) {
         match message {
-            Message::Downloaded => self.downloaded += 1,
-            Message::Unpacked => self.unpacked += 1,
+            Message::Downloading(package) => {
+                self.in_progress.insert(package, Status::Downloading);
+            }
+            Message::Unpacking(package) => {
+                self.in_progress.insert(package, Status::Unpacking);
+            }
+            Message::Finished(package) => {
+                self.finished += 1;
+                self.in_progress.remove(&package);
+            }
         }
     }
 
     fn draw(&self, frame: &mut tui::Frame) {
         let layout = Layout::new()
             .direction(Direction::Vertical)
-            .vertical_margin(1)
             .constraints([
-                Constraint::Length(1),
-                Constraint::Length(1),
+                Constraint::Length(CONCURRENT_TASKS as u16),
                 Constraint::Length(1),
             ])
             .split(frame.size());
 
+        let rows = self
+            .in_progress
+            .iter()
+            .map(|(package, status)| {
+                vec![
+                    match status {
+                        Status::Downloading => "Downloading ".blue(),
+                        Status::Unpacking => "Unpacking ".yellow(),
+                    },
+                    package.clone().bold(),
+                ]
+            })
+            .map(Line::from)
+            .collect::<Vec<_>>();
+
+        frame.render_widget(Paragraph::new(rows), layout[0]);
+
         frame.render_widget(
             progress(
-                self.downloaded as f32 / self.total as f32,
+                self.finished as f32 / self.total as f32,
                 progress::Fill::UpAcross,
                 20,
             ),
-            layout[0],
-        );
-        frame.render_widget(
-            progress(
-                self.unpacked as f32 / self.total as f32,
-                progress::Fill::UpAcross,
-                20,
-            ),
-            layout[2],
+            layout[1],
         );
     }
 }

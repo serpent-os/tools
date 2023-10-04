@@ -40,6 +40,7 @@ mod reexport {
     pub use crossterm::style::Stylize;
     use ratatui::prelude::CrosstermBackend;
     pub use ratatui::prelude::{Constraint, Direction, Layout, Rect};
+    pub use ratatui::style::Stylize as TuiStylize;
 
     pub type Frame<'a> = ratatui::Frame<'a, CrosstermBackend<Stdout>>;
 }
