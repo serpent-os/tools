@@ -7,6 +7,7 @@ use thiserror::Error;
 use tokio::{
     fs::{self, File},
     io::AsyncWriteExt,
+    sync::mpsc::{self, UnboundedSender},
     task,
 };
 use url::Url;
@@ -64,11 +65,49 @@ pub struct Download {
 impl Download {
     /// Unpack the downloaded package
     // TODO: Return an "Unpacked" struct which has a "blit" method on it?
-    pub async fn unpack(self) -> Result<(), Error> {
-        task::spawn_blocking(move || {
-            use std::fs::{create_dir_all, remove_file, File};
-            use std::io::{copy, Read, Seek, SeekFrom};
+    pub async fn unpack<S>(self, mut progress_sink: S) -> Result<(), Error>
+    where
+        S: Sink<f64, Error = Infallible> + Unpin,
+    {
+        use std::fs::{create_dir_all, remove_file, File};
+        use std::io::{copy, Read, Seek, SeekFrom, Write};
 
+        struct ProgressWriter<W> {
+            writer: W,
+            total: u64,
+            written: u64,
+            sender: UnboundedSender<f64>,
+        }
+
+        impl<W> ProgressWriter<W> {
+            pub fn new(writer: W, total: u64, sender: UnboundedSender<f64>) -> Self {
+                Self {
+                    writer,
+                    total,
+                    written: 0,
+                    sender,
+                }
+            }
+        }
+
+        impl<W: Write> Write for ProgressWriter<W> {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                let bytes = self.writer.write(buf)?;
+
+                self.written += bytes as u64;
+                let _ = self.sender.send(self.written as f64 / self.total as f64);
+
+                Ok(bytes)
+            }
+
+            fn flush(&mut self) -> std::io::Result<()> {
+                self.writer.flush()
+            }
+        }
+
+        let (sender, mut receiver) = mpsc::unbounded_channel();
+
+        let task = task::spawn_blocking(move || {
             let content_dir = self.installation.cache_path("content");
             let content_path = content_dir.join(self.id.as_ref());
 
@@ -88,7 +127,10 @@ impl Download {
                 .create(true)
                 .open(&content_path)?;
 
-            reader.unpack_content(content, &mut &content_file)?;
+            reader.unpack_content(
+                content,
+                &mut ProgressWriter::new(&content_file, content.plain_size, sender),
+            )?;
 
             payloads
                 .par_iter()
@@ -113,9 +155,22 @@ impl Download {
             remove_file(&content_path)?;
 
             Ok(())
-        })
-        .await
-        .expect("join handle")
+        });
+
+        let progress = async move {
+            while let Some(progress) = receiver.recv().await {
+                let _ = progress_sink.send(progress).await;
+            }
+            // Never return
+            futures::future::pending().await
+        };
+
+        tokio::select! {
+            handle = task => {
+                handle.expect("join handle")
+            }
+            _ = progress => unreachable!(),
+        }
     }
 }
 

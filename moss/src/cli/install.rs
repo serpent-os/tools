@@ -103,6 +103,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
         // Download and unpack each package
         stream::iter(results.into_iter().map(|package| async {
             handle.update(Message::Downloading(package.meta.name.to_string(), 0.0));
+
             let download = package::fetch(
                 &package.meta,
                 &client.installation,
@@ -117,10 +118,21 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
             )
             .await?;
 
-            handle.update(Message::Unpacking(package.meta.name.to_string()));
-            download.unpack().await?;
+            handle.update(Message::Unpacking(package.meta.name.to_string(), 0.0));
+
+            download
+                .unpack(Box::pin(sink::unfold((), |(), progress| {
+                    let handle = handle.clone();
+                    let name = package.meta.name.to_string();
+                    async move {
+                        handle.update(Message::Unpacking(name, progress));
+                        Ok(())
+                    }
+                })))
+                .await?;
 
             handle.update(Message::Finished(package.meta.name.to_string()));
+
             handle.print(vec![
                 "Installed ".green(),
                 package.meta.name.to_string().bold(),
@@ -166,7 +178,7 @@ pub enum Error {
 #[derive(Clone, Copy)]
 enum Status {
     Downloading(f64),
-    Unpacking,
+    Unpacking(f64),
 }
 
 #[derive(PartialEq, Eq)]
@@ -205,7 +217,7 @@ impl Program {
 
 enum Message {
     Downloading(String, f64),
-    Unpacking(String),
+    Unpacking(String, f64),
     Finished(String),
 }
 
@@ -220,8 +232,9 @@ impl tui::Program for Program {
                 self.in_progress
                     .insert(package, Status::Downloading(progress));
             }
-            Message::Unpacking(package) => {
-                self.in_progress.insert(package, Status::Unpacking);
+            Message::Unpacking(package, progress) => {
+                self.in_progress
+                    .insert(package, Status::Unpacking(progress));
             }
             Message::Finished(package) => {
                 self.finished += 1;
@@ -247,13 +260,13 @@ impl tui::Program for Program {
                 let paragraph = Paragraph::new(Line::from(vec![
                     match status {
                         Status::Downloading(_) => "Downloading ".blue(),
-                        Status::Unpacking => "Unpacking ".yellow(),
+                        Status::Unpacking(_) => "Unpacking ".yellow(),
                     },
                     package.clone().bold(),
                 ]));
                 let pct = match status {
                     Status::Downloading(pct) => *pct,
-                    Status::Unpacking => 0.0,
+                    Status::Unpacking(pct) => *pct,
                 };
 
                 let layout = Layout::new()
