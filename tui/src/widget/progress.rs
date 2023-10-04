@@ -60,7 +60,8 @@ impl Widget for Progress {
             buf.get_mut(x, y).set_char(char);
         }
 
-        buf.get_mut(space + self.num_bars, area.y).set_char('|');
+        buf.get_mut(area.x + space + self.num_bars, area.y)
+            .set_char('|');
     }
 }
 

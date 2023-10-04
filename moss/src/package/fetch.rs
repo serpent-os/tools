@@ -1,6 +1,6 @@
-use std::{io, path::PathBuf};
+use std::{convert::Infallible, io, path::PathBuf};
 
-use futures::StreamExt;
+use futures::{Sink, SinkExt, StreamExt};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use stone::read::Payload;
 use thiserror::Error;
@@ -17,7 +17,14 @@ use crate::{
 };
 
 /// Fetch a package with the provided [`Meta`] and [`Installation`] and return a [`Download`] on success.
-pub async fn fetch(meta: &Meta, installation: &Installation) -> Result<Download, Error> {
+pub async fn fetch<S>(
+    meta: &Meta,
+    installation: &Installation,
+    mut progress_sink: S,
+) -> Result<Download, Error>
+where
+    S: Sink<f64, Error = Infallible> + Unpin,
+{
     let url = meta.uri.as_ref().ok_or(Error::MissingUri)?.parse::<Url>()?;
     let hash = meta.hash.as_ref().ok_or(Error::MissingHash)?;
 
@@ -26,8 +33,16 @@ pub async fn fetch(meta: &Meta, installation: &Installation) -> Result<Download,
     let download_path = download_path(installation, hash).await?;
     let mut out = File::create(&download_path).await?;
 
+    let mut total = 0;
+
     while let Some(chunk) = bytes.next().await {
-        out.write_all(&chunk?).await?;
+        let bytes = chunk?;
+        total += bytes.len() as u64;
+        out.write_all(&bytes).await?;
+
+        let _ = progress_sink
+            .send(total as f64 / meta.download_size.unwrap_or(total) as f64)
+            .await;
     }
 
     out.flush().await?;

@@ -5,7 +5,7 @@
 use std::{collections::BTreeMap, path::PathBuf, time::Instant};
 
 use clap::{arg, ArgMatches, Command};
-use futures::{future::join_all, stream, StreamExt, TryStreamExt};
+use futures::{future::join_all, sink, stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use moss::{
     client::{self, Client},
@@ -102,8 +102,20 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     tui::run(Program::new(results.len()), |handle| async move {
         // Download and unpack each package
         stream::iter(results.into_iter().map(|package| async {
-            handle.update(Message::Downloading(package.meta.name.to_string()));
-            let download = package::fetch(&package.meta, &client.installation).await?;
+            handle.update(Message::Downloading(package.meta.name.to_string(), 0.0));
+            let download = package::fetch(
+                &package.meta,
+                &client.installation,
+                Box::pin(sink::unfold((), |(), progress| {
+                    let handle = handle.clone();
+                    let name = package.meta.name.to_string();
+                    async move {
+                        handle.update(Message::Downloading(name, progress));
+                        Ok(())
+                    }
+                })),
+            )
+            .await?;
 
             handle.update(Message::Unpacking(package.meta.name.to_string()));
             download.unpack().await?;
@@ -151,8 +163,9 @@ pub enum Error {
     Io(#[from] std::io::Error),
 }
 
+#[derive(Clone, Copy)]
 enum Status {
-    Downloading,
+    Downloading(f64),
     Unpacking,
 }
 
@@ -191,7 +204,7 @@ impl Program {
 }
 
 enum Message {
-    Downloading(String),
+    Downloading(String, f64),
     Unpacking(String),
     Finished(String),
 }
@@ -203,8 +216,9 @@ impl tui::Program for Program {
 
     fn update(&mut self, message: Self::Message) {
         match message {
-            Message::Downloading(package) => {
-                self.in_progress.insert(package, Status::Downloading);
+            Message::Downloading(package, progress) => {
+                self.in_progress
+                    .insert(package, Status::Downloading(progress));
             }
             Message::Unpacking(package) => {
                 self.in_progress.insert(package, Status::Unpacking);
@@ -219,28 +233,37 @@ impl tui::Program for Program {
     fn draw(&self, frame: &mut tui::Frame) {
         let layout = Layout::new()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(CONCURRENT_TASKS as u16),
-                Constraint::Length(1),
-            ])
+            .constraints(
+                (0..Self::LINES)
+                    .map(|_| Constraint::Length(1))
+                    .collect::<Vec<_>>(),
+            )
             .split(frame.size());
 
-        let rows = self
-            .in_progress
+        self.in_progress
             .iter()
-            .map(|(package, status)| {
-                vec![
+            .enumerate()
+            .for_each(|(i, (package, status))| {
+                let paragraph = Paragraph::new(Line::from(vec![
                     match status {
-                        Status::Downloading => "Downloading ".blue(),
+                        Status::Downloading(_) => "Downloading ".blue(),
                         Status::Unpacking => "Unpacking ".yellow(),
                     },
                     package.clone().bold(),
-                ]
-            })
-            .map(Line::from)
-            .collect::<Vec<_>>();
+                ]));
+                let pct = match status {
+                    Status::Downloading(pct) => *pct,
+                    Status::Unpacking => 0.0,
+                };
 
-        frame.render_widget(Paragraph::new(rows), layout[0]);
+                let layout = Layout::new()
+                    .direction(Direction::Horizontal)
+                    .constraints([Constraint::Length(13), Constraint::Max(u16::MAX)])
+                    .split(layout[i]);
+
+                frame.render_widget(progress(pct as f32, progress::Fill::UpAcross, 5), layout[0]);
+                frame.render_widget(paragraph, layout[1]);
+            });
 
         frame.render_widget(
             progress(
@@ -248,7 +271,7 @@ impl tui::Program for Program {
                 progress::Fill::UpAcross,
                 20,
             ),
-            layout[1],
+            layout[Self::LINES as usize - 1],
         );
     }
 }
