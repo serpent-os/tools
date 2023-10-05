@@ -1,13 +1,12 @@
-use std::{convert::Infallible, io, path::PathBuf};
+use std::{io, path::PathBuf};
 
-use futures::{Sink, SinkExt, StreamExt};
+use futures::StreamExt;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use stone::read::Payload;
 use thiserror::Error;
 use tokio::{
     fs::{self, File},
     io::AsyncWriteExt,
-    sync::mpsc::{self, UnboundedSender},
     task,
 };
 use url::Url;
@@ -18,14 +17,11 @@ use crate::{
 };
 
 /// Fetch a package with the provided [`Meta`] and [`Installation`] and return a [`Download`] on success.
-pub async fn fetch<S>(
+pub async fn fetch(
     meta: &Meta,
     installation: &Installation,
-    mut progress_sink: S,
-) -> Result<Download, Error>
-where
-    S: Sink<f64, Error = Infallible> + Unpin,
-{
+    on_progress: impl Fn(f64),
+) -> Result<Download, Error> {
     let url = meta.uri.as_ref().ok_or(Error::MissingUri)?.parse::<Url>()?;
     let hash = meta.hash.as_ref().ok_or(Error::MissingHash)?;
 
@@ -41,9 +37,7 @@ where
         total += bytes.len() as u64;
         out.write_all(&bytes).await?;
 
-        let _ = progress_sink
-            .send(total as f64 / meta.download_size.unwrap_or(total) as f64)
-            .await;
+        (on_progress)(total as f64 / meta.download_size.unwrap_or(total) as f64);
     }
 
     out.flush().await?;
@@ -65,10 +59,7 @@ pub struct Download {
 impl Download {
     /// Unpack the downloaded package
     // TODO: Return an "Unpacked" struct which has a "blit" method on it?
-    pub async fn unpack<S>(self, mut progress_sink: S) -> Result<(), Error>
-    where
-        S: Sink<f64, Error = Infallible> + Unpin,
-    {
+    pub async fn unpack(self, on_progress: impl Fn(f64) + Send + 'static) -> Result<(), Error> {
         use std::fs::{create_dir_all, remove_file, File};
         use std::io::{copy, Read, Seek, SeekFrom, Write};
 
@@ -76,16 +67,16 @@ impl Download {
             writer: W,
             total: u64,
             written: u64,
-            sender: UnboundedSender<f64>,
+            on_progress: Box<dyn Fn(f64)>,
         }
 
         impl<W> ProgressWriter<W> {
-            pub fn new(writer: W, total: u64, sender: UnboundedSender<f64>) -> Self {
+            pub fn new(writer: W, total: u64, on_progress: impl Fn(f64) + 'static) -> Self {
                 Self {
                     writer,
                     total,
                     written: 0,
-                    sender,
+                    on_progress: Box::new(on_progress),
                 }
             }
         }
@@ -95,7 +86,7 @@ impl Download {
                 let bytes = self.writer.write(buf)?;
 
                 self.written += bytes as u64;
-                let _ = self.sender.send(self.written as f64 / self.total as f64);
+                (self.on_progress)(self.written as f64 / self.total as f64);
 
                 Ok(bytes)
             }
@@ -105,9 +96,7 @@ impl Download {
             }
         }
 
-        let (sender, mut receiver) = mpsc::unbounded_channel();
-
-        let task = task::spawn_blocking(move || {
+        task::spawn_blocking(move || {
             let content_dir = self.installation.cache_path("content");
             let content_path = content_dir.join(self.id.as_ref());
 
@@ -129,7 +118,7 @@ impl Download {
 
             reader.unpack_content(
                 content,
-                &mut ProgressWriter::new(&content_file, content.plain_size, sender),
+                &mut ProgressWriter::new(&content_file, content.plain_size, on_progress),
             )?;
 
             payloads
@@ -155,22 +144,9 @@ impl Download {
             remove_file(&content_path)?;
 
             Ok(())
-        });
-
-        let progress = async move {
-            while let Some(progress) = receiver.recv().await {
-                let _ = progress_sink.send(progress).await;
-            }
-            // Never return
-            futures::future::pending().await
-        };
-
-        tokio::select! {
-            handle = task => {
-                handle.expect("join handle")
-            }
-            _ = progress => unreachable!(),
-        }
+        })
+        .await
+        .expect("join handle")
     }
 }
 

@@ -5,7 +5,7 @@
 use std::{collections::BTreeMap, path::PathBuf, time::Instant};
 
 use clap::{arg, ArgMatches, Command};
-use futures::{future::join_all, sink, stream, StreamExt, TryStreamExt};
+use futures::{future::join_all, stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use moss::{
     client::{self, Client},
@@ -104,31 +104,23 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
         stream::iter(results.into_iter().map(|package| async {
             handle.update(Message::Downloading(package.meta.name.to_string(), 0.0));
 
-            let download = package::fetch(
-                &package.meta,
-                &client.installation,
-                Box::pin(sink::unfold((), |(), progress| {
-                    let handle = handle.clone();
-                    let name = package.meta.name.to_string();
-                    async move {
-                        handle.update(Message::Downloading(name, progress));
-                        Ok(())
-                    }
-                })),
-            )
+            let download = package::fetch(&package.meta, &client.installation, |progress| {
+                handle.update(Message::Downloading(
+                    package.meta.name.to_string(),
+                    progress,
+                ))
+            })
             .await?;
 
             handle.update(Message::Unpacking(package.meta.name.to_string(), 0.0));
 
+            let cloned_handle = handle.clone();
+            let name = package.meta.name.to_string();
+
             download
-                .unpack(Box::pin(sink::unfold((), |(), progress| {
-                    let handle = handle.clone();
-                    let name = package.meta.name.to_string();
-                    async move {
-                        handle.update(Message::Unpacking(name, progress));
-                        Ok(())
-                    }
-                })))
+                .unpack(move |progress| {
+                    cloned_handle.update(Message::Unpacking(name.clone(), progress))
+                })
                 .await?;
 
             handle.update(Message::Finished(package.meta.name.to_string()));
