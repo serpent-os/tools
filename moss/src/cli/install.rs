@@ -94,12 +94,13 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     println!("The following package(s) will be installed:");
     println!();
     print_to_columns(&results);
+    println!();
 
     let multi_progress = MultiProgress::new();
 
     let total_progress = multi_progress.add(
         ProgressBar::new(results.len() as u64).with_style(
-            ProgressStyle::with_template("[{bar:20.cyan/blue}] {pos}/{len}")
+            ProgressStyle::with_template("\n[{bar:20.cyan/blue}] {pos}/{len}")
                 .unwrap()
                 .progress_chars("■≡=- "),
         ),
