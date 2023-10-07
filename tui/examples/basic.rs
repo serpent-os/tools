@@ -2,71 +2,31 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::time::Duration;
+use std::{
+    thread,
+    time::{Duration, Instant},
+};
 
-use tokio::time::{sleep, Instant};
-use tui::widget::progress;
-use tui::{Constraint, Direction, Frame, Handle, Layout};
+use tui::{ProgressBar, ProgressStyle};
 
-#[tokio::main]
-async fn main() {
-    tui::run(Program::default(), run).await.unwrap();
-}
-
-async fn run(handle: Handle<Message>) {
+fn main() {
     let now = Instant::now();
+
+    let progress_bar = ProgressBar::new(100).with_style(
+        ProgressStyle::with_template("\n[{bar:20.cyan/blue}] {percent}%")
+            .unwrap()
+            .progress_chars("■≡=- "),
+    );
 
     let mut progress = 0;
 
     loop {
-        handle.print(format!("{:?}", now.elapsed()));
+        progress_bar.println(format!("{:?}", now.elapsed()));
 
-        sleep(Duration::from_millis(50)).await;
+        thread::sleep(Duration::from_millis(50));
 
         progress = (progress + 1) % 100;
 
-        handle.update(Message::Progress(progress));
-    }
-}
-
-#[derive(Default)]
-struct Program {
-    progress: f32,
-}
-
-enum Message {
-    Progress(u8),
-}
-
-impl tui::Program for Program {
-    const LINES: u16 = 5;
-
-    type Message = Message;
-
-    fn update(&mut self, message: Self::Message) {
-        match message {
-            Message::Progress(p) => self.progress = p as f32 / 100.0,
-        }
-    }
-
-    fn draw(&self, frame: &mut Frame) {
-        let layout = Layout::new()
-            .direction(Direction::Vertical)
-            .vertical_margin(1)
-            .constraints([
-                Constraint::Length(1),
-                Constraint::Length(1),
-                Constraint::Length(1),
-            ])
-            .split(frame.size());
-
-        frame.render_widget(
-            progress(self.progress, progress::Fill::UpAcross, 20),
-            layout[0],
-        );
-        frame.render_widget(
-            progress(self.progress, progress::Fill::AcrossUp, 20),
-            layout[2],
-        );
+        progress_bar.set_position(progress);
     }
 }

@@ -15,7 +15,7 @@ use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use stone::{payload::layout, read::Payload};
 use thiserror::{self, Error};
 use tokio::task;
-use tui::{widget::progress, Constraint, Direction, Frame, Handle, Layout};
+use tui::{ProgressBar, ProgressStyle};
 
 pub fn command() -> Command {
     Command::new("extract")
@@ -33,24 +33,21 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
         .cloned()
         .collect::<Vec<_>>();
 
-    tui::run(Program::default(), |handle| async move {
-        task::spawn_blocking(move || extract(paths, handle))
-            .await
-            .expect("join handle")
-    })
-    .await??;
+    task::spawn_blocking(move || extract(paths))
+        .await
+        .expect("join handle")?;
 
     Ok(())
 }
 
-fn extract(paths: Vec<PathBuf>, handle: tui::Handle<Message>) -> Result<(), Error> {
+fn extract(paths: Vec<PathBuf>) -> Result<(), Error> {
     // Begin unpack
     create_dir_all(".stoneStore")?;
 
     let content_store = PathBuf::from(".stoneStore");
 
     for path in paths {
-        handle.print(format!("Extract: {:?}", path));
+        println!("Extract: {:?}", path);
 
         let rdr = File::open(path).map_err(Error::IO)?;
         let mut reader = stone::read(rdr).map_err(Error::Format)?;
@@ -71,6 +68,12 @@ fn extract(paths: Vec<PathBuf>, handle: tui::Handle<Message>) -> Result<(), Erro
             remove_dir_all(&extraction_root)?;
         }
 
+        let progress = ProgressBar::new(1000).with_style(
+            ProgressStyle::with_template("[{bar:20.cyan/bue}] {percent}%")
+                .unwrap()
+                .progress_chars("■≡=- "),
+        );
+
         if let Some(content) = content {
             let size = content.plain_size;
 
@@ -80,7 +83,7 @@ fn extract(paths: Vec<PathBuf>, handle: tui::Handle<Message>) -> Result<(), Erro
                 .create(true)
                 .open(".stoneContent")?;
 
-            let mut writer = ProgressWriter::new(&content_file, size, handle.clone());
+            let mut writer = ProgressWriter::new(&content_file, size, progress.clone());
             reader.unpack_content(content, &mut writer)?;
 
             // Extract all indices from the `.stoneContent` into hash-indexed unique files
@@ -139,6 +142,8 @@ fn extract(paths: Vec<PathBuf>, handle: tui::Handle<Message>) -> Result<(), Erro
                 }
             }
         }
+
+        progress.finish_and_clear();
     }
 
     // Clean up.
@@ -166,16 +171,16 @@ struct ProgressWriter<W> {
     writer: W,
     total: u64,
     written: u64,
-    handle: Handle<Message>,
+    progress: ProgressBar,
 }
 
 impl<W> ProgressWriter<W> {
-    pub fn new(writer: W, total: u64, handle: Handle<Message>) -> Self {
+    pub fn new(writer: W, total: u64, progress: ProgressBar) -> Self {
         Self {
             writer,
             total,
             written: 0,
-            handle,
+            progress,
         }
     }
 }
@@ -185,47 +190,13 @@ impl<W: Write> Write for ProgressWriter<W> {
         let bytes = self.writer.write(buf)?;
 
         self.written += bytes as u64;
-        self.handle
-            .update(Message::Progress(self.written as f64 / self.total as f64));
+        self.progress
+            .set_position((self.written as f64 / self.total as f64 * 1000.0) as u64);
 
         Ok(bytes)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
         self.writer.flush()
-    }
-}
-
-#[derive(Default)]
-struct Program {
-    progress: f32,
-}
-
-enum Message {
-    Progress(f64),
-}
-
-impl tui::Program for Program {
-    const LINES: u16 = 3;
-
-    type Message = Message;
-
-    fn update(&mut self, message: Self::Message) {
-        match message {
-            Message::Progress(progress) => self.progress = progress as f32,
-        }
-    }
-
-    fn draw(&self, frame: &mut Frame) {
-        let layout = Layout::new()
-            .direction(Direction::Vertical)
-            .vertical_margin(1)
-            .constraints([Constraint::Length(1)])
-            .split(frame.size());
-
-        frame.render_widget(
-            progress(self.progress, progress::Fill::UpAcross, 20),
-            layout[0],
-        );
     }
 }

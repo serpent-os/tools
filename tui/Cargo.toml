@@ -7,7 +7,4 @@ edition.workspace = true
 
 [dependencies]
 crossterm.workspace = true
-futures.workspace = true
-tokio.workspace = true
-tokio-stream.workspace = true
-ratatui.workspace = true
+indicatif.workspace = true
