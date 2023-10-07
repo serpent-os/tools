@@ -110,41 +110,44 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     // Download and unpack each package
     stream::iter(results.into_iter().map(|package| async {
         // Setup the progress bar and set as downloading
-        let progress = multi_progress.insert_before(
+        let progress_bar = multi_progress.insert_before(
             &total_progress,
-            ProgressBar::new(1000)
+            ProgressBar::new(package.meta.download_size.unwrap_or_default())
                 .with_message(format!(
                     "{} {}",
                     "Downloading".blue(),
                     package.meta.name.to_string().bold(),
                 ))
                 .with_style(
-                    ProgressStyle::with_template("{spinner} |{percent:>3}%| {msg}").unwrap(),
+                    ProgressStyle::with_template("{spinner} |{percent:>3}%| {msg}")
+                        .unwrap()
+                        .tick_chars("--=≡■≡=--"),
                 ),
         );
-        progress.enable_steady_tick(Duration::from_millis(100));
+        progress_bar.enable_steady_tick(Duration::from_millis(150));
 
         // Download and update progress
-        let download = package::fetch(&package.meta, &client.installation, |pct| {
-            progress.set_position((pct * 1000.0) as u64);
+        let download = package::fetch(&package.meta, &client.installation, |progress| {
+            progress_bar.inc(progress.delta);
         })
         .await?;
 
         // Set progress to unpacking
-        progress.set_message(format!(
+        progress_bar.set_message(format!(
             "{} {}",
             "Unpacking".yellow(),
             package.meta.name.to_string().bold(),
         ));
-        progress.set_position(0);
+        progress_bar.set_length(1000);
+        progress_bar.set_position(0);
 
         // Unpack and update progress
         download
             .unpack({
-                let pb = progress.clone();
+                let progress_bar = progress_bar.clone();
 
                 move |progress| {
-                    pb.set_position((progress * 1000.0) as u64);
+                    progress_bar.set_position((progress.pct() * 1000.0) as u64);
                 }
             })
             .await?;
@@ -157,8 +160,8 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
         ))?;
 
         // Remove this progress bar
-        progress.finish();
-        multi_progress.remove(&progress);
+        progress_bar.finish();
+        multi_progress.remove(&progress_bar);
 
         // Inc total progress by 1
         total_progress.inc(1);

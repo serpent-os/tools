@@ -16,11 +16,24 @@ use crate::{
     request, Installation,
 };
 
+#[derive(Debug, Clone, Copy)]
+pub struct Progress {
+    pub delta: u64,
+    pub completed: u64,
+    pub total: u64,
+}
+
+impl Progress {
+    pub fn pct(&self) -> f32 {
+        self.completed as f32 / self.total as f32
+    }
+}
+
 /// Fetch a package with the provided [`Meta`] and [`Installation`] and return a [`Download`] on success.
 pub async fn fetch(
     meta: &Meta,
     installation: &Installation,
-    on_progress: impl Fn(f64),
+    on_progress: impl Fn(Progress),
 ) -> Result<Download, Error> {
     let url = meta.uri.as_ref().ok_or(Error::MissingUri)?.parse::<Url>()?;
     let hash = meta.hash.as_ref().ok_or(Error::MissingHash)?;
@@ -34,10 +47,15 @@ pub async fn fetch(
 
     while let Some(chunk) = bytes.next().await {
         let bytes = chunk?;
-        total += bytes.len() as u64;
+        let delta = bytes.len() as u64;
+        total += delta;
         out.write_all(&bytes).await?;
 
-        (on_progress)(total as f64 / meta.download_size.unwrap_or(total) as f64);
+        (on_progress)(Progress {
+            delta,
+            completed: total,
+            total: meta.download_size.unwrap_or(total),
+        });
     }
 
     out.flush().await?;
@@ -59,34 +77,42 @@ pub struct Download {
 impl Download {
     /// Unpack the downloaded package
     // TODO: Return an "Unpacked" struct which has a "blit" method on it?
-    pub async fn unpack(self, on_progress: impl Fn(f64) + Send + 'static) -> Result<(), Error> {
+    pub async fn unpack(
+        self,
+        on_progress: impl Fn(Progress) + Send + 'static,
+    ) -> Result<(), Error> {
         use std::fs::{create_dir_all, remove_file, File};
         use std::io::{copy, Read, Seek, SeekFrom, Write};
 
-        struct ProgressWriter<W> {
+        struct ProgressWriter<'a, W> {
             writer: W,
             total: u64,
             written: u64,
-            on_progress: Box<dyn Fn(f64)>,
+            on_progress: &'a dyn Fn(Progress),
         }
 
-        impl<W> ProgressWriter<W> {
-            pub fn new(writer: W, total: u64, on_progress: impl Fn(f64) + 'static) -> Self {
+        impl<'a, W> ProgressWriter<'a, W> {
+            pub fn new(writer: W, total: u64, on_progress: &'a impl Fn(Progress)) -> Self {
                 Self {
                     writer,
                     total,
                     written: 0,
-                    on_progress: Box::new(on_progress),
+                    on_progress,
                 }
             }
         }
 
-        impl<W: Write> Write for ProgressWriter<W> {
+        impl<'a, W: Write> Write for ProgressWriter<'a, W> {
             fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
                 let bytes = self.writer.write(buf)?;
 
                 self.written += bytes as u64;
-                (self.on_progress)(self.written as f64 / self.total as f64);
+
+                (self.on_progress)(Progress {
+                    delta: bytes as u64,
+                    completed: self.written,
+                    total: self.total,
+                });
 
                 Ok(bytes)
             }
@@ -118,7 +144,7 @@ impl Download {
 
             reader.unpack_content(
                 content,
-                &mut ProgressWriter::new(&content_file, content.plain_size, on_progress),
+                &mut ProgressWriter::new(&content_file, content.plain_size, &on_progress),
             )?;
 
             payloads
