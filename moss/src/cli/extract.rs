@@ -69,7 +69,7 @@ fn extract(paths: Vec<PathBuf>) -> Result<(), Error> {
         }
 
         let progress = ProgressBar::new(1000).with_style(
-            ProgressStyle::with_template("[{bar:20.cyan/bue}] {percent}%")
+            ProgressStyle::with_template("|{bar:20.cyan/bue}| {percent}%")
                 .unwrap()
                 .progress_chars("■≡=- "),
         );

@@ -100,7 +100,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
 
     let total_progress = multi_progress.add(
         ProgressBar::new(results.len() as u64).with_style(
-            ProgressStyle::with_template("\n[{bar:20.cyan/blue}] {pos}/{len}")
+            ProgressStyle::with_template("\n|{bar:20.cyan/blue}| {pos}/{len}")
                 .unwrap()
                 .progress_chars("■≡=- "),
         ),
@@ -119,7 +119,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
                     package.meta.name.to_string().bold(),
                 ))
                 .with_style(
-                    ProgressStyle::with_template("{spinner} [{percent:>3}%] {msg}").unwrap(),
+                    ProgressStyle::with_template("{spinner} |{percent:>3}%| {msg}").unwrap(),
                 ),
         );
         progress.enable_steady_tick(Duration::from_millis(100));
