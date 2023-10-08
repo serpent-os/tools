@@ -1,9 +1,10 @@
 [workspace]
 members = [
+    "dag",
     "moss",
     "stone",
     "tui",
-    "dag",
+    "vfs",
 ]
 resolver = "2"
 
