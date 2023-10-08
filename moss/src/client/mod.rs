@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use thiserror::Error;
 
 use crate::{
+    db,
     registry::plugin::{self, Plugin},
     repository, Installation, Registry,
 };
@@ -17,6 +18,13 @@ pub enum Error {
     RootInvalid,
     #[error("repository: {0}")]
     Repository(#[from] repository::manager::Error),
+    #[error("meta: {0}")]
+    Meta(#[from] db::meta::Error),
+
+    #[error("layout: {0}")]
+    Layout(#[from] db::layout::Error),
+    #[error("state: {0}")]
+    State(#[from] db::state::Error),
 }
 
 /// A Client is a connection to the underlying package management systems
@@ -25,6 +33,10 @@ pub struct Client {
     pub installation: Installation,
     repositories: repository::Manager,
     pub registry: Registry,
+
+    pub install_db: db::meta::Database,
+    pub state_db: db::state::Database,
+    pub layout_db: db::layout::Database,
 }
 
 impl Client {
@@ -38,6 +50,11 @@ impl Client {
 
         let installation = Installation::open(root);
         let repositories = repository::Manager::new(installation.clone()).await?;
+        let install_db =
+            db::meta::Database::new(installation.db_path("install"), installation.read_only())
+                .await?;
+        let state_db = db::state::Database::new(&installation).await?;
+        let layout_db = db::layout::Database::new(&installation).await?;
 
         let registry = build_registry(&repositories);
 
@@ -45,6 +62,9 @@ impl Client {
             installation,
             repositories,
             registry,
+            install_db,
+            state_db,
+            layout_db,
         })
     }
 
