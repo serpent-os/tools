@@ -2,21 +2,23 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 use clap::{arg, ArgMatches, Command};
-use futures::{future::join_all, StreamExt};
+use futures::{future::join_all, stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use moss::{
     client::{self, Client},
-    package::Flags,
+    package::{self, Flags},
     registry::transaction,
     Package,
 };
 use thiserror::Error;
-use tui::pretty::print_to_columns;
+use tui::{pretty::print_to_columns, MultiProgress, ProgressBar, ProgressStyle, Stylize};
 
 use crate::cli::name_to_provider;
+
+const CONCURRENT_TASKS: usize = 8;
 
 pub fn command() -> Command {
     Command::new("install")
@@ -91,7 +93,90 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
 
     println!("The following package(s) will be installed:");
     println!();
-    print_to_columns(results);
+    print_to_columns(&results);
+    println!();
+
+    let multi_progress = MultiProgress::new();
+
+    let total_progress = multi_progress.add(
+        ProgressBar::new(results.len() as u64).with_style(
+            ProgressStyle::with_template("\n|{bar:20.cyan/blue}| {pos}/{len}")
+                .unwrap()
+                .progress_chars("■≡=- "),
+        ),
+    );
+    total_progress.tick();
+
+    // Download and unpack each package
+    stream::iter(results.into_iter().map(|package| async {
+        // Setup the progress bar and set as downloading
+        let progress_bar = multi_progress.insert_before(
+            &total_progress,
+            ProgressBar::new(package.meta.download_size.unwrap_or_default())
+                .with_message(format!(
+                    "{} {}",
+                    "Downloading".blue(),
+                    package.meta.name.to_string().bold(),
+                ))
+                .with_style(
+                    ProgressStyle::with_template("{spinner} |{percent:>3}%| {msg}")
+                        .unwrap()
+                        .tick_chars("--=≡■≡=--"),
+                ),
+        );
+        progress_bar.enable_steady_tick(Duration::from_millis(150));
+
+        // Download and update progress
+        let download = package::fetch(&package.meta, &client.installation, |progress| {
+            progress_bar.inc(progress.delta);
+        })
+        .await?;
+
+        // Set progress to unpacking
+        progress_bar.set_message(format!(
+            "{} {}",
+            "Unpacking".yellow(),
+            package.meta.name.to_string().bold(),
+        ));
+        progress_bar.set_length(1000);
+        progress_bar.set_position(0);
+
+        // Unpack and update progress
+        download
+            .unpack({
+                let progress_bar = progress_bar.clone();
+
+                move |progress| {
+                    progress_bar.set_position((progress.pct() * 1000.0) as u64);
+                }
+            })
+            .await?;
+
+        // Write installed line
+        multi_progress.println(format!(
+            "{} {}",
+            "Installed".green(),
+            package.meta.name.to_string().bold(),
+        ))?;
+
+        // Remove this progress bar
+        progress_bar.finish();
+        multi_progress.remove(&progress_bar);
+
+        // Inc total progress by 1
+        total_progress.inc(1);
+
+        // Get smarter borrow checker
+        drop(package);
+
+        Ok(()) as Result<(), Error>
+    }))
+    .buffer_unordered(CONCURRENT_TASKS)
+    .try_collect()
+    .await?;
+
+    // Remove progress
+    multi_progress.clear()?;
 
     Err(Error::NotImplemented)
 }
@@ -109,4 +194,10 @@ pub enum Error {
 
     #[error("transaction error: {0}")]
     Transaction(#[from] transaction::Error),
+
+    #[error("package fetch error: {0}")]
+    Package(#[from] package::fetch::Error),
+
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
 }

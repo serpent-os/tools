@@ -9,12 +9,14 @@ stone = { version = "0.1.0", path = "../stone" }
 tui = { path = "../tui" }
 
 bitflags.workspace = true
+bytes.workspace = true
 chrono.workspace = true
 clap.workspace = true
 itertools.workspace = true
 futures.workspace = true
 log.workspace = true
 nix.workspace = true
+once_cell.workspace = true
 rayon.workspace = true
 reqwest.workspace = true
 serde.workspace = true
