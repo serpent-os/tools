@@ -43,6 +43,22 @@ $ cargo build -p moss
 $ cargo run -p moss -- $args
 ```
 
+## Experiment
+
+Remember to use the `-D root` argument to specify a root directory, otherwise moss will happily
+eat your operating system.
+
+    cargo build --release
+    
+    # Add the volatile repo
+    ./target/release/moss -D root repo add volatile https://dev.serpentos.com/volatile/x86_64/stone.index
+
+    # List packages
+    ./target/release/moss -D root list available
+
+    # Install something
+    ./target/release/moss -D root install systemd bash libx11-32bit
+
 ## Contributing changes
 
 Please ensure all tests are running locally without issue:
