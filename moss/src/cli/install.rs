@@ -131,7 +131,6 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
 
         // Download and update progress
         let download = package::fetch(&package.meta, &client.installation, |progress| {
-            progress_bar.set_length(progress.total);
             progress_bar.inc(progress.delta);
         })
         .await?;
