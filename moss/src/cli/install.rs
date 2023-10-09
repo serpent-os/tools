@@ -120,15 +120,18 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
                     package.meta.name.to_string().bold(),
                 ))
                 .with_style(
-                    ProgressStyle::with_template("{spinner} |{percent:>3}%| {msg}")
-                        .unwrap()
-                        .tick_chars("--=≡■≡=--"),
+                    ProgressStyle::with_template(
+                        " {spinner} |{percent:>3}%| {wide_msg} {binary_bytes_per_sec:>.dim} ",
+                    )
+                    .unwrap()
+                    .tick_chars("--=≡■≡=--"),
                 ),
         );
         progress_bar.enable_steady_tick(Duration::from_millis(150));
 
         // Download and update progress
         let download = package::fetch(&package.meta, &client.installation, |progress| {
+            progress_bar.set_length(progress.total);
             progress_bar.inc(progress.delta);
         })
         .await?;
