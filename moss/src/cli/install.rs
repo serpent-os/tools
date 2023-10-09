@@ -155,29 +155,26 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
             })
             .await?;
 
-        // Merge into the DB!
+        // Merge layoutdb
         progress_bar.set_message(format!(
             "{} {}",
-            "Accounting".white(),
+            "Store layout".white(),
             package_name.clone().bold()
         ));
-        progress_bar.set_length(2);
-        progress_bar.set_position(0);
-
-        // Merge layoutdb
-        for chunk in unpacked
-            .payloads
-            .iter()
-            .find_map(Payload::layout)
-            .ok_or(Error::CorruptedPackage)?
-            .chunks(1000)
-            .map(|chunk| {
-                chunk
-                    .iter()
-                    .map(|i| (package.id.clone(), i.clone()))
-                    .collect_vec()
-            })
-        {
+        for chunk in progress_bar.wrap_iter(
+            unpacked
+                .payloads
+                .iter()
+                .find_map(Payload::layout)
+                .ok_or(Error::CorruptedPackage)?
+                .chunks(1000)
+                .map(|chunk| {
+                    chunk
+                        .iter()
+                        .map(|i| (package.id.clone(), i.clone()))
+                        .collect_vec()
+                }),
+        ) {
             client
                 .layout_db
                 .batch_add(chunk)
@@ -185,11 +182,8 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
                 .map_err(Error::LayoutDB)?;
         }
 
-        progress_bar.set_position(1);
-
-        // Consume the package
+        // Consume the package in the metadb
         client.install_db.add(package.id, package.meta).await?;
-        progress_bar.set_position(2);
 
         // Write installed line
         multi_progress.println(format!(
