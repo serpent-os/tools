@@ -165,17 +165,25 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
         progress_bar.set_position(0);
 
         // Merge layoutdb
-        let _layouts = unpacked
+        for chunk in unpacked
             .payloads
             .iter()
             .find_map(Payload::layout)
             .ok_or(Error::CorruptedPackage)?
-            .iter()
-            .map(|l| (package.id.clone(), l.to_owned()))
-            .collect_vec();
-
-        // FIXME: batch_add broken from too many variables
-        //client.layout_db.batch_add(layouts).await?;
+            .chunks(1000)
+            .map(|chunk| {
+                chunk
+                    .iter()
+                    .map(|i| (package.id.clone(), i.clone()))
+                    .collect_vec()
+            })
+        {
+            client
+                .layout_db
+                .batch_add(chunk)
+                .await
+                .map_err(Error::LayoutDB)?;
+        }
 
         progress_bar.set_position(1);
 
