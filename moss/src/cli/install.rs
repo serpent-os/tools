@@ -13,6 +13,7 @@ use moss::{
     registry::transaction,
     Package,
 };
+use stone::read::Payload;
 use thiserror::Error;
 use tui::{pretty::print_to_columns, MultiProgress, ProgressBar, ProgressStyle, Stylize};
 
@@ -132,17 +133,19 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
         })
         .await?;
 
+        let package_name = package.meta.name.to_string();
+
         // Set progress to unpacking
         progress_bar.set_message(format!(
             "{} {}",
             "Unpacking".yellow(),
-            package.meta.name.to_string().bold(),
+            package_name.clone().bold(),
         ));
         progress_bar.set_length(1000);
         progress_bar.set_position(0);
 
         // Unpack and update progress
-        download
+        let unpacked = download
             .unpack({
                 let progress_bar = progress_bar.clone();
 
@@ -152,11 +155,39 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
             })
             .await?;
 
+        // Merge into the DB!
+        progress_bar.set_message(format!(
+            "{} {}",
+            "Accounting".white(),
+            package_name.clone().bold()
+        ));
+        progress_bar.set_length(2);
+        progress_bar.set_position(0);
+
+        // Merge layoutdb
+        let _layouts = unpacked
+            .payloads
+            .iter()
+            .find_map(Payload::layout)
+            .ok_or(Error::CorruptedPackage)?
+            .iter()
+            .map(|l| (package.id.clone(), l.to_owned()))
+            .collect_vec();
+
+        // FIXME: batch_add broken from too many variables
+        //client.layout_db.batch_add(layouts).await?;
+
+        progress_bar.set_position(1);
+
+        // Consume the package
+        client.install_db.add(package.id, package.meta).await?;
+        progress_bar.set_position(2);
+
         // Write installed line
         multi_progress.println(format!(
             "{} {}",
             "Installed".green(),
-            package.meta.name.to_string().bold(),
+            package_name.clone().bold(),
         ))?;
 
         // Remove this progress bar
@@ -165,9 +196,6 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
 
         // Inc total progress by 1
         total_progress.inc(1);
-
-        // Get smarter borrow checker
-        drop(package);
 
         Ok(()) as Result<(), Error>
     }))
@@ -186,6 +214,9 @@ pub enum Error {
     #[error("client error")]
     Client(#[from] client::Error),
 
+    #[error("corrupted package")]
+    CorruptedPackage,
+
     #[error("no such candidate: {0}")]
     NoCandidate(String),
 
@@ -197,6 +228,12 @@ pub enum Error {
 
     #[error("package fetch error: {0}")]
     Package(#[from] package::fetch::Error),
+
+    #[error("installdb error: {0}")]
+    InstallDB(#[from] moss::db::meta::Error),
+
+    #[error("layoutdb error: {0}")]
+    LayoutDB(#[from] moss::db::layout::Error),
 
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),

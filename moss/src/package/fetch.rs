@@ -78,13 +78,20 @@ pub struct Download {
     installation: Installation,
 }
 
+/// Upon fetch completion we have this unpacked asset bound with
+/// an open reader
+pub struct UnpackedAsset {
+    id: Id,
+    pub payloads: Vec<Payload>,
+}
+
 impl Download {
     /// Unpack the downloaded package
     // TODO: Return an "Unpacked" struct which has a "blit" method on it?
     pub async fn unpack(
         self,
         on_progress: impl Fn(Progress) + Send + 'static,
-    ) -> Result<(), Error> {
+    ) -> Result<UnpackedAsset, Error> {
         use std::fs::{create_dir_all, remove_file, File};
         use std::io::{copy, Read, Seek, SeekFrom, Write};
 
@@ -173,7 +180,10 @@ impl Download {
 
             remove_file(&content_path)?;
 
-            Ok(())
+            Ok(UnpackedAsset {
+                id: self.id.clone(),
+                payloads,
+            })
         })
         .await
         .expect("join handle")
