@@ -30,7 +30,7 @@ serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
 sqlx = { version = "0.7.2", features = ["sqlite", "chrono", "runtime-tokio"] }
 thiserror = "1"
-tokio = { version = "1.32", features = ["full"] }
+tokio = { version = "1.33", features = ["full"] }
 tokio-stream = { version = "0.1.14", features = ["time"] }
 url = { version = "2.4.1", features = ["serde"] }
 zstd = "0.12.4"
