@@ -11,8 +11,8 @@ use tui::{
 
 use crate::Package;
 
-/// We always pad columns by 3 spaces to just not jank up the output
-const COLUMN_PADDING: usize = 3;
+/// We always pad columns by 4 spaces to just not jank up the output
+const COLUMN_PADDING: usize = 4;
 
 /// Allow display packages in column form
 impl ColumnDisplay for Package {
