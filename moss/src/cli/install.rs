@@ -97,6 +97,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     print_to_columns(&results);
     println!();
 
+    let state_ids = results.iter().map(|p| p.id.clone()).collect_vec();
     let multi_progress = MultiProgress::new();
 
     let total_progress = multi_progress.add(
@@ -207,6 +208,12 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     .try_collect()
     .await?;
 
+    // Perfect, record state.
+    client
+        .state_db
+        .add(state_ids.as_slice(), None, None)
+        .await?;
+
     // Remove progress
     multi_progress.clear()?;
 
@@ -238,6 +245,9 @@ pub enum Error {
 
     #[error("layoutdb error: {0}")]
     LayoutDB(#[from] moss::db::layout::Error),
+
+    #[error("statedb error: {0}")]
+    StateDB(#[from] moss::db::state::Error),
 
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
