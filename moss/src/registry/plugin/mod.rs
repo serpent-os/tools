@@ -124,23 +124,6 @@ impl Plugin {
     }
 }
 
-/// Defines a [`Plugin`] ordering based on "priority", sorted
-/// highest to lowest
-#[derive(Debug, PartialEq, Eq)]
-pub(super) struct PriorityOrdered(pub Plugin);
-
-impl PartialOrd for PriorityOrdered {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for PriorityOrdered {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.0.priority().cmp(&other.0.priority()).reverse()
-    }
-}
-
 #[cfg(test)]
 pub mod test {
     use std::path::PathBuf;
