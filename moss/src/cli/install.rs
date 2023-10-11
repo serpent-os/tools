@@ -164,25 +164,22 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
             "Store layout".white(),
             package_name.clone().bold()
         ));
+        // Remove old layout entries for package
+        client.layout_db.remove(&package.id).await?;
+        // Add new entries in batches of 1k
         for chunk in progress_bar.wrap_iter(
             unpacked
                 .payloads
                 .iter()
                 .find_map(Payload::layout)
                 .ok_or(Error::CorruptedPackage)?
-                .chunks(1000)
-                .map(|chunk| {
-                    chunk
-                        .iter()
-                        .map(|i| (package.id.clone(), i.clone()))
-                        .collect_vec()
-                }),
+                .chunks(1000),
         ) {
-            client
-                .layout_db
-                .batch_add(chunk)
-                .await
-                .map_err(Error::LayoutDB)?;
+            let entries = chunk
+                .iter()
+                .map(|i| (package.id.clone(), i.clone()))
+                .collect_vec();
+            client.layout_db.batch_add(entries).await?;
         }
 
         // Consume the package in the metadb

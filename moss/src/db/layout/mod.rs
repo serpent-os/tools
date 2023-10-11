@@ -91,6 +91,20 @@ impl Database {
         self.batch_add(vec![(package, layout)]).await
     }
 
+    pub async fn remove(&self, package: &package::Id) -> Result<(), Error> {
+        sqlx::query(
+            "
+            DELETE FROM layout
+            WHERE package_id = ?;
+            ",
+        )
+        .bind(package.encode())
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
     pub async fn batch_add(
         &self,
         layouts: Vec<(package::Id, payload::Layout)>,
