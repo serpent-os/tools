@@ -43,7 +43,7 @@ impl Plugin {
     /// the `package` cannot be located.
     pub async fn package(&self, id: &package::Id) -> Option<Package> {
         match self {
-            Plugin::Active(_) => None,
+            Plugin::Active(plugin) => plugin.package(id).await,
             Plugin::Cobble(plugin) => plugin.package(id),
             Plugin::Repository(plugin) => plugin.package(id).await,
 
@@ -55,7 +55,7 @@ impl Plugin {
     /// List all packages with matching `flags`
     pub async fn list(&self, flags: package::Flags) -> package::Sorted<Vec<Package>> {
         package::Sorted::new(match self {
-            Plugin::Active(_) => vec![],
+            Plugin::Active(plugin) => plugin.list(flags).await,
             Plugin::Cobble(plugin) => plugin.list(flags),
             Plugin::Repository(plugin) => plugin.list(flags).await,
 
@@ -71,7 +71,7 @@ impl Plugin {
         flags: package::Flags,
     ) -> package::Sorted<Vec<Package>> {
         package::Sorted::new(match self {
-            Plugin::Active(_) => vec![],
+            Plugin::Active(plugin) => plugin.query_provider(provider, flags).await,
             Plugin::Cobble(plugin) => plugin.query_provider(provider, flags),
             Plugin::Repository(plugin) => plugin.query_provider(provider, flags).await,
 
@@ -87,7 +87,7 @@ impl Plugin {
         flags: package::Flags,
     ) -> package::Sorted<Vec<Package>> {
         package::Sorted::new(match self {
-            Plugin::Active(_) => vec![],
+            Plugin::Active(plugin) => plugin.query_name(package_name, flags).await,
             Plugin::Cobble(plugin) => plugin.query_name(package_name, flags),
             Plugin::Repository(plugin) => plugin.query_name(package_name, flags).await,
 
@@ -101,7 +101,7 @@ impl Plugin {
     /// Higher priority = better chance of selection
     pub fn priority(&self) -> u64 {
         match self {
-            Plugin::Active(_) => todo!(),
+            Plugin::Active(plugin) => plugin.priority(),
             Plugin::Cobble(plugin) => plugin.priority(),
             Plugin::Repository(plugin) => plugin.priority(),
 

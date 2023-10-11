@@ -42,7 +42,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
         let lookup = name_to_provider(&pkg);
         let resolved = client
             .registry
-            .by_provider(&lookup, Flags::AVAILABLE)
+            .by_provider(&lookup, Flags::NONE)
             .collect::<Vec<_>>()
             .await;
         if resolved.is_empty() {

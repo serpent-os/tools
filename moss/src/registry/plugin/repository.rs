@@ -51,7 +51,7 @@ impl Repository {
     }
 
     async fn query(&self, flags: package::Flags, filter: Option<db::meta::Filter>) -> Vec<Package> {
-        if flags.contains(package::Flags::AVAILABLE) {
+        if flags.contains(package::Flags::AVAILABLE) || flags == package::Flags::NONE {
             // TODO: Error handling
             let packages = match self.active.db.query(filter).await {
                 Ok(packages) => packages,

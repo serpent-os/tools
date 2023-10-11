@@ -56,7 +56,12 @@ impl Client {
         let state_db = db::state::Database::new(&installation).await?;
         let layout_db = db::layout::Database::new(&installation).await?;
 
-        let registry = build_registry(&repositories);
+        let state = match installation.active_state {
+            Some(id) => Some(state_db.get(&id).await?),
+            None => None,
+        };
+
+        let registry = build_registry(&repositories, &install_db, state).await?;
 
         Ok(Client {
             installation,
@@ -80,23 +85,37 @@ impl Client {
         self.repositories = repository::Manager::new(self.installation.clone()).await?;
         self.repositories.refresh_all().await?;
 
+        // Refresh State DB
+        let state = match self.installation.active_state {
+            Some(id) => Some(self.state_db.get(&id).await?),
+            None => None,
+        };
+
         // Rebuild registry
-        self.registry = build_registry(&self.repositories);
+        self.registry = build_registry(&self.repositories, &self.install_db, state).await?;
 
         Ok(())
     }
 }
 
-fn build_registry(repositories: &repository::Manager) -> Registry {
+async fn build_registry(
+    repositories: &repository::Manager,
+    installdb: &db::meta::Database,
+    state: Option<db::state::State>,
+) -> Result<Registry, Error> {
     let mut registry = Registry::default();
 
     registry.add_plugin(Plugin::Cobble(plugin::Cobble::default()));
+    registry.add_plugin(Plugin::Active(plugin::Active::new(
+        state,
+        installdb.clone(),
+    )));
 
     for repo in repositories.active() {
         registry.add_plugin(Plugin::Repository(plugin::Repository::new(repo)));
     }
 
-    registry
+    Ok(registry)
 }
 
 impl Drop for Client {
