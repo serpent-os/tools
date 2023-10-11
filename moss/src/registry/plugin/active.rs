@@ -104,6 +104,9 @@ impl Active {
     }
 
     fn pkg_installed(&self, id: &package::Id) -> bool {
-        true
+        match &self.state {
+            Some(st) => st.packages.contains(id),
+            None => false,
+        }
     }
 }
