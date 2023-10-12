@@ -71,7 +71,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     transaction.remove(for_removal).await?;
 
     // Finalized tx has all reverse deps removed
-    let finalized = transaction.finalize();
+    let finalized = transaction.finalize()?.into_iter().collect::<HashSet<_>>();
 
     // Difference resolves to all removed pkgs
     let removed = installed_ids.difference(&finalized);
