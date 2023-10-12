@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{path::PathBuf, time::Duration};
+use std::{path::Path, time::Duration};
 
 use clap::{arg, ArgMatches, Command};
 use futures::{future::join_all, stream, StreamExt, TryStreamExt};
@@ -45,9 +45,7 @@ async fn find_packages(id: &str, client: &Client) -> Result<Vec<Package>, Error>
 }
 
 /// Handle execution of `moss install`
-pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
-    let root = args.get_one::<PathBuf>("root").unwrap().clone();
-
+pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     let pkgs = args
         .get_many::<String>("NAME")
         .into_iter()

@@ -82,13 +82,14 @@ pub async fn process() -> Result<(), Error> {
         Some(("extract", args)) => extract::handle(args).await.map_err(Error::Extract),
         Some(("info", args)) => info::handle(args).await.map_err(Error::Info),
         Some(("inspect", args)) => inspect::handle(args).await.map_err(Error::Inspect),
-        Some(("install", args)) => install::handle(args).await.map_err(Error::Install),
+        Some(("install", args)) => install::handle(args, root).await.map_err(Error::Install),
         Some(("version", _)) => {
             version::print();
             Ok(())
         }
-        Some(("list", a)) => list::handle(a).await.map_err(Error::List),
-        Some(("repo", a)) => repo::handle(a, root).await.map_err(Error::Repo),
+        Some(("list", args)) => list::handle(args).await.map_err(Error::List),
+        Some(("remove", args)) => remove::handle(args, root).await.map_err(Error::Remove),
+        Some(("repo", args)) => repo::handle(args, root).await.map_err(Error::Repo),
         _ => unreachable!(),
     }
 }
@@ -109,6 +110,9 @@ pub enum Error {
 
     #[error("error in extraction: {0}")]
     Extract(#[from] extract::Error),
+
+    #[error("error handling remove: {0}")]
+    Remove(#[from] remove::Error),
 
     #[error("error handling repo: {0}")]
     Repo(#[from] repo::Error),

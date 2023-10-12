@@ -72,7 +72,7 @@ impl<'a> Transaction<'a> {
     }
 
     /// Return the package IDs in the fully baked configuration
-    pub fn finalize(&self) -> Vec<package::Id> {
+    pub fn finalize(&self) -> HashSet<package::Id> {
         self.packages.iter().cloned().collect()
     }
 
