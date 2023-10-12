@@ -5,9 +5,8 @@
 //! Defines an encapsulation of "query plugins", including an interface
 //! for managing and using them.
 
-use std::collections::BTreeSet;
-
 use futures::{stream, Future, Stream, StreamExt};
+use itertools::Itertools;
 
 use crate::package::{self, Package};
 use crate::Provider;
@@ -24,13 +23,13 @@ pub mod transaction;
 #[derive(Debug, Default)]
 pub struct Registry {
     /// Ordered set of plugins
-    plugins: BTreeSet<plugin::PriorityOrdered>,
+    plugins: Vec<Plugin>,
 }
 
 impl Registry {
     /// Add a [`Plugin`] to the [`Registry`]
     pub fn add_plugin(&mut self, plugin: Plugin) {
-        self.plugins.insert(plugin::PriorityOrdered(plugin));
+        self.plugins.push(plugin);
     }
 
     fn query<'a: 'b, 'b, F, I>(
@@ -41,14 +40,19 @@ impl Registry {
         F: Future<Output = I>,
         I: IntoIterator<Item = Package>,
     {
-        stream::iter(self.plugins.iter().map(move |p| {
-            stream::once(async move {
-                let packages = query(&p.0).await;
+        stream::iter(
+            self.plugins
+                .iter()
+                .sorted_by(|a, b| a.priority().cmp(&b.priority()).reverse())
+                .map(move |p| {
+                    stream::once(async move {
+                        let packages = query(p).await;
 
-                stream::iter(packages)
-            })
-            .flatten()
-        }))
+                        stream::iter(packages)
+                    })
+                    .flatten()
+                }),
+        )
         .flatten()
     }
 

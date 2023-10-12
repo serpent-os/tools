@@ -15,6 +15,7 @@ use moss::{
 };
 use stone::read::Payload;
 use thiserror::Error;
+use tokio::fs;
 use tui::{pretty::print_to_columns, MultiProgress, ProgressBar, ProgressStyle, Stylize};
 
 use crate::cli::name_to_provider;
@@ -76,32 +77,51 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
 
     // Try stuffing everything into the transaction now
     let mut tx = client.registry.transaction()?;
-    tx.add(input).await?;
+    tx.add(input.clone()).await?;
 
     // Resolve and map it. Remove any installed items. OK to unwrap here because they're resolved already
-    let mut results = join_all(
+    let results = join_all(
         tx.finalize()
             .iter()
             .map(|p| async { client.registry.by_id(p).boxed().next().await.unwrap() }),
     )
-    .await
-    .into_iter()
-    .filter(|p| !p.flags.contains(Flags::INSTALLED))
-    .collect_vec();
+    .await;
 
-    results.sort_by_key(|p| p.meta.name.to_string());
-    results.dedup_by_key(|p| p.meta.name.to_string());
+    let mut missing = results
+        .iter()
+        .filter(|p| !p.flags.contains(Flags::INSTALLED))
+        .collect_vec();
+    missing.sort_by_key(|p| p.meta.name.to_string());
+    missing.dedup_by_key(|p| p.meta.name.to_string());
+
+    // If no new packages exist, exit and print
+    // packages already installed
+    if missing.is_empty() {
+        let mut installed = results
+            .iter()
+            .filter(|p| p.flags.contains(Flags::INSTALLED) && input.contains(&p.id))
+            .collect_vec();
+        installed.sort_by_key(|p| p.meta.name.to_string());
+        installed.dedup_by_key(|p| p.meta.name.to_string());
+
+        if !installed.is_empty() {
+            println!("The following package(s) are already installed:");
+            println!();
+            print_to_columns(&installed);
+        }
+
+        return Ok(());
+    }
 
     println!("The following package(s) will be installed:");
     println!();
-    print_to_columns(&results);
+    print_to_columns(&missing);
     println!();
 
-    let state_ids = results.iter().map(|p| p.id.clone()).collect_vec();
     let multi_progress = MultiProgress::new();
 
     let total_progress = multi_progress.add(
-        ProgressBar::new(results.len() as u64).with_style(
+        ProgressBar::new(missing.len() as u64).with_style(
             ProgressStyle::with_template("\n|{bar:20.cyan/blue}| {pos}/{len}")
                 .unwrap()
                 .progress_chars("■≡=- "),
@@ -110,7 +130,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     total_progress.tick();
 
     // Download and unpack each package
-    stream::iter(results.into_iter().map(|package| async {
+    stream::iter(missing.iter().map(|package| async {
         // Setup the progress bar and set as downloading
         let progress_bar = multi_progress.insert_before(
             &total_progress,
@@ -186,7 +206,10 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
         }
 
         // Consume the package in the metadb
-        client.install_db.add(package.id, package.meta).await?;
+        client
+            .install_db
+            .add(package.id.clone(), package.meta.clone())
+            .await?;
 
         // Write installed line
         multi_progress.println(format!(
@@ -209,10 +232,26 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     .await?;
 
     // Perfect, record state.
-    client
-        .state_db
-        .add(state_ids.as_slice(), None, None)
-        .await?;
+    let previous_state_pkgs = match client.installation.active_state {
+        Some(id) => client.state_db.get(&id).await?.packages,
+        None => vec![],
+    };
+    let new_state_pkgs = missing
+        .iter()
+        .map(|p| p.id.clone())
+        .chain(previous_state_pkgs)
+        .collect_vec();
+    let state = client.state_db.add(&new_state_pkgs, None, None).await?;
+
+    // Record state
+    // TODO: Refactor. This will happen w/ promoting state from staging
+    // but for now we are adding this to test list installed, etc
+    {
+        let usr = client.installation.root.join("usr");
+        fs::create_dir_all(&usr).await?;
+        let state_path = usr.join(".stateID");
+        fs::write(state_path, state.id.to_string()).await?;
+    }
 
     // Remove progress
     multi_progress.clear()?;
