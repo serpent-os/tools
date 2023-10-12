@@ -6,7 +6,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 use crate::package::{self, meta, Meta, MissingMetaError, Package};
 use crate::registry::job::Job;
-use crate::{stone, Provider};
+use crate::{stone, Dependency, Provider};
 use ::stone::read::Payload;
 use futures::StreamExt;
 use thiserror::Error;
@@ -74,6 +74,10 @@ impl Cobble {
 
     pub fn query_provider(&self, provider: &Provider, flags: package::Flags) -> Vec<Package> {
         self.query(flags, |meta| meta.providers.contains(provider))
+    }
+
+    pub fn query_dependency(&self, dependency: &Dependency, flags: package::Flags) -> Vec<Package> {
+        self.query(flags, |meta| meta.dependencies.contains(dependency))
     }
 
     pub fn query_name(&self, package_name: &package::Name, flags: package::Flags) -> Vec<Package> {

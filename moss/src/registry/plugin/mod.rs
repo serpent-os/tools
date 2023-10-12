@@ -11,7 +11,7 @@
 //! [`Registry`]: super::Registry
 
 use crate::registry::package::{self, Package};
-use crate::Provider;
+use crate::{Dependency, Provider};
 
 pub use self::active::Active;
 pub use self::cobble::Cobble;
@@ -77,6 +77,22 @@ impl Plugin {
 
             #[cfg(test)]
             Plugin::Test(plugin) => plugin.query_provider(provider, flags),
+        })
+    }
+
+    /// Returns a list of packages with matching `dependency` and `flags`
+    pub async fn query_dependency(
+        &self,
+        dependency: &Dependency,
+        flags: package::Flags,
+    ) -> package::Sorted<Vec<Package>> {
+        package::Sorted::new(match self {
+            Plugin::Active(plugin) => plugin.query_dependency(dependency, flags).await,
+            Plugin::Cobble(plugin) => plugin.query_dependency(dependency, flags),
+            Plugin::Repository(plugin) => plugin.query_dependency(dependency, flags).await,
+
+            #[cfg(test)]
+            Plugin::Test(plugin) => plugin.query_dependency(dependency, flags),
         })
     }
 
@@ -157,6 +173,18 @@ pub mod test {
             self.packages
                 .iter()
                 .filter(|p| p.meta.providers.contains(provider) && p.flags.contains(flags))
+                .cloned()
+                .collect()
+        }
+
+        pub fn query_dependency(
+            &self,
+            dependency: &Dependency,
+            flags: package::Flags,
+        ) -> Vec<Package> {
+            self.packages
+                .iter()
+                .filter(|p| p.meta.dependencies.contains(dependency) && p.flags.contains(flags))
                 .cloned()
                 .collect()
         }

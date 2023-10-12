@@ -9,7 +9,7 @@ use futures::{stream, Future, Stream, StreamExt};
 use itertools::Itertools;
 
 use crate::package::{self, Package};
-use crate::Provider;
+use crate::{Dependency, Provider};
 
 pub use self::plugin::Plugin;
 pub use self::transaction::Transaction;
@@ -63,6 +63,15 @@ impl Registry {
         flags: package::Flags,
     ) -> impl Stream<Item = Package> + 'b {
         self.query(move |plugin| plugin.query_provider(provider, flags))
+    }
+
+    /// Return a sorted stream of [`Package`] by dependency
+    pub fn by_dependency<'a: 'b, 'b>(
+        &'a self,
+        dependency: &'b Dependency,
+        flags: package::Flags,
+    ) -> impl Stream<Item = Package> + 'b {
+        self.query(move |plugin| plugin.query_dependency(dependency, flags))
     }
 
     /// Return a sorted stream of [`Package`] by name

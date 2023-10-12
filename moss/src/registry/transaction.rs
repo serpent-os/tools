@@ -6,11 +6,10 @@ use std::collections::HashSet;
 
 use dag::{toposort, Dfs, DiGraph};
 use futures::{StreamExt, TryFutureExt};
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{package, Provider, Registry};
+use crate::{package, Dependency, Provider, Registry};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Id(u64);
@@ -58,13 +57,23 @@ impl<'a> Transaction<'a> {
     }
 
     /// Remove a set of packages and reverse dependencies
-    pub fn remove(&self, id: package::Id) -> Result<(), Error> {
-        Err(Error::NotImplemented)
+    pub async fn remove(&mut self, incoming: Vec<package::Id>) -> Result<(), Error> {
+        let mut to_remove = incoming.clone();
+
+        // Get all installed reverse deps
+        for id in incoming {
+            to_remove.extend(self.compute_installed_reverse_deps(id.clone()).await?);
+        }
+
+        // Remove incoming and reverse deps
+        self.packages.retain(|p| !to_remove.contains(p));
+
+        Ok(())
     }
 
     /// Return the package IDs in the fully baked configuration
     pub fn finalize(&self) -> Vec<package::Id> {
-        self.packages.iter().cloned().collect_vec()
+        self.packages.iter().cloned().collect()
     }
 
     /// Return all of the dependencies for input ID
@@ -136,7 +145,87 @@ impl<'a> Transaction<'a> {
             .map_err(|e| Error::Cyclical(graph[e.node_id()].clone()))?
             .into_iter()
             .map(|i| graph[i].clone())
-            .collect_vec())
+            .collect())
+    }
+
+    async fn compute_installed_reverse_deps(
+        &self,
+        id: package::Id,
+    ) -> Result<Vec<package::Id>, Error> {
+        let mut graph = DiGraph::new();
+        let mut items = vec![id];
+
+        loop {
+            if items.is_empty() {
+                break;
+            }
+            let mut next = vec![];
+            for check_id in items.iter() {
+                // See if the node exists yet..
+                let check_node = graph
+                    .node_indices()
+                    .find(|i| graph[*i] == *check_id)
+                    .unwrap_or_else(|| graph.add_node(check_id.clone()));
+
+                // Grab this package in question
+                let matches = self.registry.by_id(check_id).collect::<Vec<_>>().await;
+                let package = matches
+                    .first()
+                    .ok_or(Error::NoCandidate(check_id.clone().into()))?;
+                for provider in package.meta.providers.iter() {
+                    let dependency = Dependency {
+                        kind: provider.kind.clone(),
+                        name: provider.name.clone(),
+                    };
+
+                    // Now get it resolved
+                    let mut dependents = self
+                        .registry
+                        .by_dependency(&dependency, package::Flags::INSTALLED)
+                        .map(|p| p.id)
+                        .boxed();
+
+                    while let Some(dependent) = dependents.next().await {
+                        // Grab dependency node
+                        let mut need_search = false;
+                        let dep_node = graph
+                            .node_indices()
+                            .find(|i| graph[*i] == dependent)
+                            .unwrap_or_else(|| {
+                                need_search = true;
+                                graph.add_node(dependent.clone())
+                            });
+
+                        // No dag node for it previously
+                        if need_search {
+                            next.push(dependent.clone());
+                        }
+
+                        // Connect w/ edges if non cyclical
+                        let mut dfs = Dfs::new(&graph, dep_node);
+                        let mut add_edge = true;
+                        while let Some(item) = dfs.next(&graph) {
+                            if item == dep_node {
+                                add_edge = false;
+                                break;
+                            }
+                        }
+                        if graph.find_edge_undirected(check_node, dep_node).is_none() && add_edge {
+                            graph.add_edge(check_node, dep_node, 1);
+                        }
+                    }
+                }
+            }
+            items = next;
+        }
+
+        // topologically sort, returning a mapped cylical error if necessary
+        // TODO: Handle emission of the cyclical error better and the chain involved
+        Ok(toposort(&graph, None)
+            .map_err(|e| Error::Cyclical(graph[e.node_id()].clone()))?
+            .into_iter()
+            .map(|i| graph[i].clone())
+            .collect())
     }
 
     /// Attempt to resolve the filterered provider
