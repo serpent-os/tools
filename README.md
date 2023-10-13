@@ -49,15 +49,18 @@ Remember to use the `-D sosroot` argument to specify a root directory, otherwise
 eat your operating system.
 
     cargo build --release
-    
+
+    # create the sosroot/ directory
+    mkdir -pv sosroot/
+
     # Add the volatile repo
-    ./target/release/moss -D sosroot repo add volatile https://dev.serpentos.com/volatile/x86_64/stone.index
+    ./target/release/moss -D sosroot/ repo add volatile https://dev.serpentos.com/volatile/x86_64/stone.index
 
     # List packages
-    ./target/release/moss -D sosroot list available
+    ./target/release/moss -D sosroot/ list available
 
     # Install something
-    ./target/release/moss -D sosroot install systemd bash libx11-32bit
+    ./target/release/moss -D sosroot/ install systemd bash libx11-32bit
 
 ## Contributing changes
 
