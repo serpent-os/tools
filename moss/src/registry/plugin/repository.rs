@@ -8,7 +8,7 @@ use crate::{
     db,
     package::{self, Package},
     registry::job::Job,
-    repository, Dependency, Provider,
+    repository, Provider,
 };
 
 #[derive(Debug)]
@@ -82,19 +82,6 @@ impl Repository {
     pub async fn query_provider(&self, provider: &Provider, flags: package::Flags) -> Vec<Package> {
         self.query(flags, Some(db::meta::Filter::Provider(provider.clone())))
             .await
-    }
-
-    /// Query all packages that match the given dependency
-    pub async fn query_dependency(
-        &self,
-        dependency: &Dependency,
-        flags: package::Flags,
-    ) -> Vec<Package> {
-        self.query(
-            flags,
-            Some(db::meta::Filter::Dependency(dependency.clone())),
-        )
-        .await
     }
 
     pub async fn query_name(

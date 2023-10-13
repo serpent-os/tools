@@ -6,7 +6,7 @@ use log::warn;
 
 use crate::{
     db::{self, state::State},
-    package, Dependency, Package, Provider,
+    package, Package, Provider,
 };
 
 // TODO:
@@ -87,19 +87,6 @@ impl Active {
     pub async fn query_provider(&self, provider: &Provider, flags: package::Flags) -> Vec<Package> {
         self.query(flags, Some(db::meta::Filter::Provider(provider.clone())))
             .await
-    }
-
-    /// Query all packages that match the given dependency
-    pub async fn query_dependency(
-        &self,
-        dependency: &Dependency,
-        flags: package::Flags,
-    ) -> Vec<Package> {
-        self.query(
-            flags,
-            Some(db::meta::Filter::Dependency(dependency.clone())),
-        )
-        .await
     }
 
     /// Query matching by name
