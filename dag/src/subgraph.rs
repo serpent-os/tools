@@ -6,19 +6,28 @@ use petgraph::{prelude::Graph, stable_graph::IndexType, visit::Dfs, EdgeType};
 
 /// Given an input [`Graph`] and the start nodes, construct a subgraph
 /// Used largely in transposed form for reverse dependency calculation
-pub fn subgraph<N, E, Ty, Ix>(graph: &Graph<N, E, Ty, Ix>, starting_nodes: &[N]) -> Graph<N, E, Ty>
+pub fn subgraph<N, E, Ty, Ix>(
+    graph: &Graph<N, E, Ty, Ix>,
+    starting_nodes: &[N],
+) -> Graph<N, E, Ty, Ix>
 where
     N: PartialEq + Clone,
-    E: Default,
+    E: Clone,
     Ix: IndexType,
     Ty: EdgeType,
 {
+    let add_node = |graph: &mut Graph<N, E, Ty, Ix>, node| {
+        if let Some(index) = graph.node_indices().find(|i| graph[*i] == node) {
+            index
+        } else {
+            graph.add_node(node)
+        }
+    };
+
     let mut res = Graph::default();
-
     let mut dfs = Dfs::empty(&graph);
-    for starting_node in starting_nodes {
-        let node_index = res.add_node(starting_node.clone());
 
+    for starting_node in starting_nodes {
         let Some(starting_node_index) = graph.node_indices().find(|n| graph[*n] == *starting_node)
         else {
             continue;
@@ -28,9 +37,11 @@ where
 
         while let Some(node) = dfs.next(&graph) {
             for neighbor in graph.neighbors_directed(node, petgraph::Direction::Outgoing) {
-                let neighbor_node = graph[neighbor].clone();
-                let neighbor_index = res.add_node(neighbor_node);
-                res.add_edge(node_index, neighbor_index, E::default());
+                if let Some(edge) = graph.find_edge(node, neighbor) {
+                    let node_index = add_node(&mut res, graph[node].clone());
+                    let neighbor_index = add_node(&mut res, graph[neighbor].clone());
+                    res.add_edge(node_index, neighbor_index, graph[edge].clone());
+                }
             }
         }
     }
