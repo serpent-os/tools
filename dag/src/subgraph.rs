@@ -36,9 +36,9 @@ where
         dfs.move_to(starting_node_index);
 
         while let Some(node) = dfs.next(&graph) {
+            let node_index = add_node(&mut res, graph[node].clone());
             for neighbor in graph.neighbors_directed(node, petgraph::Direction::Outgoing) {
                 if let Some(edge) = graph.find_edge(node, neighbor) {
-                    let node_index = add_node(&mut res, graph[node].clone());
                     let neighbor_index = add_node(&mut res, graph[neighbor].clone());
                     res.add_edge(node_index, neighbor_index, graph[edge].clone());
                 }

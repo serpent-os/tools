@@ -79,8 +79,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
 
     // Resolve and map it. Remove any installed items. OK to unwrap here because they're resolved already
     let results = join_all(
-        tx.finalize()?
-            .iter()
+        tx.finalize()
             .map(|p| async { client.registry.by_id(p).boxed().next().await.unwrap() }),
     )
     .await;
