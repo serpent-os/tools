@@ -55,7 +55,8 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
         .into_iter()
         .map(|p| State {
             name: p.meta.name.to_string(),
-            version: format!("{}-{}", p.meta.version_identifier, p.meta.source_release),
+            version: p.meta.version_identifier,
+            release: p.meta.source_release.to_string(),
             summary: p.meta.summary,
         })
         .collect_vec();
@@ -65,18 +66,19 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     // Grab maximum field
     let max_element = set
         .iter()
-        .max_by_key(|p| p.name.len() + p.version.len())
+        .max_by_key(|p| p.name.len() + p.release.len() + p.version.len())
         .unwrap();
-    let max_length = max_element.name.len() + max_element.version.len();
+    let max_length = max_element.name.len() + max_element.version.len() + max_element.version.len();
 
     // render
     for st in set {
-        let width = (max_length - (st.name.len() + st.version.len())) + 2;
+        let width = (max_length - (st.name.len() + st.release.len() + st.version.len())) + 2;
         println!(
-            "{} {:width$} {} - {}",
+            "{} {:width$} {}-{} - {}",
             st.name.bold(),
             " ",
             st.version.magenta(),
+            st.release.dim(),
             st.summary,
             width = width
         );
@@ -90,6 +92,7 @@ struct State {
     name: String,
     version: String,
     summary: String,
+    release: String,
 }
 
 #[derive(Debug, Error)]
