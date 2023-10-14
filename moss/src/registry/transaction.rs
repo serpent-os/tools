@@ -23,6 +23,11 @@ enum ProviderFilter {
     All(Provider),
 }
 
+enum Lookup {
+    InstalledOnly,
+    Global,
+}
+
 /// A Transaction is used to modify one system state to another
 #[derive(Clone, Debug)]
 pub struct Transaction<'a> {
@@ -47,10 +52,20 @@ pub(super) fn new(registry: &Registry) -> Result<Transaction<'_>, Error> {
     })
 }
 
+/// Populate the transaction on initialisation
+pub(super) async fn new_with_packages(
+    registry: &Registry,
+    incoming: Vec<package::Id>,
+) -> Result<Transaction<'_>, Error> {
+    let mut tx = new(registry)?;
+    tx.update(incoming, Lookup::InstalledOnly).await?;
+    Ok(tx)
+}
+
 impl<'a> Transaction<'a> {
     /// Add a package to this transaction
     pub async fn add(&mut self, incoming: Vec<package::Id>) -> Result<(), Error> {
-        self.update(incoming).await
+        self.update(incoming, Lookup::Global).await
     }
 
     /// Remove a set of packages and their reverse dependencies
@@ -74,7 +89,7 @@ impl<'a> Transaction<'a> {
     }
 
     /// Update internal package graph with all incoming packages & their deps
-    async fn update(&mut self, incoming: Vec<package::Id>) -> Result<(), Error> {
+    async fn update(&mut self, incoming: Vec<package::Id>, lookup: Lookup) -> Result<(), Error> {
         let mut items = incoming;
 
         loop {
@@ -98,7 +113,13 @@ impl<'a> Transaction<'a> {
                     };
 
                     // Now get it resolved
-                    let search = self.resolve_installation_provider(provider).await?;
+                    let search = match lookup {
+                        Lookup::Global => self.resolve_installation_provider(provider).await?,
+                        Lookup::InstalledOnly => {
+                            self.resolve_provider(ProviderFilter::InstalledOnly(provider))
+                                .await?
+                        }
+                    };
 
                     // Add dependency node
                     let need_search = !self.packages.node_exists(&search);

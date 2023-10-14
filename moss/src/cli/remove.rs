@@ -57,11 +57,10 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
         return Err(Error::NotImplemented);
     }
 
-    let mut transaction = client.registry.transaction()?;
-
     // Add all installed packages to transaction
-    transaction
-        .add(installed_ids.iter().cloned().cloned().collect())
+    let mut transaction = client
+        .registry
+        .transaction_with_packages(installed_ids.iter().cloned().cloned().collect())
         .await?;
 
     // Remove all pkgs for removal
