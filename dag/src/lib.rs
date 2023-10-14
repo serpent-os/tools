@@ -30,7 +30,7 @@ where
         Self::default()
     }
 
-    /// Adds node N to the graph and retusn it's index.
+    /// Adds node N to the graph and returns the index.
     /// If N already exists, it'll return the index of that node.
     pub fn add_node_or_get_index(&mut self, node: N) -> NodeIndex {
         if let Some(index) = self.get_index(&node) {
