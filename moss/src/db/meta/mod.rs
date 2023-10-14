@@ -10,7 +10,7 @@ use thiserror::Error;
 
 use crate::db::Encoding;
 use crate::package::{self, Meta};
-use crate::Provider;
+use crate::{Dependency, Provider};
 
 #[derive(Debug, Clone, Copy)]
 enum Table {
@@ -23,6 +23,7 @@ enum Table {
 #[derive(Debug)]
 pub enum Filter {
     Provider(Provider),
+    Dependency(Dependency),
     Name(package::Name),
 }
 
@@ -47,6 +48,27 @@ impl Filter {
                             ",
                         )
                         .push_bind(p.encode())
+                        .push(")");
+                }
+            }
+            Filter::Dependency(d) => {
+                if let Table::Dependencies = table {
+                    query
+                        .push(
+                            "
+                            where dependency = 
+                            ",
+                        )
+                        .push_bind(d.encode());
+                } else {
+                    query
+                        .push(
+                            "
+                            where package in 
+                                (select distinct package from meta_dependencies where dependency = 
+                            ",
+                        )
+                        .push_bind(d.encode())
                         .push(")");
                 }
             }

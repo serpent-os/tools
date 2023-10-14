@@ -2,11 +2,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::collections::HashSet;
-
-use dag::{toposort, Dfs, DiGraph};
+use dag::Dag;
 use futures::{StreamExt, TryFutureExt};
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -36,7 +33,7 @@ pub struct Transaction<'a> {
     registry: &'a Registry,
 
     // unique set of package ids
-    packages: HashSet<package::Id>,
+    packages: Dag<package::Id>,
 }
 
 /// Construct a new Transaction wrapped around the underlying Registry
@@ -46,31 +43,39 @@ pub(super) fn new(registry: &Registry) -> Result<Transaction<'_>, Error> {
     Ok(Transaction {
         id: None,
         registry,
-        packages: HashSet::new(),
+        packages: Dag::default(),
     })
 }
 
 impl<'a> Transaction<'a> {
     /// Add a package to this transaction
     pub async fn add(&mut self, incoming: Vec<package::Id>) -> Result<(), Error> {
-        self.packages.extend(self.compute_deps(incoming).await?);
+        self.update(incoming).await
+    }
+
+    /// Remove a set of packages and their reverse dependencies
+    pub async fn remove(&mut self, packages: Vec<package::Id>) -> Result<(), Error> {
+        // Get transposed subgraph
+        let transposed = self.packages.transpose();
+        let subgraph = transposed.subgraph(&packages);
+
+        // For each node, remove it from transaction graph
+        subgraph.iter_nodes().for_each(|package| {
+            // Remove that package
+            self.packages.remove_node(package);
+        });
+
         Ok(())
     }
 
-    /// Remove a set of packages and reverse dependencies
-    pub fn remove(&self, id: package::Id) -> Result<(), Error> {
-        Err(Error::NotImplemented)
-    }
-
     /// Return the package IDs in the fully baked configuration
-    pub fn finalize(&self) -> Vec<package::Id> {
-        self.packages.iter().cloned().collect_vec()
+    pub fn finalize(&self) -> impl Iterator<Item = &package::Id> + '_ {
+        self.packages.topo()
     }
 
-    /// Return all of the dependencies for input ID
-    async fn compute_deps(&self, incoming: Vec<package::Id>) -> Result<Vec<package::Id>, Error> {
-        let mut graph = DiGraph::new();
-        let mut items = incoming.clone();
+    /// Update internal package graph with all incoming packages & their deps
+    async fn update(&mut self, incoming: Vec<package::Id>) -> Result<(), Error> {
+        let mut items = incoming;
 
         loop {
             if items.is_empty() {
@@ -78,11 +83,8 @@ impl<'a> Transaction<'a> {
             }
             let mut next = vec![];
             for check_id in items.iter() {
-                // See if the node exists yet..
-                let check_node = graph
-                    .node_indices()
-                    .find(|i| graph[*i] == *check_id)
-                    .unwrap_or_else(|| graph.add_node(check_id.clone()));
+                // Ensure node is added and get it's index
+                let check_node = self.packages.add_node_or_get_index(check_id.clone());
 
                 // Grab this package in question
                 let matches = self.registry.by_id(check_id).collect::<Vec<_>>().await;
@@ -98,45 +100,23 @@ impl<'a> Transaction<'a> {
                     // Now get it resolved
                     let search = self.resolve_installation_provider(provider).await?;
 
-                    // Grab dependency node
-                    let mut need_search = false;
-                    let dep_node = graph
-                        .node_indices()
-                        .find(|i| graph[*i] == search)
-                        .unwrap_or_else(|| {
-                            need_search = true;
-                            graph.add_node(search.clone())
-                        });
+                    // Add dependency node
+                    let need_search = !self.packages.node_exists(&search);
+                    let dep_node = self.packages.add_node_or_get_index(search.clone());
 
                     // No dag node for it previously
                     if need_search {
                         next.push(search.clone());
                     }
 
-                    // Connect w/ edges if non cyclical
-                    let mut dfs = Dfs::new(&graph, dep_node);
-                    let mut add_edge = true;
-                    while let Some(item) = dfs.next(&graph) {
-                        if item == dep_node {
-                            add_edge = false;
-                            break;
-                        }
-                    }
-                    if graph.find_edge_undirected(check_node, dep_node).is_none() && add_edge {
-                        graph.add_edge(check_node, dep_node, 1);
-                    }
+                    // Connect w/ edges (rejects cyclical & duplicate edges)
+                    self.packages.add_edge(check_node, dep_node);
                 }
             }
             items = next;
         }
 
-        // topologically sort, returning a mapped cylical error if necessary
-        // TODO: Handle emission of the cyclical error better and the chain involved
-        Ok(toposort(&graph, None)
-            .map_err(|e| Error::Cyclical(graph[e.node_id()].clone()))?
-            .into_iter()
-            .map(|i| graph[i].clone())
-            .collect_vec())
+        Ok(())
     }
 
     /// Attempt to resolve the filterered provider
@@ -162,7 +142,7 @@ impl<'a> Transaction<'a> {
                 .registry
                 .by_provider(&provider, package::Flags::NONE)
                 .filter_map(|f| async {
-                    if self.packages.contains(&f.id) {
+                    if self.packages.node_exists(&f.id) {
                         Some(f)
                     } else {
                         None
@@ -198,9 +178,6 @@ impl<'a> Transaction<'a> {
 pub enum Error {
     #[error("database error: {0}")]
     Database(#[from] crate::db::meta::Error),
-
-    #[error("cyclical dependencies")]
-    Cyclical(package::Id),
 
     #[error("no such name: {0}")]
     NoCandidate(String),

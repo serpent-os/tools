@@ -2,27 +2,47 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use petgraph::{prelude::GraphMap, visit::Dfs, EdgeType};
+use petgraph::{prelude::Graph, stable_graph::IndexType, visit::Dfs, EdgeType};
 
-/// Given an input [GraphMap] and the start nodes, construct a subgraph
+/// Given an input [`Graph`] and the start nodes, construct a subgraph
 /// Used largely in transposed form for reverse dependency calculation
-pub fn subgraph<V, E, Ty>(graph: &GraphMap<V, E, Ty>, starting_nodes: Vec<V>) -> GraphMap<V, E, Ty>
+pub fn subgraph<N, E, Ty, Ix>(
+    graph: &Graph<N, E, Ty, Ix>,
+    starting_nodes: &[N],
+) -> Graph<N, E, Ty, Ix>
 where
-    V: Eq + std::hash::Hash + Ord + Copy,
-    E: Default,
+    N: PartialEq + Clone,
+    E: Clone,
+    Ix: IndexType,
     Ty: EdgeType,
 {
-    let mut res = GraphMap::default();
+    let add_node = |graph: &mut Graph<N, E, Ty, Ix>, node| {
+        if let Some(index) = graph.node_indices().find(|i| graph[*i] == node) {
+            index
+        } else {
+            graph.add_node(node)
+        }
+    };
 
+    let mut res = Graph::default();
     let mut dfs = Dfs::empty(&graph);
+
     for starting_node in starting_nodes {
-        dfs.move_to(starting_node);
+        let Some(starting_node_index) = graph.node_indices().find(|n| graph[*n] == *starting_node)
+        else {
+            continue;
+        };
+
+        dfs.move_to(starting_node_index);
+
         while let Some(node) = dfs.next(&graph) {
-            res.extend(
-                graph
-                    .neighbors_directed(node, petgraph::Direction::Outgoing)
-                    .map(|adj| (node, adj)),
-            );
+            let node_index = add_node(&mut res, graph[node].clone());
+            for neighbor in graph.neighbors_directed(node, petgraph::Direction::Outgoing) {
+                if let Some(edge) = graph.find_edge(node, neighbor) {
+                    let neighbor_index = add_node(&mut res, graph[neighbor].clone());
+                    res.add_edge(node_index, neighbor_index, graph[edge].clone());
+                }
+            }
         }
     }
 
@@ -32,7 +52,8 @@ where
 #[cfg(test)]
 mod test {
     use petgraph::{
-        prelude::DiGraphMap,
+        data::{Element, FromElements},
+        prelude::DiGraph,
         visit::{Reversed, Topo, Walker},
     };
 
@@ -40,34 +61,117 @@ mod test {
 
     #[test]
     fn basic_topo() {
-        let graph: DiGraphMap<i32, ()> = DiGraphMap::from_edges(&[(1, 2), (1, 3), (2, 3)]);
-        let subg = subgraph(&graph, vec![1]);
+        let graph: DiGraph<i32, ()> = DiGraph::from_elements([
+            Element::Node { weight: 1 },
+            Element::Node { weight: 2 },
+            Element::Node { weight: 3 },
+            Element::Node { weight: 4 },
+            Element::Edge {
+                source: 0,
+                target: 1,
+                weight: (),
+            },
+            Element::Edge {
+                source: 0,
+                target: 2,
+                weight: (),
+            },
+            Element::Edge {
+                source: 1,
+                target: 2,
+                weight: (),
+            },
+            Element::Edge {
+                source: 2,
+                target: 3,
+                weight: (),
+            },
+        ]);
+        let subg = subgraph(&graph, &[2]);
         let topo = Topo::new(&subg);
-        let order: Vec<i32> = topo.iter(&subg).collect();
+        let order: Vec<i32> = topo.iter(&subg).map(|n| subg[n]).collect();
 
-        assert_eq!(order, vec![1, 2, 3]);
+        assert_eq!(order, vec![2, 3, 4]);
     }
 
     #[test]
     fn reverse_topo() {
-        let graph: DiGraphMap<i32, ()> = DiGraphMap::from_edges(&[(1, 2), (1, 3), (2, 3)]);
-        let items = vec![1];
-        let subg = subgraph(&graph, items);
+        let graph: DiGraph<i32, ()> = DiGraph::from_elements([
+            Element::Node { weight: 1 },
+            Element::Node { weight: 2 },
+            Element::Node { weight: 3 },
+            Element::Node { weight: 4 },
+            Element::Edge {
+                source: 0,
+                target: 1,
+                weight: (),
+            },
+            Element::Edge {
+                source: 0,
+                target: 2,
+                weight: (),
+            },
+            Element::Edge {
+                source: 1,
+                target: 2,
+                weight: (),
+            },
+            Element::Edge {
+                source: 2,
+                target: 3,
+                weight: (),
+            },
+        ]);
+        let subg = subgraph(&graph, &[2]);
         let revg = Reversed(&subg);
-        let removal: Vec<i32> = Topo::new(revg).iter(revg).collect();
-        assert_eq!(removal, vec![3, 2, 1]);
+        let removal: Vec<i32> = Topo::new(revg).iter(revg).map(|n| subg[n]).collect();
+        assert_eq!(removal, vec![4, 3, 2]);
     }
 
     // TODO: break cycles!
     #[ignore = "cycles breaking needs to be implemented"]
     #[test]
     fn cyclic_topo() {
-        let graph: DiGraphMap<i32, ()> =
-            DiGraphMap::from_edges(&[(1, 2), (1, 3), (2, 4), (2, 5), (3, 5), (4, 1)]);
-        let items = vec![1, 4];
-        let subg = subgraph(&graph, items);
+        let graph: DiGraph<i32, ()> = DiGraph::from_elements([
+            Element::Node { weight: 1 },
+            Element::Node { weight: 2 },
+            Element::Node { weight: 3 },
+            Element::Node { weight: 4 },
+            Element::Node { weight: 5 },
+            Element::Edge {
+                source: 0,
+                target: 1,
+                weight: (),
+            },
+            Element::Edge {
+                source: 0,
+                target: 2,
+                weight: (),
+            },
+            Element::Edge {
+                source: 1,
+                target: 3,
+                weight: (),
+            },
+            Element::Edge {
+                source: 1,
+                target: 4,
+                weight: (),
+            },
+            Element::Edge {
+                source: 2,
+                target: 4,
+                weight: (),
+            },
+            Element::Edge {
+                source: 3,
+                target: 0,
+                weight: (),
+            },
+        ]);
+        let subg = subgraph(&graph, &[1, 4]);
         let revg = Reversed(&subg);
-        let removal: Vec<i32> = Topo::new(revg).iter(revg).collect();
+        let removal: Vec<i32> = Topo::new(revg).iter(revg).map(|n| subg[n]).collect();
         assert_eq!(removal, vec![5, 3, 4, 2, 1]);
     }
 }

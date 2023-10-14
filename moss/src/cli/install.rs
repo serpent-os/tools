@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{path::PathBuf, time::Duration};
+use std::{path::Path, time::Duration};
 
 use clap::{arg, ArgMatches, Command};
 use futures::{future::join_all, stream, StreamExt, TryStreamExt};
@@ -45,9 +45,7 @@ async fn find_packages(id: &str, client: &Client) -> Result<Vec<Package>, Error>
 }
 
 /// Handle execution of `moss install`
-pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
-    let root = args.get_one::<PathBuf>("root").unwrap().clone();
-
+pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     let pkgs = args
         .get_many::<String>("NAME")
         .into_iter()
@@ -82,7 +80,6 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     // Resolve and map it. Remove any installed items. OK to unwrap here because they're resolved already
     let results = join_all(
         tx.finalize()
-            .iter()
             .map(|p| async { client.registry.by_id(p).boxed().next().await.unwrap() }),
     )
     .await;

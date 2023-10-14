@@ -15,6 +15,16 @@ use crate::Package;
 const COLUMN_PADDING: usize = 4;
 
 /// Allow display packages in column form
+impl ColumnDisplay for Package {
+    fn get_display_width(&self) -> usize {
+        ColumnDisplay::get_display_width(&self)
+    }
+
+    fn display_column(&self, writer: &mut impl Write, col: Column, width: usize) {
+        ColumnDisplay::display_column(&self, writer, col, width)
+    }
+}
+
 impl<'a> ColumnDisplay for &'a Package {
     fn get_display_width(&self) -> usize {
         self.meta.name.to_string().len()
