@@ -52,25 +52,23 @@ where
         }
     }
 
-    pub fn add_edge(&mut self, a: &N, b: &N) -> bool {
-        if let Some((a_index, b_index)) = self.get_index(a).zip(self.get_index(b)) {
-            // prevent cycle (b connects to a)
-            if self.dfs(b_index).any(|n| n == a) {
-                return false;
-            }
+    pub fn add_edge(&mut self, a: NodeIndex, b: NodeIndex) -> bool {
+        let a_node = &self.0[a];
 
-            // don't add edge if it alread exists
-            if self.0.find_edge(a_index, b_index).is_some() {
-                return false;
-            }
-
-            // We're good, add it
-            self.0.add_edge(a_index, b_index, ());
-
-            return true;
+        // prevent cycle (b connects to a)
+        if self.dfs(b).any(|n| n == a_node) {
+            return false;
         }
 
-        false
+        // don't add edge if it alread exists
+        if self.0.find_edge(a, b).is_some() {
+            return false;
+        }
+
+        // We're good, add it
+        self.0.add_edge(a, b, ());
+
+        true
     }
 
     pub fn iter_nodes(&self) -> impl Iterator<Item = &'_ N> {

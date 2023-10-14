@@ -84,7 +84,7 @@ impl<'a> Transaction<'a> {
             let mut next = vec![];
             for check_id in items.iter() {
                 // Ensure node is added and get it's index
-                self.packages.add_node_or_get_index(check_id.clone());
+                let check_node = self.packages.add_node_or_get_index(check_id.clone());
 
                 // Grab this package in question
                 let matches = self.registry.by_id(check_id).collect::<Vec<_>>().await;
@@ -102,7 +102,7 @@ impl<'a> Transaction<'a> {
 
                     // Add dependency node
                     let need_search = !self.packages.node_exists(&search);
-                    self.packages.add_node_or_get_index(search.clone());
+                    let dep_node = self.packages.add_node_or_get_index(search.clone());
 
                     // No dag node for it previously
                     if need_search {
@@ -110,7 +110,7 @@ impl<'a> Transaction<'a> {
                     }
 
                     // Connect w/ edges (rejects cyclical & duplicate edges)
-                    self.packages.add_edge(check_id, &search);
+                    self.packages.add_edge(check_node, dep_node);
                 }
             }
             items = next;
