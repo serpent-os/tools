@@ -41,10 +41,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
         .list_installed(Flags::NONE)
         .collect::<Vec<_>>()
         .await;
-    let installed_ids = installed
-        .iter()
-        .map(|p| p.id.clone())
-        .collect::<HashSet<_>>();
+    let installed_ids = installed.iter().map(|p| &p.id).collect::<HashSet<_>>();
 
     let (for_removal, not_installed): (Vec<_>, Vec<_>) = pkgs.iter().partition_map(|provider| {
         installed
@@ -64,14 +61,14 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
 
     // Add all installed packages to transaction
     transaction
-        .add(installed_ids.iter().cloned().collect())
+        .add(installed_ids.iter().cloned().cloned().collect())
         .await?;
 
     // Remove all pkgs for removal
     transaction.remove(for_removal).await?;
 
     // Finalized tx has all reverse deps removed
-    let finalized = transaction.finalize()?.into_iter().collect::<HashSet<_>>();
+    let finalized = transaction.finalize().collect::<HashSet<_>>();
 
     // Difference resolves to all removed pkgs
     let removed = installed_ids.difference(&finalized);

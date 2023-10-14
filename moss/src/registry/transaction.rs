@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use dag::{toposort, Dfs, DiGraph};
+use dag::Dag;
 use futures::{StreamExt, TryFutureExt};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -33,7 +33,7 @@ pub struct Transaction<'a> {
     registry: &'a Registry,
 
     // unique set of package ids
-    packages: DiGraph<package::Id, i32>,
+    packages: Dag<package::Id>,
 }
 
 /// Construct a new Transaction wrapped around the underlying Registry
@@ -43,7 +43,7 @@ pub(super) fn new(registry: &Registry) -> Result<Transaction<'_>, Error> {
     Ok(Transaction {
         id: None,
         registry,
-        packages: DiGraph::default(),
+        packages: Dag::default(),
     })
 }
 
@@ -56,38 +56,21 @@ impl<'a> Transaction<'a> {
     /// Remove a set of packages and their reverse dependencies
     pub async fn remove(&mut self, packages: Vec<package::Id>) -> Result<(), Error> {
         // Get transposed subgraph
-        let mut reversed = self.packages.clone();
-        reversed.reverse();
-        let subgraph = dag::subgraph(&reversed, &packages);
+        let transposed = self.packages.transpose();
+        let subgraph = transposed.subgraph(&packages);
 
         // For each node, remove it from transaction graph
-        subgraph.node_indices().for_each(|n| {
-            // Convert node index into package
-            let package = &subgraph[n];
-            // Find node index of transaction graph
-            let Some(index) = self
-                .packages
-                .node_indices()
-                .find(|n| &self.packages[*n] == package)
-            else {
-                return;
-            };
-            // Remove that node
-            self.packages.remove_node(index);
+        subgraph.iter_nodes().for_each(|package| {
+            // Remove that package
+            self.packages.remove_node(package);
         });
 
         Ok(())
     }
 
     /// Return the package IDs in the fully baked configuration
-    pub fn finalize(&self) -> Result<Vec<package::Id>, Error> {
-        // topologically sort, returning a mapped cylical error if necessary
-        // TODO: Handle emission of the cyclical error better and the chain involved
-        Ok(toposort(&self.packages, None)
-            .map_err(|e| Error::Cyclical(self.packages[e.node_id()].clone()))?
-            .into_iter()
-            .map(|i| self.packages[i].clone())
-            .collect())
+    pub fn finalize(&self) -> impl Iterator<Item = &package::Id> + '_ {
+        self.packages.topo()
     }
 
     /// Update internal package graph with all incoming packages & their deps
@@ -100,12 +83,8 @@ impl<'a> Transaction<'a> {
             }
             let mut next = vec![];
             for check_id in items.iter() {
-                // See if the node exists yet..
-                let check_node = self
-                    .packages
-                    .node_indices()
-                    .find(|i| self.packages[*i] == *check_id)
-                    .unwrap_or_else(|| self.packages.add_node(check_id.clone()));
+                // Ensure node is added and get it's index
+                let check_node = self.packages.add_node_or_get_index(check_id.clone());
 
                 // Grab this package in question
                 let matches = self.registry.by_id(check_id).collect::<Vec<_>>().await;
@@ -121,41 +100,17 @@ impl<'a> Transaction<'a> {
                     // Now get it resolved
                     let search = self.resolve_installation_provider(provider).await?;
 
-                    // Grab dependency node
-                    let mut need_search = false;
-                    let dep_node = self
-                        .packages
-                        .node_indices()
-                        .find(|i| self.packages[*i] == search)
-                        .unwrap_or_else(|| {
-                            need_search = true;
-                            self.packages.add_node(search.clone())
-                        });
+                    // Add dependency node
+                    let need_search = !self.packages.node_exists(&search);
+                    let dep_node = self.packages.add_node_or_get_index(search.clone());
 
                     // No dag node for it previously
                     if need_search {
                         next.push(search.clone());
                     }
 
-                    // Connect w/ edges if non cyclical
-                    let mut dfs = Dfs::new(&self.packages, dep_node);
-                    // Skip dep node
-                    dfs.next(&self.packages);
-                    let mut add_edge = true;
-                    while let Some(item) = dfs.next(&self.packages) {
-                        if item == dep_node {
-                            add_edge = false;
-                            break;
-                        }
-                    }
-                    if self
-                        .packages
-                        .find_edge_undirected(check_node, dep_node)
-                        .is_none()
-                        && add_edge
-                    {
-                        self.packages.add_edge(check_node, dep_node, 1);
-                    }
+                    // Connect w/ edges (rejects cyclical & duplicate edges)
+                    self.packages.add_edge(check_node, dep_node);
                 }
             }
             items = next;
@@ -187,11 +142,7 @@ impl<'a> Transaction<'a> {
                 .registry
                 .by_provider(&provider, package::Flags::NONE)
                 .filter_map(|f| async {
-                    if self
-                        .packages
-                        .node_indices()
-                        .any(|n| self.packages[n] == f.id)
-                    {
+                    if self.packages.node_exists(&f.id) {
                         Some(f)
                     } else {
                         None
@@ -227,9 +178,6 @@ impl<'a> Transaction<'a> {
 pub enum Error {
     #[error("database error: {0}")]
     Database(#[from] crate::db::meta::Error),
-
-    #[error("cyclical dependencies")]
-    Cyclical(package::Id),
 
     #[error("no such name: {0}")]
     NoCandidate(String),
