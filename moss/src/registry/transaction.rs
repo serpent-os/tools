@@ -53,7 +53,7 @@ pub(super) fn new(registry: &Registry) -> Result<Transaction<'_>, Error> {
 }
 
 /// Populate the transaction on initialisation
-pub(super) async fn new_with_packages(
+pub(super) async fn new_with_installed(
     registry: &Registry,
     incoming: Vec<package::Id>,
 ) -> Result<Transaction<'_>, Error> {

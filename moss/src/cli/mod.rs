@@ -15,6 +15,7 @@ mod install;
 mod list;
 mod remove;
 mod repo;
+mod state;
 mod version;
 
 /// Convert the name to a lookup provider
@@ -64,8 +65,9 @@ fn command() -> Command {
         .subcommand(install::command())
         .subcommand(list::command())
         .subcommand(remove::command())
-        .subcommand(version::command())
         .subcommand(repo::command())
+        .subcommand(state::command())
+        .subcommand(version::command())
 }
 
 /// Process all CLI arguments
@@ -90,6 +92,7 @@ pub async fn process() -> Result<(), Error> {
         Some(("list", args)) => list::handle(args).await.map_err(Error::List),
         Some(("remove", args)) => remove::handle(args, root).await.map_err(Error::Remove),
         Some(("repo", args)) => repo::handle(args, root).await.map_err(Error::Repo),
+        Some(("state", args)) => state::handle(args, root).await.map_err(Error::State),
         _ => unreachable!(),
     }
 }
@@ -116,4 +119,7 @@ pub enum Error {
 
     #[error("error handling repo: {0}")]
     Repo(#[from] repo::Error),
+
+    #[error("error handling state: {0}")]
+    State(#[from] state::Error),
 }

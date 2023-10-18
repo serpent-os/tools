@@ -102,11 +102,11 @@ impl Registry {
     }
 
     /// Return a new transaction for this registry initialised with the incoming package set as installed
-    pub async fn transaction_with_packages(
+    pub async fn transaction_with_installed(
         &self,
         incoming: Vec<package::Id>,
     ) -> Result<Transaction<'_>, transaction::Error> {
-        transaction::new_with_packages(self, incoming).await
+        transaction::new_with_installed(self, incoming).await
     }
 }
 

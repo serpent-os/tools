@@ -4,10 +4,7 @@
 
 use log::warn;
 
-use crate::{
-    db::{self, state::State},
-    package, Package, Provider,
-};
+use crate::{db, package, Package, Provider, State};
 
 // TODO:
 #[derive(Debug, Clone)]

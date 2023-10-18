@@ -6,11 +6,14 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
+use self::prune::prune;
 use crate::{
     db,
     registry::plugin::{self, Plugin},
-    repository, Installation, Registry,
+    repository, Installation, Registry, State,
 };
+
+pub mod prune;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -25,6 +28,9 @@ pub enum Error {
     Layout(#[from] db::layout::Error),
     #[error("state: {0}")]
     State(#[from] db::state::Error),
+
+    #[error("prune: {0}")]
+    Prune(#[from] prune::Error),
 }
 
 /// A Client is a connection to the underlying package management systems
@@ -96,12 +102,17 @@ impl Client {
 
         Ok(())
     }
+
+    pub async fn prune(&self, strategy: prune::Strategy) -> Result<(), Error> {
+        prune(strategy, &self.state_db, &self.install_db, &self.layout_db).await?;
+        Ok(())
+    }
 }
 
 async fn build_registry(
     repositories: &repository::Manager,
     installdb: &db::meta::Database,
-    state: Option<db::state::State>,
+    state: Option<State>,
 ) -> Result<Registry, Error> {
     let mut registry = Registry::default();
 
