@@ -42,7 +42,7 @@ pub async fn fetch(
     let url = meta.uri.as_ref().ok_or(Error::MissingUri)?.parse::<Url>()?;
     let hash = meta.hash.as_ref().ok_or(Error::MissingHash)?;
 
-    let mut bytes = request::get(url).await.unwrap();
+    let mut bytes = request::get(url).await?;
 
     let download_path = download_path(installation, hash).await?;
     let mut out = File::create(&download_path).await?;
@@ -241,7 +241,7 @@ pub enum Error {
     #[error("invalid url: {0}")]
     InvalidUrl(#[from] url::ParseError),
     #[error("request failed: {0}")]
-    Request(#[from] reqwest::Error),
+    Request(#[from] request::Error),
     #[error("io error: {0}")]
     Io(#[from] io::Error),
 }
