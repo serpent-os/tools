@@ -22,9 +22,14 @@ static CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
 
 /// Fetch a resource at the provided [`Url`] and stream it's response bytes
 pub async fn get(url: Url) -> Result<impl Stream<Item = Result<Bytes>>> {
-    let response = CLIENT.get(url).send().await?;
+    match url.scheme() {
+        "file" => todo!(),
+        _ => {
+            let response = CLIENT.get(url).send().await?;
 
-    response
-        .error_for_status()
-        .map(reqwest::Response::bytes_stream)
+            response
+                .error_for_status()
+                .map(reqwest::Response::bytes_stream)
+        }
+    }
 }
