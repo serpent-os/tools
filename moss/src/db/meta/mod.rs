@@ -5,7 +5,7 @@
 use std::path::Path;
 
 use sqlx::{sqlite::SqliteConnectOptions, Acquire, Pool, Sqlite};
-use sqlx::{QueryBuilder, SqliteConnection};
+use sqlx::{Executor, QueryBuilder};
 use thiserror::Error;
 
 use crate::db::Encoding;
@@ -312,7 +312,7 @@ impl Database {
         let mut transaction = self.pool.begin().await?;
 
         // Remove package (other tables cascade)
-        batch_remove(
+        batch_remove_impl(
             packages.iter().map(|(id, _)| id),
             transaction.acquire().await?,
         )
@@ -438,11 +438,22 @@ impl Database {
 
         Ok(())
     }
+
+    pub async fn remove(&self, package: &package::Id) -> Result<(), Error> {
+        self.batch_remove(Some(package)).await
+    }
+
+    pub async fn batch_remove(
+        &self,
+        packages: impl IntoIterator<Item = &package::Id>,
+    ) -> Result<(), Error> {
+        batch_remove_impl(packages, &self.pool).await
+    }
 }
 
-async fn batch_remove(
+async fn batch_remove_impl<'a>(
     packages: impl IntoIterator<Item = &package::Id>,
-    connection: &mut SqliteConnection,
+    connection: impl Executor<'a, Database = Sqlite>,
 ) -> Result<(), Error> {
     let mut query_builder = sqlx::QueryBuilder::new(
         "
@@ -576,9 +587,7 @@ mod test {
         let fetched = database.query(Some(lookup)).await.unwrap();
         assert_eq!(fetched.len(), 1);
 
-        batch_remove([&id], &mut database.pool.acquire().await.unwrap())
-            .await
-            .unwrap();
+        batch_remove_impl([&id], &database.pool).await.unwrap();
 
         let result = database.get(&id).await;
 

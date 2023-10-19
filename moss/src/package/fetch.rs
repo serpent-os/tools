@@ -11,6 +11,7 @@ use thiserror::Error;
 use tokio::{
     fs::{self, File},
     io::AsyncWriteExt,
+    runtime::Handle,
     task,
 };
 use url::Url;
@@ -133,6 +134,8 @@ impl Download {
             }
         }
 
+        let rt = Handle::current();
+
         task::spawn_blocking(move || {
             let content_dir = self.installation.cache_path("content");
             let content_path = content_dir.join(self.id.as_ref());
@@ -168,7 +171,10 @@ impl Download {
                     file.seek(SeekFrom::Start(idx.start))?;
                     let mut split_file = (&mut file).take(idx.end - idx.start);
 
-                    let path = asset_path(&self.installation, &format!("{:02x}", idx.digest))?;
+                    let path = rt.block_on(asset_path(
+                        &self.installation,
+                        &format!("{:02x}", idx.digest),
+                    ))?;
 
                     let mut output = File::create(path)?;
 
@@ -190,7 +196,7 @@ impl Download {
     }
 }
 
-async fn download_path(installation: &Installation, hash: &str) -> Result<PathBuf, Error> {
+pub async fn download_path(installation: &Installation, hash: &str) -> Result<PathBuf, Error> {
     if hash.len() < 5 {
         return Err(Error::MalformedHash(hash.to_string()));
     }
@@ -208,7 +214,7 @@ async fn download_path(installation: &Installation, hash: &str) -> Result<PathBu
     Ok(directory.join(hash))
 }
 
-fn asset_path(installation: &Installation, hash: &str) -> Result<PathBuf, Error> {
+pub async fn asset_path(installation: &Installation, hash: &str) -> Result<PathBuf, Error> {
     let directory = if hash.len() >= 10 {
         installation
             .assets_path("v2")
@@ -220,7 +226,7 @@ fn asset_path(installation: &Installation, hash: &str) -> Result<PathBuf, Error>
     };
 
     if !directory.exists() {
-        std::fs::create_dir_all(&directory)?;
+        fs::create_dir_all(&directory).await?;
     }
 
     Ok(directory.join(hash))

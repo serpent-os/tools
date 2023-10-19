@@ -104,7 +104,14 @@ impl Client {
     }
 
     pub async fn prune(&self, strategy: prune::Strategy) -> Result<(), Error> {
-        prune(strategy, &self.state_db, &self.install_db, &self.layout_db).await?;
+        prune(
+            strategy,
+            &self.state_db,
+            &self.install_db,
+            &self.layout_db,
+            &self.installation,
+        )
+        .await?;
         Ok(())
     }
 }

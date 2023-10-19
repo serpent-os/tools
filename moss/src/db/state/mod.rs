@@ -113,27 +113,55 @@ impl Database {
         .fetch_one(transaction.acquire().await?)
         .await?;
 
-        transaction
-            .execute(
-                sqlx::QueryBuilder::new(
-                    "
+        if !packages.is_empty() {
+            transaction
+                .execute(
+                    sqlx::QueryBuilder::new(
+                        "
                     INSERT INTO state_packages (state_id, package_id, reason)
                     ",
+                    )
+                    .push_values(packages, |mut b, package| {
+                        b.push_bind(id.0.encode())
+                            .push_bind(package.encode())
+                            .push_bind(Option::<String>::None);
+                    })
+                    .build(),
                 )
-                .push_values(packages, |mut b, package| {
-                    b.push_bind(id.0.encode())
-                        .push_bind(package.encode())
-                        .push_bind(Option::<String>::None);
-                })
-                .build(),
-            )
-            .await?;
+                .await?;
+        }
 
         transaction.commit().await?;
 
         let state = self.get(&id.0).await?;
 
         Ok(state)
+    }
+
+    pub async fn remove(&self, state: &state::Id) -> Result<(), Error> {
+        self.batch_remove(Some(state)).await
+    }
+
+    pub async fn batch_remove(
+        &self,
+        states: impl IntoIterator<Item = &state::Id>,
+    ) -> Result<(), Error> {
+        let mut query = sqlx::QueryBuilder::new(
+            "
+            DELETE FROM state
+            WHERE id IN ( 
+            ",
+        );
+
+        let mut separated = query.separated(", ");
+        states.into_iter().for_each(|id| {
+            separated.push_bind(id.encode());
+        });
+        separated.push_unseparated(");");
+
+        query.build().execute(&self.pool).await?;
+
+        Ok(())
     }
 }
 
