@@ -13,8 +13,9 @@ mod encoding {
     use std::convert::Infallible;
 
     use sqlx::{Sqlite, Type};
+    use thiserror::Error;
 
-    use crate::{dependency, package, Dependency, Provider};
+    use crate::{dependency, package, state, Dependency, Provider};
 
     /// Decode from a database type using [`Encoding::decode`]
     #[derive(Debug, Clone, Copy)]
@@ -113,4 +114,39 @@ mod encoding {
             self.to_string()
         }
     }
+
+    impl<'a> Encoding<'a> for state::Id {
+        type Encoded = i64;
+        type Error = Infallible;
+
+        fn decode(value: i64) -> Result<Self, Self::Error> {
+            Ok(Self::from(value))
+        }
+
+        fn encode(&self) -> i64 {
+            (*self).into()
+        }
+    }
+
+    impl<'a> Encoding<'a> for state::Kind {
+        type Encoded = &'a str;
+        type Error = DecodeStateKindError;
+
+        fn decode(value: &'a str) -> Result<Self, Self::Error> {
+            match value {
+                "transaction" => Ok(Self::Transaction),
+                _ => Err(DecodeStateKindError(value.to_string())),
+            }
+        }
+
+        fn encode(&self) -> Self::Encoded {
+            match self {
+                state::Kind::Transaction => "transaction",
+            }
+        }
+    }
+
+    #[derive(Debug, Error)]
+    #[error("Invalid state type: {0}")]
+    pub struct DecodeStateKindError(String);
 }

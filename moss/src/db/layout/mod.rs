@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::collections::HashSet;
+
 use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::{Pool, Sqlite};
 use stone::payload;
@@ -87,22 +89,25 @@ impl Database {
             .collect())
     }
 
-    pub async fn add(&self, package: package::Id, layout: payload::Layout) -> Result<(), Error> {
-        self.batch_add(vec![(package, layout)]).await
-    }
-
-    pub async fn remove(&self, package: &package::Id) -> Result<(), Error> {
-        sqlx::query(
+    pub async fn file_hashes(&self) -> Result<HashSet<u128>, Error> {
+        let layouts = sqlx::query_as::<_, (String,)>(
             "
-            DELETE FROM layout
-            WHERE package_id = ?;
+            SELECT DISTINCT entry_value1
+            FROM layout
+            WHERE entry_type = 'regular';
             ",
         )
-        .bind(package.encode())
-        .execute(&self.pool)
+        .fetch_all(&self.pool)
         .await?;
 
-        Ok(())
+        Ok(layouts
+            .into_iter()
+            .filter_map(|(hash,)| hash.parse::<u128>().ok())
+            .collect())
+    }
+
+    pub async fn add(&self, package: package::Id, layout: payload::Layout) -> Result<(), Error> {
+        self.batch_add(vec![(package, layout)]).await
     }
 
     pub async fn batch_add(
@@ -147,6 +152,32 @@ impl Database {
         .build()
         .execute(&self.pool)
         .await?;
+
+        Ok(())
+    }
+
+    pub async fn remove(&self, package: &package::Id) -> Result<(), Error> {
+        self.batch_remove(Some(package)).await
+    }
+
+    pub async fn batch_remove(
+        &self,
+        packages: impl IntoIterator<Item = &package::Id>,
+    ) -> Result<(), Error> {
+        let mut query = sqlx::QueryBuilder::new(
+            "
+            DELETE FROM layout
+            WHERE package_id IN ( 
+            ",
+        );
+
+        let mut separated = query.separated(", ");
+        packages.into_iter().for_each(|pkg| {
+            separated.push_bind(pkg.encode());
+        });
+        separated.push_unseparated(");");
+
+        query.build().execute(&self.pool).await?;
 
         Ok(())
     }

@@ -2,66 +2,15 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::fmt;
-
 use chrono::{DateTime, Utc};
 use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::{Acquire, Executor, Pool, Sqlite};
 use thiserror::Error;
 
 use crate::db::Encoding;
-use crate::package;
+use crate::state::{self, Id};
 use crate::Installation;
-
-/// Unique identifier for [`State`]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Id(i64);
-
-impl From<i64> for Id {
-    fn from(id: i64) -> Self {
-        Id(id)
-    }
-}
-
-impl From<Id> for i64 {
-    fn from(id: Id) -> Self {
-        id.0
-    }
-}
-
-impl fmt::Display for Id {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-/// State types
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum Kind {
-    /// Automatically constructed state
-    Transaction,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct State {
-    /// Unique identifier for this state
-    pub id: Id,
-    /// Quick summary for the state (optional)
-    pub summary: Option<String>,
-    /// Description for the state (optional)
-    pub description: Option<String>,
-    /// Package IDs / selections in this state
-    pub packages: Vec<package::Id>,
-    /// Creation timestamp
-    pub created: Timestamp,
-    /// Relevant type for this State
-    pub kind: Kind,
-}
-
-// TODO: Add crate timestamp type that can be reused
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Timestamp(DateTime<Utc>);
+use crate::{package, State};
 
 #[derive(Debug)]
 pub struct Database {
@@ -87,6 +36,22 @@ impl Database {
         sqlx::migrate!("src/db/state/migrations").run(&pool).await?;
 
         Ok(Self { pool })
+    }
+
+    pub async fn list_ids(&self) -> Result<Vec<(Id, DateTime<Utc>)>, Error> {
+        let states = sqlx::query_as::<_, encoding::Created>(
+            "
+            SELECT id, created
+            FROM state;
+            ",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(states
+            .into_iter()
+            .map(|state| (state.id.0, state.created))
+            .collect())
     }
 
     pub async fn get(&self, id: &Id) -> Result<State, Error> {
@@ -122,7 +87,7 @@ impl Database {
             summary: state.summary,
             description: state.description,
             packages,
-            created: Timestamp(state.created),
+            created: state.created,
             kind: state.kind.0,
         })
     }
@@ -142,33 +107,61 @@ impl Database {
             RETURNING id;
             ",
         )
-        .bind(Kind::Transaction.encode())
+        .bind(state::Kind::Transaction.encode())
         .bind(summary)
         .bind(description)
         .fetch_one(transaction.acquire().await?)
         .await?;
 
-        transaction
-            .execute(
-                sqlx::QueryBuilder::new(
-                    "
+        if !packages.is_empty() {
+            transaction
+                .execute(
+                    sqlx::QueryBuilder::new(
+                        "
                     INSERT INTO state_packages (state_id, package_id, reason)
                     ",
+                    )
+                    .push_values(packages, |mut b, package| {
+                        b.push_bind(id.0.encode())
+                            .push_bind(package.encode())
+                            .push_bind(Option::<String>::None);
+                    })
+                    .build(),
                 )
-                .push_values(packages, |mut b, package| {
-                    b.push_bind(id.0.encode())
-                        .push_bind(package.encode())
-                        .push_bind(Option::<String>::None);
-                })
-                .build(),
-            )
-            .await?;
+                .await?;
+        }
 
         transaction.commit().await?;
 
         let state = self.get(&id.0).await?;
 
         Ok(state)
+    }
+
+    pub async fn remove(&self, state: &state::Id) -> Result<(), Error> {
+        self.batch_remove(Some(state)).await
+    }
+
+    pub async fn batch_remove(
+        &self,
+        states: impl IntoIterator<Item = &state::Id>,
+    ) -> Result<(), Error> {
+        let mut query = sqlx::QueryBuilder::new(
+            "
+            DELETE FROM state
+            WHERE id IN ( 
+            ",
+        );
+
+        let mut separated = query.separated(", ");
+        states.into_iter().for_each(|id| {
+            separated.push_bind(id.encode());
+        });
+        separated.push_unseparated(");");
+
+        query.build().execute(&self.pool).await?;
+
+        Ok(())
     }
 }
 
@@ -181,23 +174,23 @@ pub enum Error {
 }
 
 mod encoding {
-    use std::convert::Infallible;
-
     use chrono::{DateTime, Utc};
     use sqlx::FromRow;
-    use thiserror::Error;
 
-    use super::{Id, Kind};
-    use crate::{
-        db::{Decoder, Encoding},
-        package,
-    };
+    use super::{state, Id};
+    use crate::{db::Decoder, package};
+
+    #[derive(FromRow)]
+    pub struct Created {
+        pub id: Decoder<Id>,
+        pub created: DateTime<Utc>,
+    }
 
     #[derive(FromRow)]
     pub struct State {
         pub id: Decoder<Id>,
         #[sqlx(rename = "type")]
-        pub kind: Decoder<Kind>,
+        pub kind: Decoder<state::Kind>,
         pub created: DateTime<Utc>,
         pub summary: Option<String>,
         pub description: Option<String>,
@@ -212,41 +205,6 @@ mod encoding {
     pub struct Package {
         pub package_id: Decoder<package::Id>,
     }
-
-    impl<'a> Encoding<'a> for Id {
-        type Encoded = i64;
-        type Error = Infallible;
-
-        fn decode(value: i64) -> Result<Self, Self::Error> {
-            Ok(Self(value))
-        }
-
-        fn encode(&self) -> i64 {
-            self.0
-        }
-    }
-
-    impl<'a> Encoding<'a> for Kind {
-        type Encoded = &'a str;
-        type Error = DecodeKindError;
-
-        fn decode(value: &'a str) -> Result<Self, Self::Error> {
-            match value {
-                "transaction" => Ok(Self::Transaction),
-                _ => Err(DecodeKindError(value.to_string())),
-            }
-        }
-
-        fn encode(&self) -> Self::Encoded {
-            match self {
-                Kind::Transaction => "transaction",
-            }
-        }
-    }
-
-    #[derive(Debug, Error)]
-    #[error("Invalid state type: {0}")]
-    pub struct DecodeKindError(String);
 }
 
 #[cfg(test)]
@@ -280,10 +238,10 @@ mod test {
             .unwrap();
 
         // First record
-        assert_eq!(state.id.0, 1);
+        assert_eq!(i64::from(state.id), 1);
 
         // Check created
-        let elapsed = Utc::now().signed_duration_since(state.created.0);
+        let elapsed = Utc::now().signed_duration_since(state.created);
         assert!(elapsed.num_seconds() == 0);
         assert!(!elapsed.is_zero());
 

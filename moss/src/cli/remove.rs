@@ -61,7 +61,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     // Add all installed packages to transaction
     let mut transaction = client
         .registry
-        .transaction_with_packages(installed_ids.iter().cloned().cloned().collect())
+        .transaction_with_installed(installed_ids.iter().cloned().cloned().collect())
         .await?;
 
     // Remove all pkgs for removal

@@ -10,7 +10,7 @@ use std::{
 use log::{trace, warn};
 use nix::unistd::{access, AccessFlags, Uid};
 
-use crate::db;
+use crate::state;
 
 /// System mutability - do we have readwrite?
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,7 +43,7 @@ pub struct Installation {
     pub mutability: Mutability,
 
     /// Detected currently active state (optional)
-    pub active_state: Option<db::state::Id>,
+    pub active_state: Option<state::Id>,
 }
 
 impl Installation {
@@ -135,7 +135,7 @@ impl Installation {
 /// In older versions of moss, the `/usr` entry was a symlink
 /// to an active state. In newer versions, the state is recorded
 /// within the installation tree. (`/usr/.stateID`)
-fn read_state_id(root: &Path) -> Option<db::state::Id> {
+fn read_state_id(root: &Path) -> Option<state::Id> {
     let usr_path = root.join("usr");
     let state_path = root.join("usr").join(".stateID");
 
@@ -143,7 +143,7 @@ fn read_state_id(root: &Path) -> Option<db::state::Id> {
         .ok()
         .and_then(|s| s.parse::<i64>().ok())
     {
-        return Some(db::state::Id::from(id));
+        return Some(state::Id::from(id));
     } else if let Ok(usr_target) = usr_path.read_link() {
         return read_legacy_state_id(&usr_target);
     }
@@ -152,13 +152,13 @@ fn read_state_id(root: &Path) -> Option<db::state::Id> {
 }
 
 // Legacy `/usr` link support
-fn read_legacy_state_id(usr_target: &Path) -> Option<db::state::Id> {
+fn read_legacy_state_id(usr_target: &Path) -> Option<state::Id> {
     if usr_target.ends_with("usr") {
         let parent = usr_target.parent()?;
         let base = parent.file_name()?;
         let id = base.to_str()?.parse::<i64>().ok()?;
 
-        return Some(db::state::Id::from(id));
+        return Some(state::Id::from(id));
     }
 
     None
