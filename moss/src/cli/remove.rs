@@ -13,7 +13,8 @@ use moss::{
     registry::transaction,
 };
 use thiserror::Error;
-use tui::pretty::print_to_columns;
+use tokio::fs;
+use tui::{pretty::print_to_columns, Stylize};
 
 use super::name_to_provider;
 
@@ -87,6 +88,33 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     print_to_columns(&results);
     println!();
 
+    for package in results {
+        println!(
+            "{} {}",
+            "Removed".red(),
+            package.meta.name.to_string().bold(),
+        );
+    }
+
+    let state = client
+        .state_db
+        .add(
+            &finalized.into_iter().cloned().collect::<Vec<_>>(),
+            None,
+            None,
+        )
+        .await?;
+
+    // Record state
+    // TODO: Refactor. This will happen w/ promoting state from staging
+    // but for now we are adding this to test list installed, etc
+    {
+        let usr = client.installation.root.join("usr");
+        fs::create_dir_all(&usr).await?;
+        let state_path = usr.join(".stateID");
+        fs::write(state_path, state.id.to_string()).await?;
+    }
+
     Ok(())
 }
 
@@ -100,4 +128,10 @@ pub enum Error {
 
     #[error("transaction error: {0}")]
     Transaction(#[from] transaction::Error),
+
+    #[error("statedb error: {0}")]
+    StateDB(#[from] moss::db::state::Error),
+
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
 }
