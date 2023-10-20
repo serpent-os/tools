@@ -156,7 +156,7 @@ pub async fn prune(
         install_db.file_hashes().await?,
         // path builder using hash
         |hash| async move {
-            package::fetch::download_path(installation, &hash)
+            package::cache::download_path(installation, &hash)
                 .map(Result::ok)
                 .await
         },
@@ -171,7 +171,7 @@ pub async fn prune(
         layout_db.file_hashes().await?,
         // path builder using hash
         |hash| async move {
-            package::fetch::asset_path(installation, &hash)
+            package::cache::asset_path(installation, &hash)
                 .map(Result::ok)
                 .await
         },
