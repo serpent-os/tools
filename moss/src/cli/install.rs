@@ -45,7 +45,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     tx.add(input.clone()).await?;
 
     // Resolve transaction to metadata
-    let resolved = client.get_metadata(tx.finalize()).await?;
+    let resolved = client.resolve_packages(tx.finalize()).await?;
 
     // Get missing packages that aren't installed
     let missing = resolved

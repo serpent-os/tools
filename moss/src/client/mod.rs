@@ -129,10 +129,10 @@ impl Client {
         Ok(())
     }
 
-    /// Fetches package metadata for the provided packages
-    /// from the underlying registry. Returned metadata is
-    /// deduped & sorted by package name.
-    pub async fn get_metadata(
+    /// Resolves the provided id's with the underlying registry, returning
+    /// the first [`Package`] for each id. Packages are sorted by name
+    /// and deduped before returning.
+    pub async fn resolve_packages(
         &self,
         packages: impl IntoIterator<Item = &package::Id>,
     ) -> Result<Vec<Package>, Error> {

@@ -74,11 +74,10 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     // Finalized tx has all reverse deps removed
     let finalized = transaction.finalize().cloned().collect::<HashSet<_>>();
 
-    // Difference resolves to all removed pkgs
-    let removed = installed_ids.difference(&finalized);
-
-    // Get metadata for all removed pkgs & dedupe
-    let removed = client.get_metadata(removed).await?;
+    // Resolve all removed packages, where removed is (installed - finalized)
+    let removed = client
+        .resolve_packages(installed_ids.difference(&finalized))
+        .await?;
 
     println!("The following package(s) will be removed:");
     println!();
