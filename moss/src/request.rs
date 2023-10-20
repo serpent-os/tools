@@ -5,10 +5,13 @@
 use std::{io, path::PathBuf};
 
 use bytes::Bytes;
-use futures::{stream::BoxStream, Stream, StreamExt};
+use futures::{
+    stream::{self, BoxStream},
+    Stream, StreamExt,
+};
 use once_cell::sync::Lazy;
 use thiserror::Error;
-use tokio::fs::File;
+use tokio::{fs::File, io::AsyncReadExt};
 use tokio_util::io::ReaderStream;
 use url::Url;
 
@@ -29,7 +32,7 @@ static CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
 /// Fetch a resource at the provided [`Url`] and stream it's response bytes
 pub async fn get(url: Url) -> Result<BoxStream<'static, Result<Bytes, Error>>, Error> {
     match url_file(&url) {
-        Some(path) => Ok(read(path).await?.boxed()),
+        Some(path) => read(path).await,
         _ => Ok(fetch(url).await?.boxed()),
     }
 }
@@ -44,11 +47,20 @@ async fn fetch(url: Url) -> Result<impl Stream<Item = Result<Bytes, Error>>, Err
         .map_err(Error::Fetch)
 }
 
-async fn read(path: PathBuf) -> Result<impl Stream<Item = Result<Bytes, Error>>, Error> {
-    let file = File::open(path).await?;
-    let capacity = environment::FILE_READ_BUFFER_SIZE;
+async fn read(path: PathBuf) -> Result<BoxStream<'static, Result<Bytes, Error>>, Error> {
+    let mut file = File::open(path).await?;
+    let size = file.metadata().await?.len() as usize;
 
-    Ok(ReaderStream::with_capacity(file, capacity).map(|result| result.map_err(Error::Read)))
+    if size > environment::FILE_READ_CHUNK_THRESHOLD {
+        let stream = ReaderStream::with_capacity(file, environment::FILE_READ_BUFFER_SIZE);
+
+        Ok(stream.map(|result| result.map_err(Error::Read)).boxed())
+    } else {
+        let mut bytes = Vec::with_capacity(size);
+        file.read_to_end(&mut bytes).await?;
+
+        Ok(stream::once(async move { Ok(bytes.into()) }).boxed())
+    }
 }
 
 fn url_file(url: &Url) -> Option<PathBuf> {
