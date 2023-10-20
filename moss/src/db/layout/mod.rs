@@ -89,7 +89,7 @@ impl Database {
             .collect())
     }
 
-    pub async fn file_hashes(&self) -> Result<HashSet<u128>, Error> {
+    pub async fn file_hashes(&self) -> Result<HashSet<String>, Error> {
         let layouts = sqlx::query_as::<_, (String,)>(
             "
             SELECT DISTINCT entry_value1
@@ -102,7 +102,7 @@ impl Database {
 
         Ok(layouts
             .into_iter()
-            .filter_map(|(hash,)| hash.parse::<u128>().ok())
+            .filter_map(|(hash,)| hash.parse::<u128>().ok().map(|hash| format!("{hash:02x}")))
             .collect())
     }
 
