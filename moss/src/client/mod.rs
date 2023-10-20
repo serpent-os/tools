@@ -117,6 +117,7 @@ impl Client {
         Ok(())
     }
 
+    /// Prune states with the provided [`prune::Strategy`]
     pub async fn prune(&self, strategy: prune::Strategy) -> Result<(), Error> {
         prune(
             strategy,
@@ -174,7 +175,7 @@ impl Client {
         Ok(state)
     }
 
-    /// Download & unpack the provided packages
+    /// Download & unpack the provided packages. Packages already cached will be validated & skipped.
     pub async fn cache_packages(&self, packages: &[&Package]) -> Result<(), Error> {
         // Setup progress bar
         let multi_progress = MultiProgress::new();
