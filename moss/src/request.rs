@@ -12,6 +12,8 @@ use tokio::fs::File;
 use tokio_util::io::ReaderStream;
 use url::Url;
 
+use crate::environment;
+
 /// Shared client for tcp socket reuse and connection limit
 static CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
     reqwest::ClientBuilder::new()
@@ -43,12 +45,10 @@ async fn fetch(url: Url) -> Result<impl Stream<Item = Result<Bytes, Error>>, Err
 }
 
 async fn read(path: PathBuf) -> Result<impl Stream<Item = Result<Bytes, Error>>, Error> {
-    // 4 MiB
-    const BUFFER_SIZE: usize = 4 * 1024 * 1024;
-
     let file = File::open(path).await?;
+    let capacity = environment::FILE_READ_BUFFER_SIZE;
 
-    Ok(ReaderStream::with_capacity(file, BUFFER_SIZE).map(|result| result.map_err(Error::Read)))
+    Ok(ReaderStream::with_capacity(file, capacity).map(|result| result.map_err(Error::Read)))
 }
 
 fn url_file(url: &Url) -> Option<PathBuf> {

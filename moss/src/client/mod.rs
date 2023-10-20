@@ -13,15 +13,13 @@ use tui::{MultiProgress, ProgressBar, ProgressStyle, Stylize};
 
 use self::prune::prune;
 use crate::{
-    db, package,
+    db, environment, package,
     registry::plugin::{self, Plugin},
     repository, Installation, Package, Registry, State,
 };
 
 pub mod cache;
 pub mod prune;
-
-const CONCURRENT_TASKS: usize = 8;
 
 /// A Client is a connection to the underlying package management systems
 pub struct Client {
@@ -231,7 +229,7 @@ impl Client {
                     .iter()
                     .find_map(Payload::layout)
                     .ok_or(Error::CorruptedPackage)?
-                    .chunks(1000),
+                    .chunks(environment::DB_BATCH_SIZE),
             ) {
                 let entries = chunk
                     .iter()
@@ -266,7 +264,8 @@ impl Client {
 
             Ok(()) as Result<(), Error>
         }))
-        .buffer_unordered(CONCURRENT_TASKS)
+        // Use max network concurrency since we download files here
+        .buffer_unordered(environment::MAX_NETWORK_CONCURRENCY)
         .try_collect()
         .await?;
 

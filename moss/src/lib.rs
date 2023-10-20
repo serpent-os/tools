@@ -17,6 +17,7 @@ pub mod client;
 pub mod config;
 pub mod db;
 pub mod dependency;
+mod environment;
 pub mod installation;
 pub mod package;
 pub mod registry;

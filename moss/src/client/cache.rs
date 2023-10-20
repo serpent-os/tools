@@ -16,9 +16,7 @@ use tokio::{
 };
 use url::Url;
 
-use crate::{package, request, Installation};
-
-const CONCURRENT_FS_TASKS: usize = 16;
+use crate::{environment, package, request, Installation};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Progress {
@@ -221,7 +219,7 @@ async fn check_assets_exist(indicies: &[&payload::Index], installation: &Install
 
             false
         })
-        .buffer_unordered(CONCURRENT_FS_TASKS)
+        .buffer_unordered(environment::MAX_DISK_CONCURRENCY)
         .all(|exists| async move { exists })
         .await
 }

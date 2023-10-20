@@ -9,12 +9,10 @@ use thiserror::Error;
 use tokio::{fs, io};
 
 use crate::db::meta;
-use crate::stone;
 use crate::{config, package, Installation};
+use crate::{environment, stone};
 
 use crate::repository::{self, Repository};
-
-const DB_BATCH_SIZE: usize = 1_000;
 
 /// Manage a bunch of repositories
 pub struct Manager {
@@ -154,7 +152,7 @@ async fn refresh_index(
     payloads
         .map_err(Error::ReadStone)
         // Batch up to `DB_BATCH_SIZE` payloads
-        .chunks(DB_BATCH_SIZE)
+        .chunks(environment::DB_BATCH_SIZE)
         // Transpose error for early bail
         .map(|results| results.into_iter().collect::<Result<Vec<_>, _>>())
         .try_for_each(|payloads| async {
