@@ -92,7 +92,6 @@ pub struct Download {
 /// Upon fetch completion we have this unpacked asset bound with
 /// an open reader
 pub struct UnpackedAsset {
-    id: package::Id,
     pub payloads: Vec<Payload>,
 }
 
@@ -163,10 +162,7 @@ impl Download {
 
             // If download was cached & all assets exist, we can skip unpacking
             if self.was_cached && rt.block_on(check_assets_exist(&indicies, &self.installation)) {
-                return Ok(UnpackedAsset {
-                    id: self.id.clone(),
-                    payloads,
-                });
+                return Ok(UnpackedAsset { payloads });
             }
 
             let content = payloads
@@ -208,10 +204,7 @@ impl Download {
 
             remove_file(&content_path)?;
 
-            Ok(UnpackedAsset {
-                id: self.id.clone(),
-                payloads,
-            })
+            Ok(UnpackedAsset { payloads })
         })
         .await
         .expect("join handle")
