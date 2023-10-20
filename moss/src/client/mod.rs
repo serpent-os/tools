@@ -216,6 +216,7 @@ impl Client {
             })
             .await?;
 
+            let is_cached = download.was_cached;
             let package_name = package.meta.name.to_string();
 
             // Set progress to unpacking
@@ -267,16 +268,21 @@ impl Client {
                 .add(package.id.clone(), package.meta.clone())
                 .await?;
 
-            // Write installed line
-            multi_progress.println(format!(
-                "{} {}",
-                "Installed".green(),
-                package_name.clone().bold(),
-            ))?;
-
             // Remove this progress bar
             progress_bar.finish();
             multi_progress.remove(&progress_bar);
+
+            let cached_tag = is_cached
+                .then_some(format!("{}", " (cached)".dim()))
+                .unwrap_or_default();
+
+            // Write installed line
+            multi_progress.println(format!(
+                "{} {}{}",
+                "Installed".green(),
+                package_name.clone().bold(),
+                cached_tag,
+            ))?;
 
             // Inc total progress by 1
             total_progress.inc(1);
