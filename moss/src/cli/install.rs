@@ -58,7 +58,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     if missing.is_empty() {
         let installed = resolved
             .iter()
-            .filter(|p| p.is_installed())
+            .filter(|p| p.is_installed() && input.contains(&p.id))
             .collect::<Vec<_>>();
 
         if !installed.is_empty() {
