@@ -7,7 +7,6 @@ use itertools::Itertools;
 
 pub use self::meta::{Meta, MissingMetaError, Name};
 
-pub mod cache;
 pub mod meta;
 pub mod render;
 

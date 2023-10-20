@@ -14,7 +14,7 @@ use thiserror::Error;
 use tokio::{fs, task};
 use tui::pretty::print_to_columns;
 
-use crate::{db, package, state, Installation};
+use crate::{client::cache, db, package, state, Installation};
 
 const CONCURRENT_REMOVALS: usize = 16;
 
@@ -156,7 +156,7 @@ pub async fn prune(
         install_db.file_hashes().await?,
         // path builder using hash
         |hash| async move {
-            package::cache::download_path(installation, &hash)
+            cache::download_path(installation, &hash)
                 .map(Result::ok)
                 .await
         },
@@ -170,11 +170,7 @@ pub async fn prune(
         // final set of hashes to compare against
         layout_db.file_hashes().await?,
         // path builder using hash
-        |hash| async move {
-            package::cache::asset_path(installation, &hash)
-                .map(Result::ok)
-                .await
-        },
+        |hash| async move { cache::asset_path(installation, &hash).map(Result::ok).await },
     )
     .await?;
 

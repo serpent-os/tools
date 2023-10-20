@@ -16,10 +16,7 @@ use tokio::{
 };
 use url::Url;
 
-use crate::{
-    package::{Id, Meta},
-    request, Installation,
-};
+use crate::{package, request, Installation};
 
 const CONCURRENT_FS_TASKS: usize = 16;
 
@@ -36,9 +33,9 @@ impl Progress {
     }
 }
 
-/// Fetch a package with the provided [`Meta`] and [`Installation`] and return a [`Download`] on success.
+/// Fetch a package with the provided [`package::Meta`] and [`Installation`] and return a [`Download`] on success.
 pub async fn fetch(
-    meta: &Meta,
+    meta: &package::Meta,
     installation: &Installation,
     on_progress: impl Fn(Progress),
 ) -> Result<Download, Error> {
@@ -86,7 +83,7 @@ pub async fn fetch(
 
 /// A package that has been downloaded to the installation
 pub struct Download {
-    id: Id,
+    id: package::Id,
     path: PathBuf,
     installation: Installation,
     pub was_cached: bool,
@@ -95,7 +92,7 @@ pub struct Download {
 /// Upon fetch completion we have this unpacked asset bound with
 /// an open reader
 pub struct UnpackedAsset {
-    id: Id,
+    id: package::Id,
     pub payloads: Vec<Payload>,
 }
 

@@ -13,12 +13,12 @@ use tui::{MultiProgress, ProgressBar, ProgressStyle, Stylize};
 
 use self::prune::prune;
 use crate::{
-    db,
-    package::{self, cache},
+    db, package,
     registry::plugin::{self, Plugin},
     repository, Installation, Package, Registry, State,
 };
 
+pub mod cache;
 pub mod prune;
 
 const CONCURRENT_TASKS: usize = 8;
@@ -31,8 +31,8 @@ pub enum Error {
     MissingMetadata(package::Id),
     #[error("Root is invalid")]
     RootInvalid,
-    #[error("package cache error: {0}")]
-    Cache(#[from] package::cache::Error),
+    #[error("cache error: {0}")]
+    Cache(#[from] cache::Error),
     #[error("repository: {0}")]
     Repository(#[from] repository::manager::Error),
     #[error("meta: {0}")]
