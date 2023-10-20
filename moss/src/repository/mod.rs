@@ -144,8 +144,8 @@ async fn fetch_index(url: Url, out_path: impl AsRef<Path>) -> Result<(), FetchEr
 
 #[derive(Debug, Error)]
 pub enum FetchError {
-    #[error("request failed: {0}")]
+    #[error("request")]
     Request(#[from] request::Error),
-    #[error("io error: {0}")]
+    #[error("io")]
     Io(#[from] io::Error),
 }

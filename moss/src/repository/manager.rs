@@ -194,20 +194,20 @@ async fn refresh_index(
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("failed to create directory: {0}")]
-    CreateDir(io::Error),
-    #[error("failed to remove directory: {0}")]
-    RemoveDir(io::Error),
-    #[error("failed to fetch index file: {0}")]
-    FetchIndex(#[from] repository::FetchError),
-    #[error("failed to read index file: {0}")]
-    ReadStone(#[from] stone::read::Error),
-    #[error("meta database error: {0}")]
-    Database(#[from] meta::Error),
-    #[error("failed to save config: {0}")]
-    SaveConfig(config::SaveError),
-    #[error("missing metadata field: {0:?}")]
+    #[error("Missing metadata field: {0:?}")]
     MissingMetaField(stone::payload::meta::Tag),
+    #[error("create directory")]
+    CreateDir(#[source] io::Error),
+    #[error("remove directory")]
+    RemoveDir(#[source] io::Error),
+    #[error("fetch index file")]
+    FetchIndex(#[from] repository::FetchError),
+    #[error("read index file")]
+    ReadStone(#[from] stone::read::Error),
+    #[error("meta db")]
+    Database(#[from] meta::Error),
+    #[error("save config")]
+    SaveConfig(#[source] config::SaveError),
 }
 
 impl From<package::MissingMetaError> for Error {

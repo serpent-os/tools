@@ -114,9 +114,9 @@ pub enum DecodeError {
     InvalidMagic,
     #[error("Unknown version: {0}")]
     UnknownVersion(u32),
-    #[error("v1 error: {0}")]
+    #[error("v1 decode")]
     V1(#[from] v1::DecodeError),
-    #[error("io error: {0}")]
+    #[error("io")]
     Io(io::Error),
 }
 

@@ -490,11 +490,11 @@ async fn batch_remove_impl<'a>(
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("row not found")]
+    #[error("Row not found")]
     RowNotFound,
-    #[error("database error: {0}")]
-    Sqlx(sqlx::Error),
-    #[error("migration error: {0}")]
+    #[error("sqlx")]
+    Sqlx(#[source] sqlx::Error),
+    #[error("sqlx migration")]
     Migrate(#[from] sqlx::migrate::MigrateError),
 }
 
