@@ -63,9 +63,9 @@ pub async fn prune(args: &ArgMatches, root: &Path) -> Result<(), Error> {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("client error: {0}")]
+    #[error("client")]
     Client(#[from] client::Error),
 
-    #[error("statedb error: {0}")]
+    #[error("state db")]
     StateDB(#[from] moss::db::state::Error),
 }

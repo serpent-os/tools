@@ -9,6 +9,6 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum WriteError {
-    #[error(transparent)]
+    #[error("io")]
     Io(#[from] io::Error),
 }

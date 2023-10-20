@@ -197,12 +197,12 @@ impl<'a> Transaction<'a> {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("database error: {0}")]
-    Database(#[from] crate::db::meta::Error),
-
-    #[error("no such name: {0}")]
+    #[error("No such name: {0}")]
     NoCandidate(String),
 
-    #[error("not yet implemented")]
+    #[error("Not yet implemented")]
     NotImplemented,
+
+    #[error("meta db")]
+    Database(#[from] crate::db::meta::Error),
 }

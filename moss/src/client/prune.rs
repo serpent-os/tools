@@ -331,12 +331,12 @@ async fn remove_empty_dirs(starting: &Path, root: &Path) -> Result<(), io::Error
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("layout db: {0}")]
+    #[error("layout db")]
     LayoutDB(#[from] db::layout::Error),
-    #[error("meta db: {0}")]
+    #[error("meta db")]
     MetaDB(#[from] db::meta::Error),
-    #[error("state db: {0}")]
+    #[error("state db")]
     StateDB(#[from] db::state::Error),
-    #[error("io error: {0}")]
+    #[error("io")]
     Io(#[from] io::Error),
 }

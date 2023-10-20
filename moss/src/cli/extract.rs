@@ -157,13 +157,13 @@ pub enum Error {
     #[error("Missing metadata")]
     MissingMeta,
 
-    #[error("malformed meta {0}")]
+    #[error("malformed meta")]
     MalformedMeta(#[from] MissingMetaError),
 
-    #[error("Read failure")]
+    #[error("io")]
     IO(#[from] std::io::Error),
 
-    #[error("Format failure")]
+    #[error("stone format")]
     Format(#[from] stone::read::Error),
 }
 

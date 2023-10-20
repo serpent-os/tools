@@ -73,8 +73,8 @@ fn url_file(url: &Url) -> Option<PathBuf> {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("fetch error: {0}")]
+    #[error("fetch")]
     Fetch(#[from] reqwest::Error),
-    #[error("read error: {0}")]
+    #[error("io")]
     Read(#[from] io::Error),
 }

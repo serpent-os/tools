@@ -97,9 +97,8 @@ struct State {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("client error: {0}")]
-    Client(#[from] client::Error),
-
-    #[error("no packages found")]
+    #[error("No packages found")]
     NoneFound,
+    #[error("client")]
+    Client(#[from] client::Error),
 }

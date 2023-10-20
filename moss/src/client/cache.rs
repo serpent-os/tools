@@ -262,20 +262,20 @@ pub async fn asset_path(installation: &Installation, hash: &str) -> Result<PathB
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("stone format: {0}")]
-    Format(#[from] stone::read::Error),
-    #[error("missing download hash")]
+    #[error("Missing download hash")]
     MissingHash,
-    #[error("missing download URI")]
+    #[error("Missing download URI")]
     MissingUri,
-    #[error("missing content payload")]
+    #[error("Missing content payload")]
     MissingContent,
-    #[error("malformed download hash: {0}")]
+    #[error("Malformed download hash: {0}")]
     MalformedHash(String),
-    #[error("invalid url: {0}")]
+    #[error("stone format")]
+    Format(#[from] stone::read::Error),
+    #[error("invalid url")]
     InvalidUrl(#[from] url::ParseError),
-    #[error("request failed: {0}")]
+    #[error("request")]
     Request(#[from] request::Error),
-    #[error("io error: {0}")]
+    #[error("io")]
     Io(#[from] io::Error),
 }

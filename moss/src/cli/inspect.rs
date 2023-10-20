@@ -118,9 +118,9 @@ async fn inspect(paths: Vec<PathBuf>) -> Result<(), Error> {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("Read failure")]
+    #[error("io")]
     IO(#[from] std::io::Error),
 
-    #[error("Format failure")]
+    #[error("stone format")]
     Format(#[from] stone::read::Error),
 }

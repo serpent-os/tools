@@ -124,6 +124,6 @@ pub enum DecodeError {
     UnknownFileType(u8),
     #[error("Unknown dependency type: {0}")]
     UnknownDependency(u8),
-    #[error("io error: {0}")]
+    #[error("io")]
     Io(#[from] io::Error),
 }

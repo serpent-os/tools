@@ -103,18 +103,18 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("client error")]
-    Client(#[from] client::Error),
-
-    #[error("not yet implemented")]
+    #[error("Not yet implemented")]
     NotImplemented,
 
-    #[error("transaction error: {0}")]
+    #[error("client")]
+    Client(#[from] client::Error),
+
+    #[error("transaction")]
     Transaction(#[from] transaction::Error),
 
-    #[error("statedb error: {0}")]
+    #[error("state db")]
     StateDB(#[from] moss::db::state::Error),
 
-    #[error("io error: {0}")]
+    #[error("io")]
     Io(#[from] std::io::Error),
 }

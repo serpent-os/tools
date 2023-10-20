@@ -68,12 +68,12 @@ pub async fn save<T: Config + Serialize>(
 
 #[derive(Debug, Error)]
 pub enum SaveError {
-    #[error("could not create config dir {0:?}: {1}")]
-    CreateDir(PathBuf, io::Error),
-    #[error("failed to serialize config as yaml: {0}")]
+    #[error("create config dir {0:?}")]
+    CreateDir(PathBuf, #[source] io::Error),
+    #[error("serialize config")]
     Yaml(#[from] serde_yaml::Error),
-    #[error("failed to write config file at {0:?}: {1}")]
-    Write(PathBuf, io::Error),
+    #[error("write config file {0:?}")]
+    Write(PathBuf, #[source] io::Error),
 }
 
 async fn enumerate_paths(

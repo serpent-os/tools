@@ -194,11 +194,11 @@ impl Payload {
 pub enum Error {
     #[error("Multiple content payloads not allowed")]
     MultipleContent,
-    #[error("failed to decode header: {0}")]
+    #[error("header decode")]
     HeaderDecode(#[from] header::DecodeError),
-    #[error("failed to decode payload: {0}")]
+    #[error("payload decode")]
     PayloadDecode(#[from] payload::DecodeError),
-    #[error("io error: {0}")]
+    #[error("io")]
     Io(#[from] io::Error),
 }
 
