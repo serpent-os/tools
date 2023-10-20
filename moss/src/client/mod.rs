@@ -23,30 +23,6 @@ pub mod prune;
 
 const CONCURRENT_TASKS: usize = 8;
 
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error("corrupted package")]
-    CorruptedPackage,
-    #[error("No metadata found for package {0:?}")]
-    MissingMetadata(package::Id),
-    #[error("Root is invalid")]
-    RootInvalid,
-    #[error("cache error: {0}")]
-    Cache(#[from] cache::Error),
-    #[error("repository: {0}")]
-    Repository(#[from] repository::manager::Error),
-    #[error("meta: {0}")]
-    Meta(#[from] db::meta::Error),
-    #[error("layout: {0}")]
-    Layout(#[from] db::layout::Error),
-    #[error("state: {0}")]
-    State(#[from] db::state::Error),
-    #[error("prune: {0}")]
-    Prune(#[from] prune::Error),
-    #[error("io: {0}")]
-    Io(#[from] io::Error),
-}
-
 /// A Client is a connection to the underlying package management systems
 pub struct Client {
     /// Root that we operate on
@@ -321,7 +297,26 @@ async fn build_registry(
     Ok(registry)
 }
 
-impl Drop for Client {
-    // Automatically drop resources for the client
-    fn drop(&mut self) {}
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("corrupted package")]
+    CorruptedPackage,
+    #[error("No metadata found for package {0:?}")]
+    MissingMetadata(package::Id),
+    #[error("Root is invalid")]
+    RootInvalid,
+    #[error("cache error: {0}")]
+    Cache(#[from] cache::Error),
+    #[error("repository: {0}")]
+    Repository(#[from] repository::manager::Error),
+    #[error("meta: {0}")]
+    Meta(#[from] db::meta::Error),
+    #[error("layout: {0}")]
+    Layout(#[from] db::layout::Error),
+    #[error("state: {0}")]
+    State(#[from] db::state::Error),
+    #[error("prune: {0}")]
+    Prune(#[from] prune::Error),
+    #[error("io: {0}")]
+    Io(#[from] io::Error),
 }
