@@ -167,9 +167,9 @@ impl Database {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("database error: {0}")]
+    #[error("sqlx")]
     Sqlx(#[from] sqlx::Error),
-    #[error("migration error: {0}")]
+    #[error("sqlx migration")]
     Migrate(#[from] sqlx::migrate::MigrateError),
 }
 

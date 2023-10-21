@@ -108,15 +108,12 @@ impl State {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("io: {0}")]
-    Io(#[from] stone::read::Error),
-
-    #[error("metadata: {0}")]
-    Metadata(#[from] MissingMetaError),
-
-    #[error("missing metadata payload")]
+    #[error("Missing metadata payload")]
     MissingMetaPayload,
 
-    #[error("unspecified error")]
-    Unspecified,
+    #[error("io")]
+    Io(#[from] stone::read::Error),
+
+    #[error("metadata")]
+    Metadata(#[from] MissingMetaError),
 }

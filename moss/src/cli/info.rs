@@ -111,9 +111,9 @@ fn print_package(pkg: &Package) {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("client error: {0}")]
-    Client(#[from] client::Error),
-
-    #[error("no such package")]
+    #[error("No such package {0}")]
     NotFound(String),
+
+    #[error("client")]
+    Client(#[from] client::Error),
 }

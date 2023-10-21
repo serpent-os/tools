@@ -119,6 +119,6 @@ async fn list(root: &Path) -> Result<(), Error> {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("repo error: {0}")]
+    #[error("repo manager")]
     RepositoryManager(#[from] repository::manager::Error),
 }

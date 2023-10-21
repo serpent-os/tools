@@ -99,27 +99,27 @@ pub async fn process() -> Result<(), Error> {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("error handling info: {0}")]
+    #[error("info")]
     Info(#[from] info::Error),
 
-    #[error("error handling install: {0}")]
+    #[error("install")]
     Install(#[from] install::Error),
 
-    #[error("error handling list: {0}")]
+    #[error("list")]
     List(#[from] list::Error),
 
-    #[error("error handling inspect: {0}")]
+    #[error("inspect")]
     Inspect(#[from] inspect::Error),
 
-    #[error("error in extraction: {0}")]
+    #[error("extract")]
     Extract(#[from] extract::Error),
 
-    #[error("error handling remove: {0}")]
+    #[error("remove")]
     Remove(#[from] remove::Error),
 
-    #[error("error handling repo: {0}")]
+    #[error("repo")]
     Repo(#[from] repo::Error),
 
-    #[error("error handling state: {0}")]
+    #[error("state")]
     State(#[from] state::Error),
 }

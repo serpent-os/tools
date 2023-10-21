@@ -298,24 +298,24 @@ async fn build_registry(
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("corrupted package")]
+    #[error("Corrupted package")]
     CorruptedPackage,
     #[error("No metadata found for package {0:?}")]
     MissingMetadata(package::Id),
     #[error("Root is invalid")]
     RootInvalid,
-    #[error("cache error: {0}")]
+    #[error("cache")]
     Cache(#[from] cache::Error),
-    #[error("repository: {0}")]
+    #[error("repository manager")]
     Repository(#[from] repository::manager::Error),
-    #[error("meta: {0}")]
+    #[error("meta db")]
     Meta(#[from] db::meta::Error),
-    #[error("layout: {0}")]
+    #[error("layout db")]
     Layout(#[from] db::layout::Error),
-    #[error("state: {0}")]
+    #[error("state db")]
     State(#[from] db::state::Error),
-    #[error("prune: {0}")]
+    #[error("prune")]
     Prune(#[from] prune::Error),
-    #[error("io: {0}")]
+    #[error("io")]
     Io(#[from] io::Error),
 }
