@@ -4,9 +4,9 @@
 
 use std::{io, path::PathBuf};
 
-use futures::StreamExt;
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use stone::read::Payload;
+use futures::{stream, StreamExt};
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
+use stone::{payload, read::Payload};
 use thiserror::Error;
 use tokio::{
     fs::{self, File},
@@ -16,10 +16,7 @@ use tokio::{
 };
 use url::Url;
 
-use crate::{
-    package::{Id, Meta},
-    request, Installation,
-};
+use crate::{environment, package, request, Installation};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Progress {
@@ -34,18 +31,27 @@ impl Progress {
     }
 }
 
-/// Fetch a package with the provided [`Meta`] and [`Installation`] and return a [`Download`] on success.
+/// Fetch a package with the provided [`package::Meta`] and [`Installation`] and return a [`Download`] on success.
 pub async fn fetch(
-    meta: &Meta,
+    meta: &package::Meta,
     installation: &Installation,
     on_progress: impl Fn(Progress),
 ) -> Result<Download, Error> {
     let url = meta.uri.as_ref().ok_or(Error::MissingUri)?.parse::<Url>()?;
     let hash = meta.hash.as_ref().ok_or(Error::MissingHash)?;
 
-    let mut bytes = request::get(url).await?;
-
     let download_path = download_path(installation, hash).await?;
+
+    if fs::try_exists(&download_path).await? {
+        return Ok(Download {
+            id: meta.id().into(),
+            path: download_path,
+            installation: installation.clone(),
+            was_cached: true,
+        });
+    }
+
+    let mut bytes = request::get(url).await?;
     let mut out = File::create(&download_path).await?;
 
     let mut total = 0;
@@ -69,20 +75,21 @@ pub async fn fetch(
         id: meta.id().into(),
         path: download_path,
         installation: installation.clone(),
+        was_cached: false,
     })
 }
 
 /// A package that has been downloaded to the installation
 pub struct Download {
-    id: Id,
+    id: package::Id,
     path: PathBuf,
     installation: Installation,
+    pub was_cached: bool,
 }
 
 /// Upon fetch completion we have this unpacked asset bound with
 /// an open reader
 pub struct UnpackedAsset {
-    id: Id,
     pub payloads: Vec<Payload>,
 }
 
@@ -145,6 +152,17 @@ impl Download {
             let mut reader = stone::read(File::open(&self.path)?)?;
 
             let payloads = reader.payloads()?.collect::<Result<Vec<_>, _>>()?;
+            let indicies = payloads
+                .iter()
+                .filter_map(Payload::index)
+                .flatten()
+                .collect::<Vec<_>>();
+
+            // If download was cached & all assets exist, we can skip unpacking
+            if self.was_cached && rt.block_on(check_assets_exist(&indicies, &self.installation)) {
+                return Ok(UnpackedAsset { payloads });
+            }
+
             let content = payloads
                 .iter()
                 .find_map(Payload::content)
@@ -161,10 +179,8 @@ impl Download {
                 &mut ProgressWriter::new(&content_file, content.plain_size, &on_progress),
             )?;
 
-            payloads
-                .par_iter()
-                .filter_map(Payload::index)
-                .flatten()
+            indicies
+                .into_par_iter()
                 .map(|idx| {
                     // Split file reader over index range
                     let mut file = &content_file;
@@ -186,14 +202,26 @@ impl Download {
 
             remove_file(&content_path)?;
 
-            Ok(UnpackedAsset {
-                id: self.id.clone(),
-                payloads,
-            })
+            Ok(UnpackedAsset { payloads })
         })
         .await
         .expect("join handle")
     }
+}
+
+/// Returns true if all assets already exist in the installation
+async fn check_assets_exist(indicies: &[&payload::Index], installation: &Installation) -> bool {
+    stream::iter(indicies)
+        .map(|index| async move {
+            if let Ok(path) = asset_path(installation, &format!("{:02x}", index.digest)).await {
+                return fs::try_exists(path).await.unwrap_or_default();
+            }
+
+            false
+        })
+        .buffer_unordered(environment::MAX_DISK_CONCURRENCY)
+        .all(|exists| async move { exists })
+        .await
 }
 
 pub async fn download_path(installation: &Installation, hash: &str) -> Result<PathBuf, Error> {

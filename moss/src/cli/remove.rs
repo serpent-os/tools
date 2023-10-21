@@ -5,7 +5,7 @@
 use std::{collections::HashSet, path::Path};
 
 use clap::{arg, ArgMatches, Command};
-use futures::{future::join_all, StreamExt};
+use futures::StreamExt;
 use itertools::{Either, Itertools};
 use moss::{
     client::{self, Client},
@@ -13,7 +13,6 @@ use moss::{
     registry::transaction,
 };
 use thiserror::Error;
-use tokio::fs;
 use tui::{pretty::print_to_columns, Stylize};
 
 use super::name_to_provider;
@@ -42,8 +41,12 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
         .list_installed(Flags::NONE)
         .collect::<Vec<_>>()
         .await;
-    let installed_ids = installed.iter().map(|p| &p.id).collect::<HashSet<_>>();
+    let installed_ids = installed
+        .iter()
+        .map(|p| p.id.clone())
+        .collect::<HashSet<_>>();
 
+    // Separate packages between installed / not installed (or invalid)
     let (for_removal, not_installed): (Vec<_>, Vec<_>) = pkgs.iter().partition_map(|provider| {
         installed
             .iter()
@@ -52,6 +55,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
             .unwrap_or(Either::Right(provider.clone()))
     });
 
+    // Bail if there's packages not installed
     // TODO: Add error hookups
     if !not_installed.is_empty() {
         println!("Missing packages in lookup: {:?}", not_installed);
@@ -61,34 +65,27 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     // Add all installed packages to transaction
     let mut transaction = client
         .registry
-        .transaction_with_installed(installed_ids.iter().cloned().cloned().collect())
+        .transaction_with_installed(installed_ids.clone().into_iter().collect())
         .await?;
 
     // Remove all pkgs for removal
     transaction.remove(for_removal).await?;
 
     // Finalized tx has all reverse deps removed
-    let finalized = transaction.finalize().collect::<HashSet<_>>();
+    let finalized = transaction.finalize().cloned().collect::<HashSet<_>>();
 
-    // Difference resolves to all removed pkgs
-    let removed = installed_ids.difference(&finalized);
-
-    // Get metadata for all removed pkgs & dedupe
-    let mut results = join_all(
-        removed
-            .into_iter()
-            .map(|p| async { client.registry.by_id(p).boxed().next().await.unwrap() }),
-    )
-    .await;
-    results.sort_by_key(|p| p.meta.name.to_string());
-    results.dedup_by_key(|p| p.meta.name.to_string());
+    // Resolve all removed packages, where removed is (installed - finalized)
+    let removed = client
+        .resolve_packages(installed_ids.difference(&finalized))
+        .await?;
 
     println!("The following package(s) will be removed:");
     println!();
-    print_to_columns(&results);
+    print_to_columns(&removed);
     println!();
 
-    for package in results {
+    // Print each package to stdout
+    for package in removed {
         println!(
             "{} {}",
             "Removed".red(),
@@ -96,26 +93,12 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
         );
     }
 
-    let state = client
-        .state_db
-        .add(
-            &finalized.into_iter().cloned().collect::<Vec<_>>(),
-            None,
-            None,
-        )
+    // Record state
+    client
+        .record_state(&finalized.into_iter().collect::<Vec<_>>(), "Remove")
         .await?;
 
-    // Record state
-    // TODO: Refactor. This will happen w/ promoting state from staging
-    // but for now we are adding this to test list installed, etc
-    {
-        let usr = client.installation.root.join("usr");
-        fs::create_dir_all(&usr).await?;
-        let state_path = usr.join(".stateID");
-        fs::write(state_path, state.id.to_string()).await?;
-    }
-
-    Ok(())
+    Err(Error::NotImplemented)
 }
 
 #[derive(Debug, Error)]

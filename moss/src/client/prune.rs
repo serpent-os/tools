@@ -14,9 +14,7 @@ use thiserror::Error;
 use tokio::{fs, task};
 use tui::pretty::print_to_columns;
 
-use crate::{db, package, state, Installation};
-
-const CONCURRENT_REMOVALS: usize = 16;
+use crate::{client::cache, db, environment, package, state, Installation, State};
 
 /// The prune strategy for removing old states
 #[derive(Debug, Clone, Copy)]
@@ -137,16 +135,14 @@ pub async fn prune(
     println!();
 
     // Prune these states / packages from all dbs
-    {
-        // Remove db states
-        state_db
-            .batch_remove(removals.iter().map(|state| &state.id))
-            .await?;
-        // Remove db metadata
-        install_db.batch_remove(&package_removals).await?;
-        // Remove db layouts
-        layout_db.batch_remove(&package_removals).await?;
-    }
+    prune_databases(
+        &removals,
+        &package_removals,
+        state_db,
+        install_db,
+        layout_db,
+    )
+    .await?;
 
     // Remove orphaned downloads
     remove_orphaned_files(
@@ -156,7 +152,7 @@ pub async fn prune(
         install_db.file_hashes().await?,
         // path builder using hash
         |hash| async move {
-            package::fetch::download_path(installation, &hash)
+            cache::download_path(installation, &hash)
                 .map(Result::ok)
                 .await
         },
@@ -170,13 +166,37 @@ pub async fn prune(
         // final set of hashes to compare against
         layout_db.file_hashes().await?,
         // path builder using hash
-        |hash| async move {
-            package::fetch::asset_path(installation, &hash)
-                .map(Result::ok)
-                .await
-        },
+        |hash| async move { cache::asset_path(installation, &hash).map(Result::ok).await },
     )
     .await?;
+
+    Ok(())
+}
+
+/// Removes the provided states & packages from the databases
+async fn prune_databases(
+    states: &[State],
+    packages: &[package::Id],
+    state_db: &db::state::Database,
+    install_db: &db::meta::Database,
+    layout_db: &db::layout::Database,
+) -> Result<(), Error> {
+    for chunk in &states
+        .iter()
+        .map(|state| &state.id)
+        .chunks(environment::DB_BATCH_SIZE)
+    {
+        // Remove db states
+        state_db.batch_remove(chunk).await?;
+    }
+    for chunk in &packages.iter().chunks(environment::DB_BATCH_SIZE) {
+        // Remove db metadata
+        install_db.batch_remove(chunk).await?;
+    }
+    for chunk in &packages.iter().chunks(environment::DB_BATCH_SIZE) {
+        // Remove db layouts
+        layout_db.batch_remove(chunk).await?;
+    }
 
     Ok(())
 }
@@ -216,7 +236,7 @@ where
             Ok(()) as Result<(), Error>
         })
         // Remove w/ concurrency!
-        .buffer_unordered(CONCURRENT_REMOVALS)
+        .buffer_unordered(environment::MAX_DISK_CONCURRENCY)
         .try_collect::<()>()
         .await?;
 
