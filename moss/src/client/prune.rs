@@ -5,13 +5,13 @@
 use std::{
     collections::{HashMap, HashSet},
     io,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
-use futures::{stream, StreamExt, TryStreamExt};
+use futures::{stream, Future, FutureExt, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use thiserror::Error;
-use tokio::fs;
+use tokio::{fs, task};
 use tui::pretty::print_to_columns;
 
 use crate::{db, package, state, Installation};
@@ -65,6 +65,7 @@ pub async fn prune(
             // Calculate how many states over the limit we are
             let num_to_remove = state_ids.len().saturating_sub(keep as usize);
 
+            // Sort ascending and assign first `num_to_remove` as `Status::Remove`
             state_ids
                 .into_iter()
                 .sorted_by_key(|(_, created)| *created)
@@ -80,11 +81,13 @@ pub async fn prune(
         }
         Strategy::Remove(remove) => state_ids
             .iter()
+            // Remove if this id actually exists
             .find_map(|(id, _)| (*id == remove).then_some(Status::Remove(remove)))
             .into_iter()
             .collect(),
     };
 
+    // Bail if there's no states to remove
     if !states_by_status.iter().any(Status::is_removal) {
         // TODO: Print no states to be removed
         return Ok(());
@@ -92,9 +95,10 @@ pub async fn prune(
 
     // Keep track of how many active states are using a package
     let mut packages_counts = HashMap::<package::Id, usize>::new();
+    // Collects the states we will remove
     let mut removals = vec![];
 
-    // Add each package and get net count
+    // Get net refcount of each package and collect removal states
     for status in states_by_status {
         // Get metadata
         let state = state_db.get(status.id()).await?;
@@ -113,6 +117,15 @@ pub async fn prune(
         }
     }
 
+    // Get all packages which were decremented to 0,
+    // these are the packages we want to remove since
+    // no more states reference them
+    let package_removals = packages_counts
+        .into_iter()
+        .filter_map(|(pkg, count)| (count == 0).then_some(pkg))
+        .collect::<Vec<_>>();
+
+    // Print out the states to be removed to the user
     println!("The following state(s) will be removed:");
     println!();
     print_to_columns(
@@ -123,71 +136,86 @@ pub async fn prune(
     );
     println!();
 
-    // Get all packages which were decremented to 0
-    let package_removals = packages_counts
-        .into_iter()
-        .filter_map(|(pkg, count)| (count == 0).then_some(pkg))
-        .collect::<Vec<_>>();
+    // Prune these states / packages from all dbs
+    {
+        // Remove db states
+        state_db
+            .batch_remove(removals.iter().map(|state| &state.id))
+            .await?;
+        // Remove db metadata
+        install_db.batch_remove(&package_removals).await?;
+        // Remove db layouts
+        layout_db.batch_remove(&package_removals).await?;
+    }
 
-    let download_hashes = stream::iter(package_removals.iter())
-        .then(|id| install_db.get(id))
-        .try_collect::<Vec<_>>()
-        .await?
-        .into_iter()
-        .filter_map(|meta| meta.hash)
-        .collect::<HashSet<_>>();
+    // Remove orphaned downloads
+    remove_orphaned_files(
+        // root
+        installation.cache_path("downloads").join("v1"),
+        // final set of hashes to compare against
+        install_db.file_hashes().await?,
+        // path builder using hash
+        |hash| async move {
+            package::fetch::download_path(installation, &hash)
+                .map(Result::ok)
+                .await
+        },
+    )
+    .await?;
 
-    // Remove states
-    state_db
-        .batch_remove(removals.iter().map(|state| &state.id))
-        .await?;
+    // Remove orphaned assets
+    remove_orphaned_files(
+        // root
+        installation.assets_path("v2"),
+        // final set of hashes to compare against
+        layout_db.file_hashes().await?,
+        // path builder using hash
+        |hash| async move {
+            package::fetch::asset_path(installation, &hash)
+                .map(Result::ok)
+                .await
+        },
+    )
+    .await?;
 
-    // Remove metadata
-    install_db.batch_remove(&package_removals).await?;
+    Ok(())
+}
 
-    // Remove layouts and compute change in file hashes
-    let pre_hashes = layout_db.file_hashes().await?;
-    layout_db.batch_remove(&package_removals).await?;
-    let post_hashes = layout_db.file_hashes().await?;
-    let asset_hashes = pre_hashes.difference(&post_hashes);
+/// Removes all files under `root` that no longer exist in the provided `final_hashes` set
+async fn remove_orphaned_files<F>(
+    root: PathBuf,
+    final_hashes: HashSet<String>,
+    compute_path: impl Fn(String) -> F,
+) -> Result<(), Error>
+where
+    F: Future<Output = Option<PathBuf>>,
+{
+    // Compute hashes to remove by (installed - final)
+    let installed_hashes = enumerate_file_hashes(&root).await?;
+    let hashes_to_remove = installed_hashes.difference(&final_hashes);
 
-    // Remove cached assets
-    stream::iter(asset_hashes)
+    // Remove each and it's parent dir if empty
+    stream::iter(hashes_to_remove)
         .map(|hash| async {
-            let hash = format!("{:02x}", *hash);
-            let Ok(asset) = package::fetch::asset_path(installation, &hash).await else {
+            // Compute path to file using hash
+            let Some(file) = compute_path(hash.clone()).await else {
                 return Ok(());
             };
-            if fs::try_exists(&asset).await? {
-                fs::remove_file(&asset).await?;
+
+            // Remove if it exists
+            if fs::try_exists(&file).await? {
+                fs::remove_file(&file).await?;
             }
 
-            if let Some(parent) = asset.parent() {
-                remove_empty_dirs(parent, &installation.assets_path("v2")).await?;
+            // Try to remove leading parent dirs if they're
+            // now empty
+            if let Some(parent) = file.parent() {
+                let _ = remove_empty_dirs(parent, &root).await;
             }
 
             Ok(()) as Result<(), Error>
         })
-        .buffer_unordered(CONCURRENT_REMOVALS)
-        .try_collect::<()>()
-        .await?;
-
-    // Remove cached downloads
-    stream::iter(&download_hashes)
-        .map(|hash| async {
-            let Ok(download) = package::fetch::download_path(installation, hash).await else {
-                return Ok(());
-            };
-            if fs::try_exists(&download).await? {
-                fs::remove_file(&download).await?;
-            }
-
-            if let Some(parent) = download.parent() {
-                remove_empty_dirs(parent, &installation.cache_path("downloads").join("v1")).await?;
-            }
-
-            Ok(()) as Result<(), Error>
-        })
+        // Remove w/ concurrency!
         .buffer_unordered(CONCURRENT_REMOVALS)
         .try_collect::<()>()
         .await?;
@@ -195,9 +223,64 @@ pub async fn prune(
     Ok(())
 }
 
+/// Returns all nested files under `root` and parses the file name as a hash
+async fn enumerate_file_hashes(root: impl Into<PathBuf>) -> Result<HashSet<String>, io::Error> {
+    let files = enumerate_files(root).await?;
+
+    let path_to_hash = |path: PathBuf| {
+        path.file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+
+    Ok(files.into_iter().map(path_to_hash).collect())
+}
+
+/// Returns all nested files under `root`
+async fn enumerate_files(root: impl Into<PathBuf>) -> Result<Vec<PathBuf>, io::Error> {
+    use std::fs;
+
+    use rayon::prelude::*;
+
+    fn recurse(dir: impl AsRef<Path>) -> io::Result<Vec<PathBuf>> {
+        let mut dirs = vec![];
+        let mut files = vec![];
+
+        let contents = fs::read_dir(dir)?;
+
+        for entry in contents {
+            let entry = entry?;
+            let file_type = entry.file_type()?;
+            let path = entry.path();
+
+            if file_type.is_dir() {
+                dirs.push(path);
+            } else if file_type.is_file() {
+                files.push(path);
+            }
+        }
+
+        let nested_files = dirs
+            .par_iter()
+            .map(recurse)
+            .try_reduce(Vec::new, |acc, files| {
+                Ok(acc.into_iter().chain(files).collect())
+            })?;
+
+        Ok(files.into_iter().chain(nested_files).collect())
+    }
+
+    let root = root.into();
+
+    task::spawn_blocking(|| recurse(root))
+        .await
+        .expect("join handle")
+}
+
 /// Remove all empty folders from `starting` and moving up until `root`
 ///
-/// `root` must be a prefix / ancestory of `starting`
+/// `root` must be a prefix / ancestor of `starting`
 async fn remove_empty_dirs(starting: &Path, root: &Path) -> Result<(), io::Error> {
     if !starting.starts_with(root) || !starting.is_dir() || !root.is_dir() {
         return Ok(());

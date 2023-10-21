@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::collections::HashSet;
 use std::path::Path;
 
 use sqlx::{sqlite::SqliteConnectOptions, Acquire, Pool, Sqlite};
@@ -302,6 +303,20 @@ impl Database {
             hash: entry.hash,
             download_size: entry.download_size.map(|i| i as u64),
         })
+    }
+
+    pub async fn file_hashes(&self) -> Result<HashSet<String>, Error> {
+        let hashes = sqlx::query_as::<_, (String,)>(
+            "
+            SELECT DISTINCT hash
+            FROM meta
+            WHERE hash IS NOT NULL;
+            ",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(hashes.into_iter().map(|(hash,)| hash).collect())
     }
 
     pub async fn add(&self, id: package::Id, meta: Meta) -> Result<(), Error> {
