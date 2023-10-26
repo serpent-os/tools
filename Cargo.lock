@@ -1189,6 +1189,7 @@ dependencies = [
  "tokio-util",
  "tui",
  "url",
+ "vfs",
 ]
 
 [[package]]

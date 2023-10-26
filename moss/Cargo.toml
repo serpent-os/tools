@@ -7,6 +7,7 @@ edition.workspace = true
 dag = { path = "../dag" }
 stone = { version = "0.1.0", path = "../stone" }
 tui = { path = "../tui" }
+vfs = { path = "../vfs" }
 
 bitflags.workspace = true
 bytes.workspace = true
