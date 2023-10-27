@@ -94,6 +94,8 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     // Perfect, record state.
     client.record_state(&new_state_pkgs, "Install").await?;
 
+    client.blit_root(&new_state_pkgs).await?;
+
     Err(Error::NotImplemented)
 }
 
