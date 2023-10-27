@@ -6,7 +6,7 @@ use std::collections::HashSet;
 
 use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::{Pool, Sqlite};
-use stone::payload;
+use stone::payload::{self};
 use thiserror::Error;
 
 use crate::package;
@@ -180,6 +180,50 @@ impl Database {
         query.build().execute(&self.pool).await?;
 
         Ok(())
+    }
+
+    /// Retrieve all entries for a given package by ID
+    pub async fn query(&self, package: &package::Id) -> Result<Vec<payload::Layout>, Error> {
+        let query = sqlx::query_as::<_, encoding::Layout>(
+            "SELECT package_id,
+                   uid,
+                   gid,
+                   mode,
+                   tag,
+                   entry_type,
+                   entry_value1,
+                   entry_value2
+            FROM layout WHERE package_id = ?",
+        )
+        .bind(package.encode());
+
+        let layouts = query.fetch_all(&self.pool).await?;
+
+        Ok(layouts
+            .into_iter()
+            .filter_map(|layout| {
+                let encoding::Layout {
+                    package_id,
+                    uid,
+                    gid,
+                    mode,
+                    tag,
+                    entry_type,
+                    entry_value1,
+                    entry_value2,
+                } = layout;
+
+                let entry = encoding::decode_entry(entry_type, entry_value1, entry_value2)?;
+
+                Some(payload::Layout {
+                    uid,
+                    gid,
+                    mode,
+                    tag,
+                    entry,
+                })
+            })
+            .collect())
     }
 }
 
