@@ -72,7 +72,7 @@ impl<T: BlitFile> TreeBuilder<T> {
         self.explicit.push(item);
     }
 
-    /// Create all implicit entries.
+    /// Sort incoming entries and remove duplicates
     pub fn bake(&mut self) {
         self.explicit.sort_by(sorted_paths);
 
