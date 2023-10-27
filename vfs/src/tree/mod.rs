@@ -33,7 +33,7 @@ struct Node<T: BlitFile> {
 
 /// Simple generic interface for blittable files while retaining details
 /// All implementations should return a directory typed blitfile for a PathBuf
-pub trait BlitFile: Clone + Sized + Default + Debug + Ord + From<PathBuf> {
+pub trait BlitFile: Clone + Sized + Debug + From<PathBuf> {
     fn kind(&self) -> Kind;
     fn path(&self) -> PathBuf;
 
@@ -42,7 +42,7 @@ pub trait BlitFile: Clone + Sized + Default + Debug + Ord + From<PathBuf> {
 }
 
 /// Actual tree implementation, encapsulating indextree
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct Tree<T: BlitFile> {
     arena: Arena<T>,
     map: HashMap<PathBuf, NodeId>,
@@ -51,7 +51,10 @@ pub struct Tree<T: BlitFile> {
 impl<T: BlitFile> Tree<T> {
     /// Construct a new Tree
     fn new() -> Self {
-        Self::default()
+        Tree {
+            arena: Arena::new(),
+            map: HashMap::new(),
+        }
     }
 
     /// Generate a new node, store the path mapping for it

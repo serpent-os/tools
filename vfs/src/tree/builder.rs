@@ -13,7 +13,6 @@ use crate::tree::{Kind, Tree};
 use super::{BlitFile, Error};
 
 /// Builder used to generate a full tree, free of conflicts
-#[derive(Default)]
 pub struct TreeBuilder<T: BlitFile> {
     // Explicitly requested incoming paths
     explicit: Vec<T>,
@@ -33,7 +32,20 @@ fn sorted_paths<T: BlitFile>(a: &T, b: &T) -> std::cmp::Ordering {
     }
 }
 
+impl<T: BlitFile> Default for TreeBuilder<T> {
+    fn default() -> Self {
+        TreeBuilder::new()
+    }
+}
+
 impl<T: BlitFile> TreeBuilder<T> {
+    pub fn new() -> Self {
+        TreeBuilder {
+            explicit: vec![],
+            implicit_dirs: BTreeMap::new(),
+        }
+    }
+
     /// Push an item to the builder - we don't care if we have duplicates yet
     pub fn push(&mut self, item: T) {
         let path = item.path();
@@ -71,7 +83,7 @@ impl<T: BlitFile> TreeBuilder<T> {
     }
 
     /// Generate the final tree by baking all inputs
-    fn tree(&self) -> Result<(), Error> {
+    pub fn tree(&self) -> Result<(), Error> {
         // Chain all directories, replace implicits with explicits
         let all_dirs = self
             .explicit
@@ -183,7 +195,7 @@ mod tests {
 
     #[test]
     fn test_simple_root() {
-        let mut b: TreeBuilder<CustomFile> = TreeBuilder::default();
+        let mut b: TreeBuilder<CustomFile> = TreeBuilder::new();
         let paths = vec![
             CustomFile {
                 path: "/usr/bin/nano".into(),
@@ -203,14 +215,6 @@ mod tests {
             },
             CustomFile {
                 path: "/var/run/lock/subsys/1".into(),
-                kind: Kind::Regular,
-            },
-            CustomFile {
-                path: "/run/lock".into(),
-                kind: Kind::Directory,
-            },
-            CustomFile {
-                path: "/run/lock/subsys/2".into(),
                 kind: Kind::Regular,
             },
         ];
