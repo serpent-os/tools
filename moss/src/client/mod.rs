@@ -6,10 +6,11 @@ use std::{io, path::PathBuf, time::Duration};
 
 use futures::{future::try_join_all, stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
-use stone::read::Payload;
+use stone::{payload::layout, read::Payload};
 use thiserror::Error;
 use tokio::fs;
 use tui::{MultiProgress, ProgressBar, ProgressStyle, Stylize};
+use vfs::tree::{builder::TreeBuilder, BlitFile};
 
 use self::prune::prune;
 use crate::{
@@ -274,6 +275,87 @@ impl Client {
 
         Ok(())
     }
+
+    /// Blit the packages to a filesystem root
+    /// TODO: Actually yield an iterator that allows dfs mkdirat style use.
+    pub async fn blit_root(&self, packages: &[package::Id]) -> Result<(), Error> {
+        let mut tbuild = TreeBuilder::new();
+        for id in packages {
+            let layouts = self.layout_db.query(id).await?;
+            for layout in layouts {
+                tbuild.push(PendingFile {
+                    id: id.clone(),
+                    layout,
+                });
+            }
+        }
+        tbuild.bake();
+        tbuild.tree()?;
+        Ok(())
+    }
+}
+
+/// A pending file for blitting
+#[derive(Debug, Clone)]
+struct PendingFile {
+    id: package::Id,
+    layout: layout::Layout,
+}
+
+impl BlitFile for PendingFile {
+    /// Match internal kind to minimalist vfs kind
+    fn kind(&self) -> vfs::tree::Kind {
+        match &self.layout.entry {
+            layout::Entry::Symlink(source, _) => vfs::tree::Kind::Symlink(source.clone()),
+            layout::Entry::Directory(_) => vfs::tree::Kind::Directory,
+            _ => vfs::tree::Kind::Regular,
+        }
+    }
+
+    /// Resolve the target path, including the missing `/usr` prefix
+    fn path(&self) -> PathBuf {
+        let result = match &self.layout.entry {
+            layout::Entry::Regular(_, target) => target.clone(),
+            layout::Entry::Symlink(_, target) => target.clone(),
+            layout::Entry::Directory(target) => target.clone(),
+            layout::Entry::CharacterDevice(target) => target.clone(),
+            layout::Entry::BlockDevice(target) => target.clone(),
+            layout::Entry::Fifo(target) => target.clone(),
+            layout::Entry::Socket(target) => target.clone(),
+        };
+        PathBuf::from("/usr").join(result)
+    }
+
+    /// Clone the node to a reparented path, for symlink resolution
+    fn cloned_to(&self, path: PathBuf) -> Self {
+        let mut new = self.clone();
+        let strpath = path.to_string_lossy().to_string();
+        new.layout.entry = match &self.layout.entry {
+            layout::Entry::Regular(source, _) => layout::Entry::Regular(*source, strpath),
+            layout::Entry::Symlink(source, _) => layout::Entry::Symlink(source.clone(), strpath),
+            layout::Entry::Directory(_) => layout::Entry::Directory(strpath),
+            layout::Entry::CharacterDevice(_) => layout::Entry::CharacterDevice(strpath),
+            layout::Entry::BlockDevice(_) => layout::Entry::BlockDevice(strpath),
+            layout::Entry::Fifo(_) => layout::Entry::Fifo(strpath),
+            layout::Entry::Socket(_) => layout::Entry::Socket(strpath),
+        };
+        new
+    }
+}
+
+impl From<PathBuf> for PendingFile {
+    fn from(value: PathBuf) -> Self {
+        PendingFile {
+            id: Default::default(),
+            layout: layout::Layout {
+                uid: 0,
+                gid: 0,
+                mode: 0,
+                tag: 0,
+                entry: layout::Entry::Directory(value.to_string_lossy().to_string()),
+            },
+        }
+    }
 }
 
 async fn build_registry(
@@ -318,4 +400,6 @@ pub enum Error {
     Prune(#[from] prune::Error),
     #[error("io")]
     Io(#[from] io::Error),
+    #[error("filesystem")]
+    Filesystem(#[from] vfs::tree::Error),
 }
