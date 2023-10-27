@@ -7,7 +7,7 @@
 use core::fmt::Debug;
 use std::{collections::HashMap, path::PathBuf, vec};
 
-use indextree::{Arena, NodeId};
+use indextree::{Arena, Descendants, NodeId};
 use thiserror::Error;
 pub mod builder;
 
@@ -151,6 +151,35 @@ impl<T: BlitFile> Tree<T> {
         }
 
         Ok(())
+    }
+
+    /// Iterate using a TreeIterator, starting at the `/` node
+    pub fn iter(&self) -> TreeIterator<'_, T> {
+        TreeIterator {
+            parent: self,
+            enume: self.resolve_node("/").map(|n| n.descendants(&self.arena)),
+        }
+    }
+}
+
+/// Simple DFS iterator for a Tree
+pub struct TreeIterator<'a, T: BlitFile> {
+    parent: &'a Tree<T>,
+    enume: Option<Descendants<'a, T>>,
+}
+
+impl<'a, T: BlitFile> Iterator for TreeIterator<'a, T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match &mut self.enume {
+            Some(enume) => enume
+                .next()
+                .and_then(|i| self.parent.arena.get(i))
+                .map(|n| n.get())
+                .cloned(),
+            None => None,
+        }
     }
 }
 

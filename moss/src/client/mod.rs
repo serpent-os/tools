@@ -290,7 +290,9 @@ impl Client {
             }
         }
         tbuild.bake();
-        tbuild.tree()?;
+        for item in tbuild.tree()?.iter() {
+            eprintln!(" - {:?}", item.path());
+        }
         Ok(())
     }
 }

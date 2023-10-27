@@ -83,7 +83,7 @@ impl<T: BlitFile> TreeBuilder<T> {
     }
 
     /// Generate the final tree by baking all inputs
-    pub fn tree(&self) -> Result<(), Error> {
+    pub fn tree(&self) -> Result<Tree<T>, Error> {
         // Chain all directories, replace implicits with explicits
         let all_dirs = self
             .explicit
@@ -148,9 +148,7 @@ impl<T: BlitFile> TreeBuilder<T> {
         for (source_tree, target_tree) in redirects {
             tree.reparent(source_tree, target_tree)?;
         }
-        tree.print();
-
-        Ok(())
+        Ok(tree)
     }
 }
 
