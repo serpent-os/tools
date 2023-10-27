@@ -11,7 +11,7 @@ pub mod meta;
 pub mod render;
 
 /// Unique ID of a [`Package`]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Id(String);
 
 impl From<String> for Id {
