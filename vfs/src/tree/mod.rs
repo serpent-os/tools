@@ -24,13 +24,6 @@ pub enum Kind {
     Symlink(String),
 }
 
-#[derive(Clone, Default, Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct Node<T: BlitFile> {
-    /// The partial file name (usr, etc)
-    name: String,
-    file: T,
-}
-
 /// Simple generic interface for blittable files while retaining details
 /// All implementations should return a directory typed blitfile for a PathBuf
 pub trait BlitFile: Clone + Sized + Debug + From<PathBuf> {
