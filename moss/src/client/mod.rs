@@ -2,15 +2,21 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{io, path::PathBuf, time::Duration};
+use std::{io, os::fd::RawFd, path::PathBuf, time::Duration};
 
 use futures::{future::try_join_all, stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
+use nix::{
+    errno::Errno,
+    fcntl::{self, OFlag},
+    sys::stat::{fchmodat, mkdirat, Mode},
+    unistd::{linkat, mkdir, symlinkat},
+};
 use stone::{payload::layout, read::Payload};
 use thiserror::Error;
 use tokio::fs;
 use tui::{MultiProgress, ProgressBar, ProgressStyle, Stylize};
-use vfs::tree::{builder::TreeBuilder, BlitFile};
+use vfs::tree::{builder::TreeBuilder, BlitFile, Element};
 
 use self::prune::prune;
 use crate::{
@@ -290,9 +296,116 @@ impl Client {
             }
         }
         tbuild.bake();
-        for item in tbuild.tree()?.iter() {
-            eprintln!(" - {:?}", item.path());
+
+        let cache_dir = self.installation.assets_path("v2");
+        let cache_fd = fcntl::open(
+            &cache_dir,
+            OFlag::O_DIRECTORY | OFlag::O_RDONLY,
+            Mode::empty(),
+        )?;
+
+        if let Some(root) = tbuild.tree()?.structured() {
+            let _ = mkdir(
+                &self.installation.staging_dir(),
+                Mode::S_IRWXU | Mode::S_IRGRP | Mode::S_IXOTH,
+            );
+            let root_dir = fcntl::open(
+                &self.installation.staging_dir(),
+                OFlag::O_DIRECTORY | OFlag::O_RDONLY,
+                Mode::empty(),
+            )?;
+
+            if let Element::Directory(_, _, children) = root {
+                for child in children {
+                    self.blit_element(root_dir, cache_fd, child)?;
+                }
+            }
         }
+        Ok(())
+    }
+
+    /// blit an element to the disk.
+    fn blit_element(
+        &self,
+        parent: RawFd,
+        cache: RawFd,
+        element: Element<PendingFile>,
+    ) -> Result<(), Error> {
+        match element {
+            Element::Directory(name, item, children) => {
+                // Construct within the parent
+                self.blit_element_item(parent, cache, &name, item)?;
+
+                // open the new dir
+                let newdir = fcntl::openat(
+                    parent,
+                    name.as_str(),
+                    OFlag::O_RDONLY | OFlag::O_DIRECTORY,
+                    Mode::empty(),
+                )?;
+                for child in children.into_iter() {
+                    self.blit_element(newdir, cache, child)?;
+                }
+                Ok(())
+            }
+            Element::Child(name, item) => {
+                self.blit_element_item(parent, cache, &name, item)?;
+                Ok(())
+            }
+        }
+    }
+
+    /// Process the raw layout entry.
+    fn blit_element_item(
+        &self,
+        parent: RawFd,
+        cache: RawFd,
+        subpath: &str,
+        item: PendingFile,
+    ) -> Result<(), Error> {
+        match item.layout.entry {
+            layout::Entry::Regular(id, _) => {
+                let hash = format!("{:02x}", id);
+                let directory = if hash.len() >= 10 {
+                    PathBuf::from(&hash[..2])
+                        .join(&hash[2..4])
+                        .join(&hash[4..6])
+                } else {
+                    "".into()
+                };
+
+                // Link relative from cache to target
+                let fp = directory.join(hash);
+                linkat(
+                    Some(cache),
+                    fp.to_str().unwrap(),
+                    Some(parent),
+                    subpath,
+                    nix::unistd::LinkatFlags::NoSymlinkFollow,
+                )?;
+
+                // Fix permissions
+                fchmodat(
+                    Some(parent),
+                    subpath,
+                    Mode::from_bits_truncate(item.layout.mode),
+                    nix::sys::stat::FchmodatFlags::NoFollowSymlink,
+                )?;
+            }
+            layout::Entry::Symlink(source, _) => {
+                symlinkat(source.as_str(), Some(parent), subpath)?;
+            }
+            layout::Entry::Directory(_) => {
+                mkdirat(parent, subpath, Mode::from_bits_truncate(item.layout.mode))?;
+            }
+
+            // unimplemented
+            layout::Entry::CharacterDevice(_) => todo!(),
+            layout::Entry::BlockDevice(_) => todo!(),
+            layout::Entry::Fifo(_) => todo!(),
+            layout::Entry::Socket(_) => todo!(),
+        };
+
         Ok(())
     }
 }
@@ -352,7 +465,7 @@ impl From<PathBuf> for PendingFile {
             layout: layout::Layout {
                 uid: 0,
                 gid: 0,
-                mode: 0,
+                mode: (Mode::S_IRWXU | Mode::S_IRGRP | Mode::S_IXOTH).bits(),
                 tag: 0,
                 entry: layout::Entry::Directory(value.to_string_lossy().to_string()),
             },
@@ -404,4 +517,6 @@ pub enum Error {
     Io(#[from] io::Error),
     #[error("filesystem")]
     Filesystem(#[from] vfs::tree::Error),
+    #[error("blit")]
+    Blit(#[from] Errno),
 }
