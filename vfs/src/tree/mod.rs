@@ -5,7 +5,7 @@
 //! Virtual filesystem tree (optimise layout inserts)
 
 use core::fmt::Debug;
-use std::{collections::HashMap, path::PathBuf, vec};
+use std::{collections::HashMap, ffi::OsStr, path::PathBuf, vec};
 
 use indextree::{Arena, Descendants, NodeId};
 use thiserror::Error;
@@ -153,6 +153,39 @@ impl<T: BlitFile> Tree<T> {
             enume: self.resolve_node("/").map(|n| n.descendants(&self.arena)),
         }
     }
+
+    /// Return structured view beginning at `/`
+    pub fn structured(&self) -> Option<Element<T>> {
+        self.resolve_node("/")
+            .map(|root| self.structured_children(root))
+    }
+
+    /// For the given node, recursively convert to Element::Directory of Child
+    fn structured_children(&self, start: &NodeId) -> Element<T> {
+        let node = &self.arena[*start];
+        let item = node.get();
+        let partial = item
+            .path()
+            .file_name()
+            .unwrap_or(OsStr::new(""))
+            .to_string_lossy()
+            .to_string();
+        match item.kind() {
+            Kind::Directory => {
+                let children = start
+                    .children(&self.arena)
+                    .map(|c| self.structured_children(&c))
+                    .collect::<Vec<_>>();
+                Element::Directory(partial, item.clone(), children)
+            }
+            _ => Element::Child(partial, item.clone()),
+        }
+    }
+}
+
+pub enum Element<T: BlitFile> {
+    Directory(String, T, Vec<Element<T>>),
+    Child(String, T),
 }
 
 /// Simple DFS iterator for a Tree
