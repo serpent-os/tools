@@ -134,11 +134,16 @@ impl Client {
 
     /// Create a new recorded state from the provided packages
     /// provided packages and write that state ID to the installation
-    pub async fn record_state(
+    /// Then blit the filesystem, promote it, finally archiving the active ID
+    pub async fn apply_state(
         &self,
         packages: &[package::Id],
         summary: impl ToString,
     ) -> Result<State, Error> {
+        let old_state = self.installation.active_state;
+
+        self.blit_root(packages).await?;
+
         // Add to db
         let state = self
             .state_db
@@ -153,11 +158,16 @@ impl Client {
             fs::write(state_path, state.id.to_string()).await?;
         }
 
+        self.promote_staging().await?;
+        if let Some(id) = old_state {
+            self.archive_state(id).await?;
+        }
+
         Ok(state)
     }
 
     /// Activate the given state
-    pub async fn promote_staging(&self) -> Result<(), Error> {
+    async fn promote_staging(&self) -> Result<(), Error> {
         let usr_target = self.installation.root.join("usr");
         let usr_source = self.installation.staging_path("usr");
 
@@ -179,7 +189,7 @@ impl Client {
     }
 
     /// Archive old states into their respective tree
-    pub async fn archive_state(&self, id: state::Id) -> Result<(), Error> {
+    async fn archive_state(&self, id: state::Id) -> Result<(), Error> {
         // After promotion, the old active /usr is now in staging/usr
         let usr_target = self.installation.root_path(id.to_string()).join("usr");
         let usr_source = self.installation.staging_path("usr");
@@ -321,7 +331,7 @@ impl Client {
 
     /// Blit the packages to a filesystem root
     /// TODO: Actually yield an iterator that allows dfs mkdirat style use.
-    pub async fn blit_root(&self, packages: &[package::Id]) -> Result<(), Error> {
+    async fn blit_root(&self, packages: &[package::Id]) -> Result<(), Error> {
         let mut tbuild = TreeBuilder::new();
         for id in packages {
             let layouts = self.layout_db.query(id).await?;

@@ -93,12 +93,12 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
         );
     }
 
-    // Record state
+    // Apply state
     client
-        .record_state(&finalized.into_iter().collect::<Vec<_>>(), "Remove")
+        .apply_state(&finalized.into_iter().collect::<Vec<_>>(), "Remove")
         .await?;
 
-    Err(Error::NotImplemented)
+    Ok(())
 }
 
 #[derive(Debug, Error)]

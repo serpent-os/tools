@@ -92,16 +92,8 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
             .collect::<Vec<_>>()
     };
 
-    // Perfect, blit root + record state.
-    client.blit_root(&new_state_pkgs).await?;
-    client.record_state(&new_state_pkgs, "Install").await?;
-
-    // Finally, promote staging to live disk
-    client.promote_staging().await?;
-
-    if let Some(id) = active_state {
-        client.archive_state(id).await?;
-    }
+    // Perfect, apply state.
+    client.apply_state(&new_state_pkgs, "Install").await?;
 
     Ok(())
 }
