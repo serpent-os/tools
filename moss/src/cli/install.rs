@@ -36,6 +36,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
 
     // Grab a client for the root
     let client = Client::new_for_root(root).await?;
+    let active_state = client.installation.active_state;
 
     // Resolve input packages
     let input = resolve_input(pkgs, &client).await?;
@@ -80,7 +81,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
 
     // Calculate the new state of packages (old_state + missing)
     let new_state_pkgs = {
-        let previous_state_pkgs = match client.installation.active_state {
+        let previous_state_pkgs = match active_state {
             Some(id) => client.state_db.get(&id).await?.packages,
             None => vec![],
         };
@@ -91,12 +92,18 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
             .collect::<Vec<_>>()
     };
 
-    // Perfect, record state.
+    // Perfect, blit root + record state.
+    client.blit_root(&new_state_pkgs).await?;
     client.record_state(&new_state_pkgs, "Install").await?;
 
-    client.blit_root(&new_state_pkgs).await?;
+    // Finally, promote staging to live disk
+    client.promote_staging().await?;
 
-    Err(Error::NotImplemented)
+    if let Some(id) = active_state {
+        client.archive_state(id).await?;
+    }
+
+    Ok(())
 }
 
 /// Resolves the pacakge arguments as valid input packages. Returns an error

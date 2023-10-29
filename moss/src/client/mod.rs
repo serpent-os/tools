@@ -8,13 +8,13 @@ use futures::{future::try_join_all, stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use nix::{
     errno::Errno,
-    fcntl::{self, OFlag},
+    fcntl::{self, renameat2, OFlag, RenameFlags},
     sys::stat::{fchmodat, mkdirat, Mode},
     unistd::{linkat, mkdir, symlinkat},
 };
 use stone::{payload::layout, read::Payload};
 use thiserror::Error;
-use tokio::fs;
+use tokio::fs::{self, create_dir_all, remove_dir_all, rename};
 use tui::{MultiProgress, ProgressBar, ProgressStyle, Stylize};
 use vfs::tree::{builder::TreeBuilder, BlitFile, Element};
 
@@ -22,7 +22,7 @@ use self::prune::prune;
 use crate::{
     db, environment, package,
     registry::plugin::{self, Plugin},
-    repository, Installation, Package, Registry, State,
+    repository, state, Installation, Package, Registry, State,
 };
 
 pub mod cache;
@@ -147,13 +147,50 @@ impl Client {
 
         // Write state id
         {
-            let usr = self.installation.root.join("usr");
+            let usr = self.installation.staging_path("usr");
             fs::create_dir_all(&usr).await?;
             let state_path = usr.join(".stateID");
             fs::write(state_path, state.id.to_string()).await?;
         }
 
         Ok(state)
+    }
+
+    /// Activate the given state
+    pub async fn promote_staging(&self) -> Result<(), Error> {
+        let usr_target = self.installation.root.join("usr");
+        let usr_source = self.installation.staging_path("usr");
+
+        // Create the target tree
+        if !usr_target.try_exists()? {
+            create_dir_all(&usr_target).await?;
+        }
+
+        // Now swap staging with live
+        renameat2(
+            None,
+            &usr_source,
+            None,
+            &usr_target,
+            RenameFlags::RENAME_EXCHANGE,
+        )?;
+
+        Ok(())
+    }
+
+    /// Archive old states into their respective tree
+    pub async fn archive_state(&self, id: state::Id) -> Result<(), Error> {
+        // After promotion, the old active /usr is now in staging/usr
+        let usr_target = self.installation.root_path(id.to_string()).join("usr");
+        let usr_source = self.installation.staging_path("usr");
+        if let Some(parent) = usr_target.parent() {
+            if !parent.exists() {
+                create_dir_all(parent).await?;
+            }
+        }
+        // hot swap the staging/usr into the root/$id/usr
+        rename(&usr_source, &usr_target).await?;
+        Ok(())
     }
 
     /// Download & unpack the provided packages. Packages already cached will be validated & skipped.
@@ -303,6 +340,9 @@ impl Client {
             OFlag::O_DIRECTORY | OFlag::O_RDONLY,
             Mode::empty(),
         )?;
+
+        // undirt.
+        remove_dir_all(&self.installation.staging_dir()).await?;
 
         if let Some(root) = tbuild.tree()?.structured() {
             let _ = mkdir(
