@@ -23,10 +23,10 @@ Progress:
  - [ ] Search support
  - [x] Transactions
  - [x] Installation support
- - [ ] Removal support
+ - [x] Removal support
  - [ ] Upgrade support
  - [ ] Trigger integration (usysconf-rs)
- - [ ] GC / cleanups of latent states
+ - [x] GC / cleanups of latent states
  - [ ] Features (previously: Subscriptions)
 
 ## Test libstone
