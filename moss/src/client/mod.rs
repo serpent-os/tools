@@ -14,7 +14,7 @@ use nix::{
 };
 use stone::{payload::layout, read::Payload};
 use thiserror::Error;
-use tokio::fs::{self, create_dir_all, remove_dir_all, rename};
+use tokio::fs::{self, create_dir_all, remove_dir_all, remove_file, rename, symlink};
 use tui::{MultiProgress, ProgressBar, ProgressStyle, Stylize};
 use vfs::tree::{builder::TreeBuilder, BlitFile, Element};
 
@@ -163,6 +163,8 @@ impl Client {
             self.archive_state(id).await?;
         }
 
+        self.update_root_layout().await?;
+
         Ok(state)
     }
 
@@ -200,6 +202,37 @@ impl Client {
         }
         // hot swap the staging/usr into the root/$id/usr
         rename(&usr_source, &usr_target).await?;
+        Ok(())
+    }
+
+    /// Update the root fs layout to match the state
+    async fn update_root_layout(&self) -> Result<(), Error> {
+        let links = vec![
+            ("usr/sbin", "sbin"),
+            ("usr/bin", "bin"),
+            ("usr/lib", "lib"),
+            ("usr/lib", "lib64"),
+            ("usr/lib32", "lib32"),
+        ];
+
+        'linker: for (source, target) in links.into_iter() {
+            let final_target = self.installation.root.join(target);
+            let staging_target = self.installation.root.join(format!("{target}.next"));
+
+            if staging_target.exists() {
+                remove_file(&staging_target).await?;
+            }
+
+            if final_target.exists()
+                && final_target.is_symlink()
+                && final_target.read_link()?.to_string_lossy() == source
+            {
+                continue 'linker;
+            }
+            symlink(source, &staging_target).await?;
+            rename(staging_target, final_target).await?;
+        }
+
         Ok(())
     }
 
