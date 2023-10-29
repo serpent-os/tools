@@ -22,7 +22,7 @@ Progress:
  - [x] Plugin system for layered graph of dependencies
  - [ ] Search support
  - [x] Transactions
- - [ ] Installation support
+ - [x] Installation support
  - [ ] Removal support
  - [ ] Upgrade support
  - [ ] Trigger integration (usysconf-rs)
