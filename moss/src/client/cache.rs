@@ -5,7 +5,6 @@
 use std::{io, path::PathBuf};
 
 use futures::{stream, StreamExt};
-use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use stone::{payload, read::Payload};
 use thiserror::Error;
 use tokio::{
@@ -180,7 +179,7 @@ impl Download {
             )?;
 
             indicies
-                .into_par_iter()
+                .into_iter()
                 .map(|idx| {
                     // Split file reader over index range
                     let mut file = &content_file;
