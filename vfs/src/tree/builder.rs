@@ -64,23 +64,13 @@ impl<T: BlitFile> TreeBuilder<T> {
             resolved_path,
         } in self.symlinks.drain(..)
         {
-            // Skip dangling symlinks (doesn't resolve to anything)
-            let Some(resolved_entry) = self
-                .entries
-                .iter()
-                .find(|entry| entry.inner().path() == resolved_path)
-            else {
-                // TODO: Error log?
-                eprintln!(
-                    "Dangling symlink source: {:?}, target: {:?}",
-                    item.path(),
-                    resolved_path
-                );
-                continue;
-            };
+            let is_resolved_dir = self.entries.iter().any(|entry| {
+                entry.inner().path() == resolved_path
+                    && matches!(entry.inner().kind(), Kind::Directory)
+            });
 
             // If this is a known directory, add it as the resolved directory
-            if matches!(resolved_entry, Entry::Directory(_)) {
+            if is_resolved_dir {
                 let item = item.cloned_to(resolved_path);
                 self.entries.insert(Entry::Directory(item));
             }
