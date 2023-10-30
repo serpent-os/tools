@@ -11,7 +11,7 @@ use moss::{
     state,
 };
 use thiserror::Error;
-use tui::pretty::print_to_columns;
+use tui::Stylize;
 
 pub fn command() -> Command {
     Command::new("state")
@@ -37,18 +37,19 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     }
 }
 
+/// List all known states, newest first
 pub async fn list(root: &Path) -> Result<(), Error> {
     let client = Client::new_for_root(root).await?;
 
     let state_ids = client.state_db.list_ids().await?;
 
-    let states = stream::iter(state_ids.iter().map(|(id, _)| id))
+    let mut states = stream::iter(state_ids.iter().map(|(id, _)| id))
         .then(|id| client.state_db.get(id).map_err(Error::StateDB))
         .try_collect::<Vec<_>>()
         .await?;
 
-    print_to_columns(&states.iter().map(state::ColumnDisplay).collect::<Vec<_>>());
-
+    states.reverse();
+    states.into_iter().for_each(print_state);
     Ok(())
 }
 
@@ -59,6 +60,25 @@ pub async fn prune(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     client.prune(prune::Strategy::KeepRecent(keep)).await?;
 
     Ok(())
+}
+
+/// Emit a state description for the TUI
+fn print_state(state: state::State) {
+    println!(
+        "State #{} - {}",
+        state.id.to_string().bold(),
+        state.summary.unwrap_or(String::from("system transaction")),
+    );
+    println!("{} {}", "Created:".bold(), state.created);
+    println!(
+        "{} {}",
+        "Description:".bold(),
+        state.description.unwrap_or(String::from("no description"))
+    );
+    // TODO: List packages?
+    // TODO: Start with normal list, compute diff, reverse to print ?
+    println!("{} {}", "Packages:".bold(), state.packages.len());
+    println!();
 }
 
 #[derive(Debug, Error)]
