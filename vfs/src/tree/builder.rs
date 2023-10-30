@@ -52,6 +52,19 @@ impl<T: BlitFile> TreeBuilder<T> {
     /// If a symlink directory (redirect) is encountered, all files under that direcory will
     /// get reparented to the redirect target directory.
     fn process_symlinks(&mut self) {
+        // Get all dir entries
+        let dirs = self
+            .entries
+            .iter()
+            .filter_map(|entry| {
+                if let Entry::Directory(item) = entry {
+                    Some(item.path().to_string_lossy().to_string())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
         let mut redirects = vec![];
 
         for Symlink {
@@ -59,15 +72,14 @@ impl<T: BlitFile> TreeBuilder<T> {
             resolved_source,
         } in self.symlinks.drain(..)
         {
-            let is_resolved_dir = self.entries.iter().any(|entry| {
-                entry.inner().path() == resolved_source
-                    && matches!(entry.inner().kind(), Kind::Directory)
-            });
+            let is_resolved_dir = dirs
+                .iter()
+                .any(|dir| Some(dir.as_str()) == resolved_source.to_str());
 
             // If this is a known directory, add it as the resolved directory
             if is_resolved_dir {
                 redirects.push(Redirect {
-                    from: item.path(),
+                    from: item.path().to_path_buf(),
                     to: resolved_source,
                 });
             }
@@ -89,9 +101,9 @@ impl<T: BlitFile> TreeBuilder<T> {
         self.entries = std::mem::take(&mut self.entries)
             .into_iter()
             .flat_map(|entry| {
-                enumerate_leading_dirs(&entry.inner().path())
+                enumerate_leading_dirs(entry.inner().path())
                     .into_iter()
-                    .map(|dir| Entry::Directory(dir.into()))
+                    .map(|dir| Entry::Directory(dir.to_path_buf().into()))
                     .chain(Some(entry))
             })
             .collect();
@@ -107,7 +119,7 @@ impl<T: BlitFile> TreeBuilder<T> {
             .try_fold(Tree::new(), |mut tree, entry| {
                 let item = entry.into_inner();
 
-                let path = item.path();
+                let path = item.path().to_path_buf();
                 let node = tree.new_node(item);
 
                 if let Some(parent) = path.parent() {
@@ -157,7 +169,10 @@ impl<T: BlitFile> Entry<T> {
 
 impl<T: BlitFile> PartialEq for Entry<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.inner().path().eq(&other.inner().path())
+        self.inner()
+            .path()
+            .to_str()
+            .eq(&other.inner().path().to_str())
     }
 }
 
@@ -175,7 +190,7 @@ impl<T: BlitFile> Ord for Entry<T> {
         match (self, other) {
             (Entry::Directory(_), Entry::Other(_)) => cmp::Ordering::Less,
             (Entry::Other(_), Entry::Directory(_)) => cmp::Ordering::Greater,
-            (a, b) => a.inner().path().cmp(&b.inner().path()),
+            (a, b) => a.inner().path().to_str().cmp(&b.inner().path().to_str()),
         }
     }
 }
@@ -247,17 +262,10 @@ fn normalize_path(path: PathBuf) -> PathBuf {
 
 /// Returns all leading directories to the supplied path
 fn enumerate_leading_dirs(path: &Path) -> Vec<PathBuf> {
-    let Some(parent) = path.parent() else {
-        return vec![];
-    };
-
-    parent
-        .components()
-        .scan(PathBuf::default(), |leading, component| {
-            let path = leading.join(component);
-            *leading = path.clone();
-            Some(path)
-        })
+    path.ancestors()
+        .skip(1)
+        .filter(|p| *p != PathBuf::default())
+        .map(PathBuf::from)
         .collect()
 }
 
@@ -284,8 +292,8 @@ mod tests {
     }
 
     impl BlitFile for CustomFile {
-        fn path(&self) -> PathBuf {
-            self.path.clone()
+        fn path(&self) -> &Path {
+            &self.path
         }
 
         fn kind(&self) -> Kind {
@@ -405,16 +413,16 @@ mod tests {
             (
                 PathBuf::from("/a/b/c/d/testing"),
                 vec![
-                    PathBuf::from("/"),
-                    PathBuf::from("/a"),
-                    PathBuf::from("/a/b"),
-                    PathBuf::from("/a/b/c"),
                     PathBuf::from("/a/b/c/d"),
+                    PathBuf::from("/a/b/c"),
+                    PathBuf::from("/a/b"),
+                    PathBuf::from("/a"),
+                    PathBuf::from("/"),
                 ],
             ),
             (
                 PathBuf::from("relative/path/testing"),
-                vec![PathBuf::from("relative"), PathBuf::from("relative/path")],
+                vec![PathBuf::from("relative/path"), PathBuf::from("relative")],
             ),
             (PathBuf::from("no_parent"), vec![]),
         ];

@@ -2,7 +2,12 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{io, os::fd::RawFd, path::PathBuf, time::Duration};
+use std::{
+    io,
+    os::fd::RawFd,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use futures::{future::try_join_all, stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
@@ -370,10 +375,7 @@ impl Client {
         for id in packages {
             let layouts = self.layout_db.query(id).await?;
             for layout in layouts {
-                tree_builder.push(PendingFile {
-                    id: id.clone(),
-                    layout,
-                });
+                tree_builder.push(PendingFile::new(id.clone(), layout));
             }
         }
 
@@ -498,6 +500,25 @@ impl Client {
 struct PendingFile {
     id: package::Id,
     layout: layout::Layout,
+    path: PathBuf,
+}
+
+impl PendingFile {
+    fn new(id: package::Id, layout: layout::Layout) -> Self {
+        // Resolve the target path, including the missing `/usr` prefix
+        let target = match &layout.entry {
+            layout::Entry::Regular(_, target) => target,
+            layout::Entry::Symlink(_, target) => target,
+            layout::Entry::Directory(target) => target,
+            layout::Entry::CharacterDevice(target) => target,
+            layout::Entry::BlockDevice(target) => target,
+            layout::Entry::Fifo(target) => target,
+            layout::Entry::Socket(target) => target,
+        };
+        let path = PathBuf::from("/usr").join(target);
+
+        Self { id, layout, path }
+    }
 }
 
 impl BlitFile for PendingFile {
@@ -510,39 +531,21 @@ impl BlitFile for PendingFile {
         }
     }
 
-    /// Resolve the target path, including the missing `/usr` prefix
-    fn path(&self) -> PathBuf {
-        let result = match &self.layout.entry {
-            layout::Entry::Regular(_, target) => target.clone(),
-            layout::Entry::Symlink(_, target) => target.clone(),
-            layout::Entry::Directory(target) => target.clone(),
-            layout::Entry::CharacterDevice(target) => target.clone(),
-            layout::Entry::BlockDevice(target) => target.clone(),
-            layout::Entry::Fifo(target) => target.clone(),
-            layout::Entry::Socket(target) => target.clone(),
-        };
-        PathBuf::from("/usr").join(result)
+    fn path(&self) -> &Path {
+        &self.path
     }
 
     /// Clone the node to a reparented path, for symlink resolution
     fn cloned_to(&self, path: PathBuf) -> Self {
-        let mut new = self.clone();
-        let strpath = path.to_string_lossy().to_string();
-        new.layout.entry = match &self.layout.entry {
-            layout::Entry::Regular(source, _) => layout::Entry::Regular(*source, strpath),
-            layout::Entry::Symlink(source, _) => layout::Entry::Symlink(source.clone(), strpath),
-            layout::Entry::Directory(_) => layout::Entry::Directory(strpath),
-            layout::Entry::CharacterDevice(_) => layout::Entry::CharacterDevice(strpath),
-            layout::Entry::BlockDevice(_) => layout::Entry::BlockDevice(strpath),
-            layout::Entry::Fifo(_) => layout::Entry::Fifo(strpath),
-            layout::Entry::Socket(_) => layout::Entry::Socket(strpath),
-        };
-        new
+        Self {
+            path,
+            ..self.clone()
+        }
     }
 }
 
 impl From<PathBuf> for PendingFile {
-    fn from(value: PathBuf) -> Self {
+    fn from(path: PathBuf) -> Self {
         PendingFile {
             id: Default::default(),
             layout: layout::Layout {
@@ -550,8 +553,9 @@ impl From<PathBuf> for PendingFile {
                 gid: 0,
                 mode: (Mode::S_IRWXU | Mode::S_IRGRP | Mode::S_IXOTH).bits(),
                 tag: 0,
-                entry: layout::Entry::Directory(value.to_string_lossy().to_string()),
+                entry: layout::Entry::Directory(path.to_string_lossy().to_string()),
             },
+            path,
         }
     }
 }

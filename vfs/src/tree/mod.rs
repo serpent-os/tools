@@ -5,7 +5,11 @@
 //! Virtual filesystem tree (optimise layout inserts)
 
 use core::fmt::Debug;
-use std::{collections::HashMap, ffi::OsStr, path::PathBuf};
+use std::{
+    collections::HashMap,
+    ffi::OsStr,
+    path::{Path, PathBuf},
+};
 
 use indextree::{Arena, Descendants, NodeId};
 use thiserror::Error;
@@ -31,7 +35,7 @@ pub enum Kind {
 /// All implementations should return a directory typed blitfile for a PathBuf
 pub trait BlitFile: Clone + Sized + Debug + From<PathBuf> {
     fn kind(&self) -> Kind;
-    fn path(&self) -> PathBuf;
+    fn path(&self) -> &Path;
 
     /// Clone the BlitFile and update the path
     fn cloned_to(&self, path: PathBuf) -> Self;
@@ -55,9 +59,9 @@ impl<T: BlitFile> Tree<T> {
 
     /// Generate a new node, store the path mapping for it
     fn new_node(&mut self, data: T) -> NodeId {
-        let path = data.path();
+        let path = data.path().to_path_buf();
         let node = self.arena.new_node(data);
-        self.map.insert(path, node);
+        self.map.insert(path.to_path_buf(), node);
         node
     }
 
@@ -83,7 +87,7 @@ impl<T: BlitFile> Tree<T> {
                 .any(|child| child.get().path().file_name() == path.file_name());
 
             if is_duplicate {
-                Err(Error::Duplicate(path))
+                Err(Error::Duplicate(path.to_path_buf()))
             } else {
                 parent_node.append(node_id, &mut self.arena);
                 Ok(())
