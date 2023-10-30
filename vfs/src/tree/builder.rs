@@ -37,61 +37,78 @@ impl<T: BlitFile> TreeBuilder<T> {
     pub fn push(&mut self, item: T) {
         // Add symlinks and return, we will process these
         // during `build`
-        if let Some(resolved_path) = resolve_symlink(&item) {
+        if let Some(resolved_source) = resolve_symlink_source(&item) {
             self.symlinks.push(Symlink {
                 item,
-                resolved_path,
+                resolved_source,
             });
             return;
-        }
-
-        // Find all leading directories and add them
-        for dir in enumerate_leading_dirs(&item.path()) {
-            self.entries.insert(Entry::Directory(dir.into()));
         }
 
         // Insert the provided entry
         self.entries.insert(Entry::new(item));
     }
 
-    /// Process all symlinks, adding them to `entries`.
-    ///
-    /// If the symlink is a dir, resolve it and add as Entry::Directory
-    /// If the symlink is not a dir, add it as Entry::Other
+    /// If a symlink directory (redirect) is encountered, all files under that direcory will
+    /// get reparented to the redirect target directory.
     fn process_symlinks(&mut self) {
+        let mut redirects = vec![];
+
         for Symlink {
             item,
-            resolved_path,
+            resolved_source,
         } in self.symlinks.drain(..)
         {
             let is_resolved_dir = self.entries.iter().any(|entry| {
-                entry.inner().path() == resolved_path
+                entry.inner().path() == resolved_source
                     && matches!(entry.inner().kind(), Kind::Directory)
             });
 
             // If this is a known directory, add it as the resolved directory
             if is_resolved_dir {
-                let item = item.cloned_to(resolved_path);
-                self.entries.insert(Entry::Directory(item));
+                redirects.push(Redirect {
+                    from: item.path(),
+                    to: resolved_source,
+                });
             }
-            // otherwise this is just a normal symlink
+            // otherwise this is just a normal symlink so add it
             else {
                 self.entries.insert(Entry::Other(item));
             }
         }
+
+        // Process all redirects
+        self.entries = std::mem::take(&mut self.entries)
+            .into_iter()
+            .map(|entry| redirect_entry(entry, &redirects))
+            .collect();
+    }
+
+    /// Ensures all leading directories are added
+    fn expand_directories(&mut self) {
+        self.entries = std::mem::take(&mut self.entries)
+            .into_iter()
+            .flat_map(|entry| {
+                enumerate_leading_dirs(&entry.inner().path())
+                    .into_iter()
+                    .map(|dir| Entry::Directory(dir.into()))
+                    .chain(Some(entry))
+            })
+            .collect();
     }
 
     /// Build a [`Tree`] from the provided items
     pub fn build(mut self) -> Result<Tree<T>, Error> {
         self.process_symlinks();
+        self.expand_directories();
 
         self.entries
             .into_iter()
             .try_fold(Tree::new(), |mut tree, entry| {
-                let entry = entry.into_inner();
+                let item = entry.into_inner();
 
-                let path = entry.path();
-                let node = tree.new_node(entry);
+                let path = item.path();
+                let node = tree.new_node(item);
 
                 if let Some(parent) = path.parent() {
                     tree.add_child_to_node(node, parent)?;
@@ -117,6 +134,13 @@ impl<T: BlitFile> Entry<T> {
     }
 
     fn inner(&self) -> &T {
+        match self {
+            Entry::Directory(inner) => inner,
+            Entry::Other(inner) => inner,
+        }
+    }
+
+    fn inner_mut(&mut self) -> &mut T {
         match self {
             Entry::Directory(inner) => inner,
             Entry::Other(inner) => inner,
@@ -158,32 +182,56 @@ impl<T: BlitFile> Ord for Entry<T> {
 
 struct Symlink<T> {
     item: T,
-    resolved_path: PathBuf,
+    resolved_source: PathBuf,
 }
 
-fn resolve_symlink<T: BlitFile>(item: &T) -> Option<PathBuf> {
-    let Kind::Symlink(target) = item.kind() else {
+fn resolve_symlink_source<T: BlitFile>(item: &T) -> Option<PathBuf> {
+    let Kind::Symlink(source) = item.kind() else {
         return None;
     };
 
     let path = item.path();
 
     // Resolve the link.
-    let target = if target.starts_with('/') {
+    let source = if source.starts_with('/') {
         // Absolute
-        target.into()
+        source.into()
     } else if let Some(parent) = path.parent() {
         // Relative w/ parent
-        parent.join(target)
+        parent.join(source)
     } else {
         // Relative to root
-        target.into()
+        source.into()
     };
 
-    Some(normalize_path(target))
+    Some(normalize_path(source))
 }
 
-// Remove `.` and `..` components
+#[derive(Debug)]
+struct Redirect {
+    from: PathBuf,
+    to: PathBuf,
+}
+
+/// Checks if entry falls under any redirects and redirects the entry if so. Otherwise,
+/// returns the original entry.
+fn redirect_entry<T: BlitFile>(mut entry: Entry<T>, redirects: &[Redirect]) -> Entry<T> {
+    let path = entry.inner().path();
+
+    let Some(redirected) = redirects.iter().find_map(|redirect| {
+        path.strip_prefix(&redirect.from)
+            .ok()
+            .map(|relative| redirect.to.join(relative))
+    }) else {
+        return entry;
+    };
+
+    *entry.inner_mut() = entry.inner().cloned_to(redirected);
+
+    entry
+}
+
+/// Remove `.` and `..` components
 fn normalize_path(path: PathBuf) -> PathBuf {
     path.components()
         .fold(PathBuf::new(), |path, component| match component {
@@ -197,6 +245,7 @@ fn normalize_path(path: PathBuf) -> PathBuf {
         })
 }
 
+/// Returns all leading directories to the supplied path
 fn enumerate_leading_dirs(path: &Path) -> Vec<PathBuf> {
     let Some(parent) = path.parent() else {
         return vec![];
@@ -281,6 +330,73 @@ mod tests {
             b.push(path);
         }
         b.build().unwrap();
+    }
+
+    #[test]
+    fn test_redirects() {
+        let mut b: TreeBuilder<CustomFile> = TreeBuilder::new();
+        let paths = vec![
+            CustomFile {
+                path: "/usr/lib".into(),
+                kind: Kind::Directory,
+            },
+            CustomFile {
+                path: "/usr/lib64".into(),
+                kind: Kind::Symlink("/usr/lib".into()),
+            },
+            CustomFile {
+                path: "/usr/lib64/libz.so.1.2.13".into(),
+                kind: Kind::Regular,
+            },
+            CustomFile {
+                path: "/usr/lib64/libz.so.1".into(),
+                kind: Kind::Symlink("libz.so.1.2.13".into()),
+            },
+            CustomFile {
+                path: "/run/lock".into(),
+                kind: Kind::Directory,
+            },
+            CustomFile {
+                path: "/var/run/lock".into(),
+                kind: Kind::Symlink("/run/lock".into()),
+            },
+            CustomFile {
+                path: "/var/run/lock/subsys/1".into(),
+                kind: Kind::Regular,
+            },
+        ];
+        for path in paths {
+            b.push(path);
+        }
+        let tree = b.build().unwrap();
+
+        let dirs = tree
+            .iter()
+            .filter_map(|file| matches!(file.kind, Kind::Directory).then_some(file.path))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            dirs,
+            vec![
+                PathBuf::from("/"),
+                PathBuf::from("/run"),
+                PathBuf::from("/run/lock"),
+                PathBuf::from("/run/lock/subsys"),
+                PathBuf::from("/usr"),
+                PathBuf::from("/usr/lib"),
+            ]
+        );
+
+        let symlink = tree
+            .iter()
+            .find(|file| matches!(file.kind, Kind::Symlink(_)))
+            .unwrap();
+        assert_eq!(
+            symlink,
+            CustomFile {
+                path: "/usr/lib/libz.so.1".into(),
+                kind: Kind::Symlink("libz.so.1.2.13".into()),
+            }
+        );
     }
 
     #[test]
