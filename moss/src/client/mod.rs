@@ -390,7 +390,7 @@ impl Client {
         if let Some(root) = tbuild.tree()?.structured() {
             let _ = mkdir(
                 &self.installation.staging_dir(),
-                Mode::S_IRWXU | Mode::S_IRGRP | Mode::S_IXOTH,
+                Mode::from_bits_truncate(0o755),
             );
             let root_dir = fcntl::open(
                 &self.installation.staging_dir(),
@@ -551,7 +551,7 @@ impl From<PathBuf> for PendingFile {
             layout: layout::Layout {
                 uid: 0,
                 gid: 0,
-                mode: (Mode::S_IRWXU | Mode::S_IRGRP | Mode::S_IXOTH).bits(),
+                mode: 0o755,
                 tag: 0,
                 entry: layout::Entry::Directory(value.to_string_lossy().to_string()),
             },
