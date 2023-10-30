@@ -4,8 +4,9 @@
 
 //! Build a vfs tree incrementally
 use std::{
-    collections::{BTreeMap, HashMap},
-    path::PathBuf,
+    cmp,
+    collections::BTreeSet,
+    path::{Path, PathBuf},
 };
 
 use crate::tree::{Kind, Tree};
@@ -14,149 +15,219 @@ use super::{BlitFile, Error};
 
 /// Builder used to generate a full tree, free of conflicts
 pub struct TreeBuilder<T: BlitFile> {
-    // Explicitly requested incoming paths
-    explicit: Vec<T>,
-
-    // Implicitly created paths
-    implicit_dirs: BTreeMap<PathBuf, T>,
-}
-
-/// Special sort algorithm for files by directory
-fn sorted_paths<T: BlitFile>(a: &T, b: &T) -> std::cmp::Ordering {
-    let a_path_len = a.path().to_string_lossy().to_string().matches('/').count();
-    let b_path_len = b.path().to_string_lossy().to_string().matches('/').count();
-    if a_path_len != b_path_len {
-        a_path_len.cmp(&b_path_len)
-    } else {
-        a.path().cmp(&b.path())
-    }
+    entries: BTreeSet<Entry<T>>,
+    symlinks: Vec<Symlink<T>>,
 }
 
 impl<T: BlitFile> Default for TreeBuilder<T> {
     fn default() -> Self {
-        TreeBuilder::new()
+        TreeBuilder {
+            entries: BTreeSet::new(),
+            symlinks: vec![],
+        }
     }
 }
 
 impl<T: BlitFile> TreeBuilder<T> {
     pub fn new() -> Self {
-        TreeBuilder {
-            explicit: vec![],
-            implicit_dirs: BTreeMap::new(),
-        }
+        TreeBuilder::default()
     }
 
-    /// Push an item to the builder - we don't care if we have duplicates yet
+    /// Push an item to the builder
     pub fn push(&mut self, item: T) {
-        let path = item.path();
+        // Add symlinks and return, we will process these
+        // during `build`
+        if let Some(resolved_path) = resolve_symlink(&item) {
+            self.symlinks.push(Symlink {
+                item,
+                resolved_path,
+            });
+            return;
+        }
 
-        // Find all parent paths
-        if let Some(parent) = path.parent() {
-            let mut leading_path: Option<PathBuf> = None;
-            // Build a set of parent paths skipping `/`, yielding `usr`, `usr/bin`, etc.
-            let components = parent
-                .components()
-                .map(|p| p.as_os_str().to_string_lossy().to_string())
-                //.skip(1)
-                .collect::<Vec<_>>();
-            for component in components {
-                let full_path = match leading_path {
-                    Some(fp) => fp.join(&component),
-                    None => PathBuf::from(&component),
-                };
-                leading_path = Some(full_path.clone());
-                self.implicit_dirs
-                    .insert(full_path.clone(), full_path.into());
+        // Find all leading directories and add them
+        for dir in enumerate_leading_dirs(&item.path()) {
+            self.entries.insert(Entry::Directory(dir.into()));
+        }
+
+        // Insert the provided entry
+        self.entries.insert(Entry::new(item));
+    }
+
+    /// Process all symlinks, adding them to `entries`.
+    ///
+    /// If the symlink is a dir, resolve it and add as Entry::Directory
+    /// If the symlink is not a dir, add it as Entry::Other
+    fn process_symlinks(&mut self) {
+        for Symlink {
+            item,
+            resolved_path,
+        } in self.symlinks.drain(..)
+        {
+            // Skip dangling symlinks (doesn't resolve to anything)
+            let Some(resolved_entry) = self
+                .entries
+                .iter()
+                .find(|entry| entry.inner().path() == resolved_path)
+            else {
+                // TODO: Error log?
+                eprintln!(
+                    "Dangling symlink source: {:?}, target: {:?}",
+                    item.path(),
+                    resolved_path
+                );
+                continue;
+            };
+
+            // If this is a known directory, add it as the resolved directory
+            if matches!(resolved_entry, Entry::Directory(_)) {
+                let item = item.cloned_to(resolved_path);
+                self.entries.insert(Entry::Directory(item));
+            }
+            // otherwise this is just a normal symlink
+            else {
+                self.entries.insert(Entry::Other(item));
             }
         }
-        self.explicit.push(item);
     }
 
-    /// Sort incoming entries and remove duplicates
-    pub fn bake(&mut self) {
-        self.explicit.sort_by(sorted_paths);
+    /// Build a [`Tree`] from the provided items
+    pub fn build(mut self) -> Result<Tree<T>, Error> {
+        self.process_symlinks();
 
-        // Walk again to remove accidental dupes
-        for i in self.explicit.iter() {
-            self.implicit_dirs.remove(&i.path());
-        }
-    }
+        self.entries
+            .into_iter()
+            .try_fold(Tree::new(), |mut tree, entry| {
+                let entry = entry.into_inner();
 
-    /// Generate the final tree by baking all inputs
-    pub fn tree(&self) -> Result<Tree<T>, Error> {
-        // Chain all directories, replace implicits with explicits
-        let all_dirs = self
-            .explicit
-            .iter()
-            .filter(|f| matches!(f.kind(), Kind::Directory))
-            .chain(self.implicit_dirs.values())
-            .map(|d| (d.path().to_string_lossy().to_string(), d))
-            .collect::<BTreeMap<_, _>>();
+                let path = entry.path();
+                let node = tree.new_node(entry);
 
-        // build a set of redirects
-        let mut redirects = HashMap::new();
-
-        // Resolve symlinks-to-dirs
-        for link in self.explicit.iter() {
-            if let Kind::Symlink(target) = link.kind() {
-                let path = link.path();
-
-                // Resolve the link.
-                let target = if target.starts_with('/') {
-                    target.into()
-                } else {
-                    let parent = path.parent();
-                    if let Some(parent) = parent {
-                        parent.join(target)
-                    } else {
-                        target.into()
-                    }
-                };
-                let string_path = path.to_string_lossy().to_string();
-                let string_target = target.to_string_lossy().to_string();
-                if all_dirs.get(&string_target).is_some() {
-                    redirects.insert(string_path, string_target);
+                if let Some(parent) = path.parent() {
+                    tree.add_child_to_node(node, parent)?;
                 }
-            }
-        }
 
-        // Insert everything WITHOUT redirects, directory first.
-        let mut full_set = all_dirs
-            .into_values()
-            .chain(
-                self.explicit
-                    .iter()
-                    .filter(|m| !matches!(m.kind(), Kind::Directory)),
-            )
-            .collect::<Vec<_>>();
-        full_set.sort_by(|a, b| sorted_paths(*a, *b));
-
-        let mut tree: Tree<T> = Tree::new();
-
-        // Build the initial full tree now.
-        for entry in full_set {
-            // New node for this guy
-            let path = entry.path();
-            let node = tree.new_node(entry.clone());
-
-            if let Some(parent) = path.parent() {
-                tree.add_child_to_node(node, parent)?;
-            }
-        }
-
-        // Reparent any symlink redirects.
-        for (source_tree, target_tree) in redirects {
-            tree.reparent(source_tree, target_tree)?;
-        }
-        Ok(tree)
+                Ok(tree)
+            })
     }
+}
+
+#[derive(Debug)]
+enum Entry<T: BlitFile> {
+    Directory(T),
+    Other(T),
+}
+
+impl<T: BlitFile> Entry<T> {
+    fn new(item: T) -> Self {
+        match item.kind() {
+            Kind::Directory => Entry::Directory(item),
+            _ => Self::Other(item),
+        }
+    }
+
+    fn inner(&self) -> &T {
+        match self {
+            Entry::Directory(inner) => inner,
+            Entry::Other(inner) => inner,
+        }
+    }
+
+    fn into_inner(self) -> T {
+        match self {
+            Entry::Directory(inner) => inner,
+            Entry::Other(inner) => inner,
+        }
+    }
+}
+
+impl<T: BlitFile> PartialEq for Entry<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner().path().eq(&other.inner().path())
+    }
+}
+
+impl<T: BlitFile> Eq for Entry<T> {}
+
+impl<T: BlitFile> PartialOrd for Entry<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+// Order by directories first, then path ascending
+impl<T: BlitFile> Ord for Entry<T> {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        match (self, other) {
+            (Entry::Directory(_), Entry::Other(_)) => cmp::Ordering::Less,
+            (Entry::Other(_), Entry::Directory(_)) => cmp::Ordering::Greater,
+            (a, b) => a.inner().path().cmp(&b.inner().path()),
+        }
+    }
+}
+
+struct Symlink<T> {
+    item: T,
+    resolved_path: PathBuf,
+}
+
+fn resolve_symlink<T: BlitFile>(item: &T) -> Option<PathBuf> {
+    let Kind::Symlink(target) = item.kind() else {
+        return None;
+    };
+
+    let path = item.path();
+
+    // Resolve the link.
+    let target = if target.starts_with('/') {
+        // Absolute
+        target.into()
+    } else if let Some(parent) = path.parent() {
+        // Relative w/ parent
+        parent.join(target)
+    } else {
+        // Relative to root
+        target.into()
+    };
+
+    Some(normalize_path(target))
+}
+
+// Remove `.` and `..` components
+fn normalize_path(path: PathBuf) -> PathBuf {
+    path.components()
+        .fold(PathBuf::new(), |path, component| match component {
+            std::path::Component::CurDir => path,
+            // `parent` shouldn't fail here, but return non-nomalized otherwise
+            std::path::Component::ParentDir => path
+                .parent()
+                .map(PathBuf::from)
+                .unwrap_or_else(|| path.join(component)),
+            c => path.join(c),
+        })
+}
+
+fn enumerate_leading_dirs(path: &Path) -> Vec<PathBuf> {
+    let Some(parent) = path.parent() else {
+        return vec![];
+    };
+
+    parent
+        .components()
+        .scan(PathBuf::default(), |leading, component| {
+            let path = leading.join(component);
+            *leading = path.clone();
+            Some(path)
+        })
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{BlitFile, TreeBuilder};
-    use crate::tree::Kind;
     use std::path::PathBuf;
+
+    use super::*;
+    use crate::tree::Kind;
 
     #[derive(Clone, Default, Debug, PartialEq, Eq, PartialOrd, Ord)]
     struct CustomFile {
@@ -219,7 +290,33 @@ mod tests {
         for path in paths {
             b.push(path);
         }
-        b.bake();
-        b.tree().unwrap();
+        b.build().unwrap();
+    }
+
+    #[test]
+    fn test_enumerate_leading_dirs() {
+        let tests = [
+            (
+                PathBuf::from("/a/b/c/d/testing"),
+                vec![
+                    PathBuf::from("/"),
+                    PathBuf::from("/a"),
+                    PathBuf::from("/a/b"),
+                    PathBuf::from("/a/b/c"),
+                    PathBuf::from("/a/b/c/d"),
+                ],
+            ),
+            (
+                PathBuf::from("relative/path/testing"),
+                vec![PathBuf::from("relative"), PathBuf::from("relative/path")],
+            ),
+            (PathBuf::from("no_parent"), vec![]),
+        ];
+
+        for (path, expected) in tests {
+            let leading_dirs = enumerate_leading_dirs(&path);
+
+            assert_eq!(leading_dirs, expected);
+        }
     }
 }

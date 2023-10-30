@@ -16,7 +16,7 @@ use stone::{payload::layout, read::Payload};
 use thiserror::Error;
 use tokio::fs::{self, create_dir_all, remove_dir_all, remove_file, rename, symlink};
 use tui::{MultiProgress, ProgressBar, ProgressStyle, Stylize};
-use vfs::tree::{builder::TreeBuilder, BlitFile, Element};
+use vfs::tree::{BlitFile, Element, TreeBuilder};
 
 use self::prune::prune;
 use crate::{
@@ -365,17 +365,17 @@ impl Client {
     /// Blit the packages to a filesystem root
     /// TODO: Actually yield an iterator that allows dfs mkdirat style use.
     async fn blit_root(&self, packages: &[package::Id]) -> Result<(), Error> {
-        let mut tbuild = TreeBuilder::new();
+        let mut tree_builder = TreeBuilder::new();
+
         for id in packages {
             let layouts = self.layout_db.query(id).await?;
             for layout in layouts {
-                tbuild.push(PendingFile {
+                tree_builder.push(PendingFile {
                     id: id.clone(),
                     layout,
                 });
             }
         }
-        tbuild.bake();
 
         let cache_dir = self.installation.assets_path("v2");
         let cache_fd = fcntl::open(
@@ -387,7 +387,7 @@ impl Client {
         // undirt.
         remove_dir_all(&self.installation.staging_dir()).await?;
 
-        if let Some(root) = tbuild.tree()?.structured() {
+        if let Some(root) = tree_builder.build()?.structured() {
             let _ = mkdir(
                 &self.installation.staging_dir(),
                 Mode::S_IRWXU | Mode::S_IRGRP | Mode::S_IXOTH,

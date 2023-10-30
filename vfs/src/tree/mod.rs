@@ -5,11 +5,14 @@
 //! Virtual filesystem tree (optimise layout inserts)
 
 use core::fmt::Debug;
-use std::{collections::HashMap, ffi::OsStr, path::PathBuf, vec};
+use std::{collections::HashMap, ffi::OsStr, path::PathBuf};
 
 use indextree::{Arena, Descendants, NodeId};
 use thiserror::Error;
-pub mod builder;
+
+pub use builder::TreeBuilder;
+
+mod builder;
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Kind {
@@ -71,79 +74,28 @@ impl<T: BlitFile> Tree<T> {
     ) -> Result<(), Error> {
         let parent = parent.into();
         let node = self.arena.get(node_id).unwrap();
+        let path = node.get().path();
+
         if let Some(parent_node) = self.map.get(&parent) {
-            let others = parent_node
+            let is_duplicate = parent_node
                 .children(&self.arena)
                 .filter_map(|n| self.arena.get(n))
-                .filter_map(|n| {
-                    if n.get().path().file_name() == node.get().path().file_name() {
-                        Some(n.get())
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-            if !others.is_empty() {
-                Err(Error::Duplicate(node.get().path()))
+                .any(|child| child.get().path().file_name() == path.file_name());
+
+            if is_duplicate {
+                Err(Error::Duplicate(path))
             } else {
                 parent_node.append(node_id, &mut self.arena);
                 Ok(())
             }
         } else {
-            Err(Error::MissingParent(parent.clone()))
+            Err(Error::MissingParent(parent))
         }
     }
 
     pub fn print(&self) {
         let root = self.resolve_node("/").unwrap();
         eprintln!("{:#?}", root.debug_pretty_print(&self.arena));
-    }
-
-    /// For all descendents of the given source tree, return a set of the reparented nodes,
-    /// and remove the originals from the tree
-    fn reparent(
-        &mut self,
-        source_tree: impl Into<PathBuf>,
-        target_tree: impl Into<PathBuf>,
-    ) -> Result<(), Error> {
-        let source_path = source_tree.into();
-        let target_path = target_tree.into();
-        let mut mutations = vec![];
-        let mut orphans = vec![];
-        if let Some(source) = self.map.get(&source_path) {
-            if let Some(_target) = self.map.get(&target_path) {
-                for child in source.descendants(&self.arena).skip(1) {
-                    mutations.push(child);
-                }
-            }
-
-            for i in mutations {
-                let original = self.arena.get(i).unwrap().get();
-                let relapath =
-                    target_path.join(original.path().strip_prefix(&source_path).unwrap());
-                orphans.push(original.cloned_to(relapath));
-            }
-
-            // Remove descendents
-            let children = source.children(&self.arena).collect::<Vec<_>>();
-            for child in children.iter() {
-                child.remove_subtree(&mut self.arena)
-            }
-        }
-
-        for orphan in orphans {
-            let path = orphan.path().clone();
-            // Do we have this node already?
-            let node = match self.resolve_node(&path) {
-                Some(n) => *n,
-                None => self.new_node(orphan),
-            };
-            if let Some(parent) = path.parent() {
-                self.add_child_to_node(node, parent)?;
-            }
-        }
-
-        Ok(())
     }
 
     /// Iterate using a TreeIterator, starting at the `/` node
