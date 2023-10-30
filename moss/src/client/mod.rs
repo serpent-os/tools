@@ -10,7 +10,7 @@ use nix::{
     errno::Errno,
     fcntl::{self, renameat2, OFlag, RenameFlags},
     sys::stat::{fchmodat, mkdirat, Mode},
-    unistd::{linkat, mkdir, symlinkat},
+    unistd::{close, linkat, mkdir, symlinkat},
 };
 use stone::{payload::layout, read::Payload};
 use thiserror::Error;
@@ -403,6 +403,8 @@ impl Client {
                     self.blit_element(root_dir, cache_fd, child)?;
                 }
             }
+
+            close(root_dir)?;
         }
         Ok(())
     }
@@ -429,6 +431,7 @@ impl Client {
                 for child in children.into_iter() {
                     self.blit_element(newdir, cache, child)?;
                 }
+                close(newdir)?;
                 Ok(())
             }
             Element::Child(name, item) => {
