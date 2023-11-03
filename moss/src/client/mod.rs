@@ -141,7 +141,6 @@ impl Client {
         summary: impl ToString,
     ) -> Result<State, Error> {
         let old_state = self.installation.active_state;
-
         self.blit_root(packages).await?;
 
         // Add to db
@@ -363,8 +362,16 @@ impl Client {
     }
 
     /// Blit the packages to a filesystem root
-    /// TODO: Actually yield an iterator that allows dfs mkdirat style use.
     async fn blit_root(&self, packages: &[package::Id]) -> Result<(), Error> {
+        let progress = ProgressBar::new(1).with_style(
+            ProgressStyle::with_template("\n|{bar:20.red/blue}| {pos}/{len} {msg}")
+                .unwrap()
+                .progress_chars("■≡=- "),
+        );
+        progress.set_message("Blitting filesystem");
+        progress.enable_steady_tick(Duration::from_millis(150));
+        progress.tick();
+
         let mut tbuild = TreeBuilder::new();
         for id in packages {
             let layouts = self.layout_db.query(id).await?;
@@ -376,6 +383,9 @@ impl Client {
             }
         }
         tbuild.bake();
+        let tree = tbuild.tree()?;
+        progress.set_length(tree.len());
+        progress.set_position(0_u64);
 
         let cache_dir = self.installation.assets_path("v2");
         let cache_fd = fcntl::open(
@@ -387,7 +397,7 @@ impl Client {
         // undirt.
         remove_dir_all(&self.installation.staging_dir()).await?;
 
-        if let Some(root) = tbuild.tree()?.structured() {
+        if let Some(root) = tree.structured() {
             let _ = mkdir(
                 &self.installation.staging_dir(),
                 Mode::from_bits_truncate(0o755),
@@ -400,7 +410,7 @@ impl Client {
 
             if let Element::Directory(_, _, children) = root {
                 for child in children {
-                    self.blit_element(root_dir, cache_fd, child)?;
+                    self.blit_element(root_dir, cache_fd, child, &progress)?;
                 }
             }
 
@@ -415,7 +425,9 @@ impl Client {
         parent: RawFd,
         cache: RawFd,
         element: Element<PendingFile>,
+        progress: &ProgressBar,
     ) -> Result<(), Error> {
+        progress.inc(1);
         match element {
             Element::Directory(name, item, children) => {
                 // Construct within the parent
@@ -429,7 +441,7 @@ impl Client {
                     Mode::empty(),
                 )?;
                 for child in children.into_iter() {
-                    self.blit_element(newdir, cache, child)?;
+                    self.blit_element(newdir, cache, child, progress)?;
                 }
                 close(newdir)?;
                 Ok(())
