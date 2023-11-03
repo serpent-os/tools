@@ -39,6 +39,7 @@ pub trait BlitFile: Clone + Sized + Debug + From<PathBuf> {
 pub struct Tree<T: BlitFile> {
     arena: Arena<T>,
     map: HashMap<PathBuf, NodeId>,
+    length: u64,
 }
 
 impl<T: BlitFile> Tree<T> {
@@ -47,7 +48,18 @@ impl<T: BlitFile> Tree<T> {
         Tree {
             arena: Arena::new(),
             map: HashMap::new(),
+            length: 0_u64,
         }
+    }
+
+    /// Return the number of items in the tree
+    pub fn len(&self) -> u64 {
+        self.length
+    }
+
+    /// Returns true if this tree is empty
+    pub fn is_empty(&self) -> bool {
+        self.length == 0
     }
 
     /// Generate a new node, store the path mapping for it
@@ -55,6 +67,7 @@ impl<T: BlitFile> Tree<T> {
         let path = data.path();
         let node = self.arena.new_node(data);
         self.map.insert(path, node);
+        self.length += 1;
         node
     }
 
