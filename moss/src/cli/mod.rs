@@ -16,6 +16,7 @@ mod list;
 mod remove;
 mod repo;
 mod state;
+mod upgrade;
 mod version;
 
 /// Convert the name to a lookup provider
@@ -67,6 +68,7 @@ fn command() -> Command {
         .subcommand(remove::command())
         .subcommand(repo::command())
         .subcommand(state::command())
+        .subcommand(upgrade::command())
         .subcommand(version::command())
 }
 
@@ -93,6 +95,7 @@ pub async fn process() -> Result<(), Error> {
         Some(("remove", args)) => remove::handle(args, root).await.map_err(Error::Remove),
         Some(("repo", args)) => repo::handle(args, root).await.map_err(Error::Repo),
         Some(("state", args)) => state::handle(args, root).await.map_err(Error::State),
+        Some(("upgrade", args)) => upgrade::handle(args, root).await.map_err(Error::Upgrade),
         _ => unreachable!(),
     }
 }
@@ -122,4 +125,7 @@ pub enum Error {
 
     #[error("state")]
     State(#[from] state::Error),
+
+    #[error("upgrade")]
+    Upgrade(#[from] upgrade::Error),
 }
