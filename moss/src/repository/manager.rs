@@ -95,6 +95,15 @@ impl Manager {
         Ok(())
     }
 
+    /// Refresh a [`Repository`] by Id
+    pub async fn refresh(&mut self, id: &repository::Id) -> Result<(), Error> {
+        if let Some(repo) = self.repositories.get(id) {
+            refresh_index(id, repo, &self.installation).await
+        } else {
+            Err(Error::UnknownRepo(id.clone()))
+        }
+    }
+
     /// Returns the active repositories held by this manager
     pub(crate) fn active(&self) -> impl Iterator<Item = repository::Active> + '_ {
         self.repositories.values().cloned()
@@ -208,6 +217,8 @@ pub enum Error {
     Database(#[from] meta::Error),
     #[error("save config")]
     SaveConfig(#[source] config::SaveError),
+    #[error("unknown repo")]
+    UnknownRepo(repository::Id),
 }
 
 impl From<package::MissingMetaError> for Error {

@@ -21,6 +21,8 @@ enum Action<'a> {
     Add(&'a Path, String, Url, String, Priority),
     // Root, Id
     Remove(&'a Path, String),
+    // Root, Id
+    Update(&'a Path, Option<String>),
 }
 
 /// Return a command for handling `repo` subcommands
@@ -60,6 +62,12 @@ pub fn command() -> Command {
                 .about("Remove a repository for the system")
                 .arg(arg!(<NAME> "repo name").value_parser(clap::value_parser!(String))),
         )
+        .subcommand(
+            Command::new("update")
+                .about("Update the system repositories")
+                .long_about("If no repository is named, update them all")
+                .arg(arg!([NAME] "repo name").value_parser(clap::value_parser!(String))),
+        )
 }
 
 /// Handle subcommands to `repo`
@@ -76,6 +84,9 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
         Some(("remove", cmd_args)) => {
             Action::Remove(root, cmd_args.get_one::<String>("NAME").cloned().unwrap())
         }
+        Some(("update", cmd_args)) => {
+            Action::Update(root, cmd_args.get_one::<String>("NAME").cloned())
+        }
         _ => unreachable!(),
     };
 
@@ -86,6 +97,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
             add(root, name, uri, comment, priority).await
         }
         Action::Remove(_, _) => unimplemented!(),
+        Action::Update(root, name) => update(root, name).await,
     }
 }
 
@@ -132,6 +144,19 @@ async fn list(root: &Path) -> Result<(), Error> {
         configured_repos.sorted_by(|(_, a), (_, b)| a.priority.cmp(&b.priority).reverse())
     {
         println!(" - {} = {} [{}]", id, repo.uri, repo.priority);
+    }
+
+    Ok(())
+}
+
+/// Update specific repos or all
+async fn update(root: &Path, which: Option<String>) -> Result<(), Error> {
+    let installation = Installation::open(root);
+    let mut manager = repository::Manager::new(installation).await?;
+
+    match which {
+        Some(repo) => manager.refresh(&repository::Id::new(repo)).await?,
+        None => manager.refresh_all().await?,
     }
 
     Ok(())
