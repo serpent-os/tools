@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use crossterm::event::{self, Event, KeyCode, KeyEvent};
+
 pub use self::reexport::*;
 
 pub mod pretty;
@@ -26,6 +28,32 @@ pub fn term_size() -> TermSize {
         width: mapped.0 as usize,
         height: mapped.1 as usize,
     }
+}
+
+/// Read a single line of input (up to enter)
+pub fn read_line() -> std::io::Result<String> {
+    let mut s = String::new();
+    while let Event::Key(KeyEvent { code, .. }) = event::read()? {
+        match code {
+            KeyCode::Enter => break,
+            KeyCode::Char(c) => s.push(c),
+            _ => {}
+        }
+    }
+    Ok(s)
+}
+
+/// Prompt yes/no
+pub fn ask_yes_no(question: &str) -> std::io::Result<bool> {
+    println!(
+        "{} {} {} / {} {}",
+        question,
+        "[".dim(),
+        "yes".bold(),
+        "no".bold().red(),
+        "]".dim()
+    );
+    Ok(matches!(read_line()?.to_lowercase().as_str(), "y" | "yes"))
 }
 
 /// Provide a standard approach to ratatui based TUI in moss
