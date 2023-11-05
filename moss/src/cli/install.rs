@@ -14,7 +14,7 @@ use moss::{
     Package,
 };
 use thiserror::Error;
-use tui::pretty::print_to_columns;
+use tui::{ask_yes_no, pretty::print_to_columns};
 
 use crate::cli::name_to_provider;
 
@@ -76,6 +76,11 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     print_to_columns(&missing);
     println!();
 
+    // Must we prompt?
+    if args.get_one::<bool>("yes").unwrap() == &false && !ask_yes_no("Do you wish to continue?")? {
+        return Err(Error::Cancelled);
+    }
+
     // Cache packages
     client.cache_packages(&missing).await?;
 
@@ -133,6 +138,9 @@ async fn find_packages<'a>(id: &'a str, client: &Client) -> Result<Vec<Package>,
 pub enum Error {
     #[error("Not yet implemented")]
     NotImplemented,
+
+    #[error("cancelled")]
+    Cancelled,
 
     #[error("client")]
     Client(#[from] client::Error),
