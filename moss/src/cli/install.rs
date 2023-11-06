@@ -6,7 +6,6 @@ use std::path::Path;
 
 use clap::{arg, ArgMatches, Command};
 use futures::{future::join_all, StreamExt};
-use itertools::Itertools;
 use moss::{
     client::{self, Client},
     package::{self, Flags},
@@ -43,6 +42,8 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
 
     // Add all inputs
     let mut tx = client.registry.transaction()?;
+
+    eprintln!("Adding: {:?}", &input);
     tx.add(input.clone()).await?;
 
     // Resolve transaction to metadata
@@ -103,47 +104,48 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     Ok(())
 }
 
-/// Resolves the pacakge arguments as valid input packages. Returns an error
+/// Resolves the package arguments as valid input packages. Returns an error
 /// if any args are invalid.
 async fn resolve_input(pkgs: Vec<String>, client: &Client) -> Result<Vec<package::Id>, Error> {
     // Parse pkg args into valid / invalid sets
     let queried = join_all(pkgs.iter().map(|p| find_packages(p, client))).await;
-    let (valid_pkgs, invalid_pkgs): (Vec<_>, Vec<_>) = queried.into_iter().partition_result();
 
-    // TODO: Add error hookups
-    if !invalid_pkgs.is_empty() {
-        println!("Missing packages in lookup: {:?}", invalid_pkgs);
-        return Err(Error::NotImplemented);
+    let mut results = vec![];
+
+    for (id, pkg) in queried {
+        if let Some(pkg) = pkg {
+            results.push(pkg.id.clone())
+        } else {
+            return Err(Error::NoPackage(id));
+        }
     }
 
-    Ok(valid_pkgs.into_iter().flatten().map(|p| p.id).collect())
+    Ok(results)
 }
 
-/// Resolve a package ID into either an error or a set of packages matching
-/// TODO: Collapse to .first() for installation selection
-async fn find_packages<'a>(id: &'a str, client: &Client) -> Result<Vec<Package>, &'a str> {
+/// Resolve a package name to the first package
+async fn find_packages<'a>(id: &'a str, client: &Client) -> (String, Option<Package>) {
     let provider = name_to_provider(id);
     let result = client
         .registry
         .by_provider(&provider, Flags::AVAILABLE)
         .collect::<Vec<_>>()
         .await;
-    if result.is_empty() {
-        return Err(id);
-    }
-    Ok(result)
+
+    // First only, pre-sorted
+    (id.into(), result.first().cloned())
 }
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("Not yet implemented")]
-    NotImplemented,
-
     #[error("cancelled")]
     Cancelled,
 
     #[error("client")]
     Client(#[from] client::Error),
+
+    #[error("no package found: {0}")]
+    NoPackage(String),
 
     #[error("transaction")]
     Transaction(#[from] transaction::Error),
