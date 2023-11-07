@@ -44,7 +44,6 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     // Add all inputs
     let mut tx = client.registry.transaction()?;
 
-    eprintln!("Adding: {:?}", &input);
     tx.add(input.clone()).await?;
 
     // Resolve transaction to metadata
