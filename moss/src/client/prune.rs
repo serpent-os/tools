@@ -102,14 +102,18 @@ pub async fn prune(
         let state = state_db.get(status.id()).await?;
 
         // Increment each package
-        state.packages.iter().for_each(|pkg| {
-            *packages_counts.entry(pkg.clone()).or_default() += 1;
+        state.selections.iter().for_each(|selection| {
+            *packages_counts
+                .entry(selection.package.clone())
+                .or_default() += 1;
         });
 
         // Decrement if removal
         if status.is_removal() {
-            state.packages.iter().for_each(|pkg| {
-                *packages_counts.entry(pkg.clone()).or_default() -= 1;
+            state.selections.iter().for_each(|selection| {
+                *packages_counts
+                    .entry(selection.package.clone())
+                    .or_default() -= 1;
             });
             removals.push(state);
         }

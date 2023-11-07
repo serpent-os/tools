@@ -22,7 +22,9 @@ use self::prune::prune;
 use crate::{
     db, environment, package,
     registry::plugin::{self, Plugin},
-    repository, state, Installation, Package, Registry, State,
+    repository,
+    state::{self, Selection},
+    Installation, Package, Registry, State,
 };
 
 pub mod cache;
@@ -137,16 +139,17 @@ impl Client {
     /// Then blit the filesystem, promote it, finally archiving the active ID
     pub async fn apply_state(
         &self,
-        packages: &[package::Id],
+        selections: &[Selection],
         summary: impl ToString,
     ) -> Result<State, Error> {
         let old_state = self.installation.active_state;
-        self.blit_root(packages).await?;
+        self.blit_root(selections.iter().map(|s| &s.package))
+            .await?;
 
         // Add to db
         let state = self
             .state_db
-            .add(packages, Some(summary.to_string()), None)
+            .add(selections, Some(summary.to_string()), None)
             .await?;
 
         // Write state id
@@ -362,7 +365,10 @@ impl Client {
     }
 
     /// Blit the packages to a filesystem root
-    async fn blit_root(&self, packages: &[package::Id]) -> Result<(), Error> {
+    async fn blit_root(
+        &self,
+        packages: impl IntoIterator<Item = &package::Id>,
+    ) -> Result<(), Error> {
         let progress = ProgressBar::new(1).with_style(
             ProgressStyle::with_template("\n|{bar:20.red/blue}| {pos}/{len} {msg}")
                 .unwrap()
@@ -373,7 +379,7 @@ impl Client {
         progress.tick();
 
         let mut tbuild = TreeBuilder::new();
-        for id in packages {
+        for id in packages.into_iter() {
             let layouts = self.layout_db.query(id).await?;
             for layout in layouts {
                 tbuild.push(PendingFile {

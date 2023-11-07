@@ -10,6 +10,7 @@ use moss::{
     client::{self, Client},
     package::{self, Flags},
     registry::transaction,
+    state::Selection,
     Package,
 };
 use thiserror::Error;
@@ -87,14 +88,20 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
 
     // Calculate the new state of packages (old_state + missing)
     let new_state_pkgs = {
-        let previous_state_pkgs = match active_state {
-            Some(id) => client.state_db.get(&id).await?.packages,
+        let previous_selections = match active_state {
+            Some(id) => client.state_db.get(&id).await?.selections,
             None => vec![],
         };
-        missing
-            .iter()
-            .map(|p| p.id.clone())
-            .chain(previous_state_pkgs)
+        let missing_selections = missing.iter().map(|p| Selection {
+            package: p.id.clone(),
+            // Package is explicit if it was one of the input
+            // packages provided by the user
+            explicit: input.iter().any(|id| *id == p.id),
+            reason: None,
+        });
+
+        missing_selections
+            .chain(previous_selections)
             .collect::<Vec<_>>()
     };
 

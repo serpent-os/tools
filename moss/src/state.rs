@@ -47,12 +47,46 @@ pub struct State {
     pub summary: Option<String>,
     /// Description for the state (optional)
     pub description: Option<String>,
-    /// Package IDs / selections in this state
-    pub packages: Vec<package::Id>,
+    /// Selections in this state
+    pub selections: Vec<Selection>,
     /// Creation timestamp
     pub created: DateTime<Utc>,
     /// Relevant type for this State
     pub kind: Kind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Selection {
+    pub package: package::Id,
+    /// Marks whether the package was explicitly installed
+    /// by the user, or if it's a "transitive" dependency
+    pub explicit: bool,
+    pub reason: Option<String>,
+}
+
+impl Selection {
+    pub fn explicit(package: package::Id) -> Self {
+        Self {
+            package,
+            explicit: true,
+            reason: None,
+        }
+    }
+
+    pub fn transitive(package: package::Id) -> Self {
+        Self {
+            package,
+            explicit: true,
+            reason: None,
+        }
+    }
+
+    pub fn reason(self, reason: impl ToString) -> Self {
+        Self {
+            reason: Some(reason.to_string()),
+            ..self
+        }
+    }
 }
 
 pub struct ColumnDisplay<'a>(pub &'a State);

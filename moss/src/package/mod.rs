@@ -90,6 +90,8 @@ bitflags! {
         const INSTALLED = 1 << 2;
         /// Available as from-source build
         const SOURCE = 1 << 3;
+        /// Package is explicitly installed (use with [`Flags::INSTALLED`])
+        const EXPLICIT = 1 << 4;
     }
 }
 
