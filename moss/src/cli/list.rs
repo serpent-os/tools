@@ -58,7 +58,11 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
             version: p.meta.version_identifier,
             release: p.meta.source_release.to_string(),
             summary: p.meta.summary,
-            explicit: p.flags.contains(Flags::EXPLICIT),
+            explicit: if filter_flags == Flags::INSTALLED {
+                p.flags.contains(Flags::EXPLICIT)
+            } else {
+                true
+            },
         })
         .collect_vec();
     // sort alpha
