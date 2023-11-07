@@ -65,8 +65,10 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
             },
         })
         .collect_vec();
-    // sort alpha
-    set.sort();
+    // Thanks to priorities, first in list is the winning candidate in list available.
+    // Therefore sort by name and dedupe is safe as we mask the lower priority items out.
+    set.sort_by_key(|s|s.name.clone());
+    set.dedup_by_key(|s|s.name.clone());
 
     // Grab maximum field
     let max_element = set
