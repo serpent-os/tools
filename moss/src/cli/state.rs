@@ -77,7 +77,7 @@ fn print_state(state: state::State) {
     );
     // TODO: List packages?
     // TODO: Start with normal list, compute diff, reverse to print ?
-    println!("{} {}", "Packages:".bold(), state.packages.len());
+    println!("{} {}", "Packages:".bold(), state.selections.len());
     println!();
 }
 

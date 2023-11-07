@@ -8,9 +8,8 @@ use sqlx::{Acquire, Executor, Pool, Sqlite};
 use thiserror::Error;
 
 use crate::db::Encoding;
-use crate::state::{self, Id};
-use crate::Installation;
-use crate::{package, State};
+use crate::state::{self, Id, Selection};
+use crate::{Installation, State};
 
 #[derive(Debug)]
 pub struct Database {
@@ -63,30 +62,36 @@ impl Database {
             ",
         )
         .bind(id.encode());
-        let packages_query = sqlx::query_as::<_, encoding::Package>(
+        let selections_query = sqlx::query_as::<_, encoding::Selection>(
             "
-            SELECT package_id
-            FROM state_packages
+            SELECT package_id,
+                   explicit,
+                   reason
+            FROM state_selections
             WHERE state_id = ?;
             ",
         )
         .bind(id.encode());
 
-        let (state, package_rows) = futures::try_join!(
+        let (state, selections_rows) = futures::try_join!(
             state_query.fetch_one(&self.pool),
-            packages_query.fetch_all(&self.pool)
+            selections_query.fetch_all(&self.pool)
         )?;
 
-        let packages = package_rows
+        let selections = selections_rows
             .into_iter()
-            .map(|row| row.package_id.0)
+            .map(|row| Selection {
+                package: row.package_id.0,
+                explicit: row.explicit,
+                reason: row.reason,
+            })
             .collect();
 
         Ok(State {
             id: state.id.0,
             summary: state.summary,
             description: state.description,
-            packages,
+            selections,
             created: state.created,
             kind: state.kind.0,
         })
@@ -94,7 +99,7 @@ impl Database {
 
     pub async fn add(
         &self,
-        packages: &[package::Id],
+        selections: &[Selection],
         summary: Option<String>,
         description: Option<String>,
     ) -> Result<State, Error> {
@@ -113,18 +118,19 @@ impl Database {
         .fetch_one(transaction.acquire().await?)
         .await?;
 
-        if !packages.is_empty() {
+        if !selections.is_empty() {
             transaction
                 .execute(
                     sqlx::QueryBuilder::new(
                         "
-                    INSERT INTO state_packages (state_id, package_id, reason)
+                    INSERT INTO state_selections (state_id, package_id, explicit, reason)
                     ",
                     )
-                    .push_values(packages, |mut b, package| {
+                    .push_values(selections, |mut b, selection| {
                         b.push_bind(id.0.encode())
-                            .push_bind(package.encode())
-                            .push_bind(Option::<String>::None);
+                            .push_bind(selection.package.encode())
+                            .push_bind(selection.explicit)
+                            .push_bind(selection.reason.as_ref());
                     })
                     .build(),
                 )
@@ -202,8 +208,10 @@ mod encoding {
     }
 
     #[derive(FromRow)]
-    pub struct Package {
+    pub struct Selection {
         pub package_id: Decoder<package::Id>,
+        pub explicit: bool,
+        pub reason: Option<String>,
     }
 }
 
@@ -214,6 +222,7 @@ mod test {
     use chrono::Utc;
 
     use super::*;
+    use crate::package;
 
     #[tokio::test]
     async fn create_insert_select() {
@@ -222,15 +231,15 @@ mod test {
                 .await
                 .unwrap();
 
-        let packages = vec![
-            package::Id::from("pkg a".to_string()),
-            package::Id::from("pkg b".to_string()),
-            package::Id::from("pkg c".to_string()),
+        let selections = vec![
+            Selection::explicit(package::Id::from("pkg a".to_string())),
+            Selection::explicit(package::Id::from("pkg a".to_string())),
+            Selection::explicit(package::Id::from("pkg a".to_string())),
         ];
 
         let state = database
             .add(
-                &packages,
+                &selections,
                 Some("test".to_string()),
                 Some("test".to_string()),
             )
@@ -248,6 +257,6 @@ mod test {
         assert_eq!(state.summary.as_deref(), Some("test"));
         assert_eq!(state.description.as_deref(), Some("test"));
 
-        assert_eq!(state.packages, packages);
+        assert_eq!(state.selections, selections);
     }
 }

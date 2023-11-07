@@ -7,9 +7,10 @@ CREATE TABLE IF NOT EXISTS state (
     description TEXT NULL
 );
 
-CREATE TABLE IF NOT EXISTS state_packages (
+CREATE TABLE IF NOT EXISTS state_selections (
     state_id INTEGER NOT NULL,  
     package_id TEXT NOT NULL,
+    explicit BOOLEAN NOT NULL,
     reason TEXT NULL,
     FOREIGN KEY(state_id) REFERENCES state(id) ON DELETE CASCADE
 );

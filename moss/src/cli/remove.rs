@@ -11,6 +11,7 @@ use moss::{
     client::{self, Client},
     package::Flags,
     registry::transaction,
+    state::Selection,
 };
 use thiserror::Error;
 use tui::{pretty::print_to_columns, Stylize};
@@ -93,10 +94,38 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
         );
     }
 
+    // Map finalized state to a [`Selection`] by referencing
+    // it's value from the previous state
+    let new_state_pkgs = {
+        let previous_selections = match client.installation.active_state {
+            Some(id) => client.state_db.get(&id).await?.selections,
+            None => vec![],
+        };
+
+        finalized
+            .into_iter()
+            .map(|id| {
+                previous_selections
+                    .iter()
+                    .find(|s| s.package == id)
+                    .cloned()
+                    // Should be unreachable since new state from removal
+                    // is always a subset of the previous state
+                    .unwrap_or_else(|| {
+                        eprintln!("Unreachable: previous selection not found during removal for package {id:?}, marking as not explicit");
+
+                        Selection {
+                            package: id,
+                            explicit: false,
+                            reason: None,
+                        }
+                    })
+            })
+            .collect::<Vec<_>>()
+    };
+
     // Apply state
-    client
-        .apply_state(&finalized.into_iter().collect::<Vec<_>>(), "Remove")
-        .await?;
+    client.apply_state(&new_state_pkgs, "Remove").await?;
 
     Ok(())
 }

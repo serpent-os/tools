@@ -29,23 +29,13 @@ impl Active {
 
     /// Query the given package
     pub async fn package(&self, id: &package::Id) -> Option<Package> {
-        if self.pkg_installed(id) {
-            let result = self.db.get(id).await;
-
-            match result {
-                Ok(meta) => Some(Package {
-                    id: id.clone(),
-                    meta,
-                    flags: package::Flags::INSTALLED,
-                }),
-                Err(db::meta::Error::RowNotFound) => None,
-                Err(error) => {
-                    warn!("failed to query installed package: {error}");
-                    None
-                }
+        match self.db.get(id).await {
+            Ok(meta) => self.installed_package(id.clone(), meta),
+            Err(db::meta::Error::RowNotFound) => None,
+            Err(error) => {
+                warn!("failed to query installed package: {error}");
+                None
             }
-        } else {
-            None
         }
     }
 
@@ -63,11 +53,14 @@ impl Active {
 
             packages
                 .into_iter()
-                .filter(|(id, _)| self.pkg_installed(id))
-                .map(|(id, meta)| Package {
-                    id,
-                    meta,
-                    flags: package::Flags::INSTALLED,
+                .filter_map(|(id, meta)| self.installed_package(id, meta))
+                // Filter for explicit only packages, if applicable
+                .filter(|package| {
+                    if flags.contains(package::Flags::EXPLICIT) {
+                        package.flags.contains(package::Flags::EXPLICIT)
+                    } else {
+                        true
+                    }
                 })
                 .collect()
         } else {
@@ -100,10 +93,22 @@ impl Active {
         u64::MAX
     }
 
-    fn pkg_installed(&self, id: &package::Id) -> bool {
+    fn installed_package(&self, id: package::Id, meta: package::Meta) -> Option<Package> {
         match &self.state {
-            Some(st) => st.packages.contains(id),
-            None => false,
+            Some(st) => st
+                .selections
+                .iter()
+                .find(|selection| selection.package == id)
+                .map(|selection| Package {
+                    id,
+                    meta,
+                    flags: if selection.explicit {
+                        package::Flags::INSTALLED | package::Flags::EXPLICIT
+                    } else {
+                        package::Flags::INSTALLED
+                    },
+                }),
+            None => None,
         }
     }
 }
