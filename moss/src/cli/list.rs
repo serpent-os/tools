@@ -58,6 +58,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
             version: p.meta.version_identifier,
             release: p.meta.source_release.to_string(),
             summary: p.meta.summary,
+            explicit: p.flags.contains(Flags::EXPLICIT),
         })
         .collect_vec();
     // sort alpha
@@ -73,9 +74,14 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     // render
     for st in set {
         let width = (max_length - (st.name.len() + st.release.len() + st.version.len())) + 2;
+        let name = if st.explicit {
+            st.name.bold()
+        } else {
+            st.name.dim()
+        };
         println!(
             "{} {:width$} {}-{} - {}",
-            st.name.bold(),
+            name,
             " ",
             st.version.magenta(),
             st.release.dim(),
@@ -93,6 +99,7 @@ struct State {
     version: String,
     summary: String,
     release: String,
+    explicit: bool,
 }
 
 #[derive(Debug, Error)]
