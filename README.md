@@ -24,7 +24,7 @@ Progress:
  - [x] Transactions
  - [x] Installation support
  - [x] Removal support
- - [ ] Upgrade support
+ - [x] `sync` support (See: https://github.com/serpent-os/moss-rs/pull/73#issuecomment-1802672634)
  - [ ] Trigger integration (usysconf-rs)
  - [x] GC / cleanups of latent states
  - [ ] Features (previously: Subscriptions)
