@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::io::{self, Write};
+
 use crossterm::event::{self, Event, KeyCode, KeyEvent};
 
 pub use self::reexport::*;
@@ -45,14 +47,15 @@ pub fn read_line() -> std::io::Result<String> {
 
 /// Prompt yes/no
 pub fn ask_yes_no(question: &str) -> std::io::Result<bool> {
-    println!(
-        "{} {} {} / {} {}",
+    print!(
+        "{} {} {} / {} {} ",
         question,
         "[".dim(),
         "yes".bold(),
         "no".bold().red(),
         "]".dim()
     );
+    io::stdout().flush()?;
     Ok(matches!(read_line()?.to_lowercase().as_str(), "y" | "yes"))
 }
 
