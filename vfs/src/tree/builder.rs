@@ -162,6 +162,7 @@ mod tests {
     struct CustomFile {
         path: PathBuf,
         kind: Kind,
+        id: String,
     }
 
     impl From<PathBuf> for CustomFile {
@@ -169,6 +170,7 @@ mod tests {
             Self {
                 path: value,
                 kind: Kind::Directory,
+                id: "Virtual".into(),
             }
         }
     }
@@ -182,11 +184,16 @@ mod tests {
             self.kind.clone()
         }
 
+        fn id(&self) -> String {
+            self.id.clone()
+        }
+
         /// Clone to new path portion
         fn cloned_to(&self, path: PathBuf) -> Self {
             Self {
                 path: path.clone(),
                 kind: self.kind.clone(),
+                id: self.id.clone(),
             }
         }
     }
@@ -198,22 +205,27 @@ mod tests {
             CustomFile {
                 path: "/usr/bin/nano".into(),
                 kind: Kind::Regular,
+                id: "nano".into(),
             },
             CustomFile {
                 path: "/usr/bin/rnano".into(),
                 kind: Kind::Symlink("nano".to_string()),
+                id: "nano".into(),
             },
             CustomFile {
                 path: "/usr/share/nano".into(),
                 kind: Kind::Directory,
+                id: "nano".into(),
             },
             CustomFile {
                 path: "/var/run/lock".into(),
                 kind: Kind::Symlink("/run/lock".into()),
+                id: "baselayout".into(),
             },
             CustomFile {
                 path: "/var/run/lock/subsys/1".into(),
                 kind: Kind::Regular,
+                id: "baselayout".into(),
             },
         ];
         for path in paths {

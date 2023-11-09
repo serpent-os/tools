@@ -531,6 +531,11 @@ impl BlitFile for PendingFile {
         }
     }
 
+    /// Return ID for conflict
+    fn id(&self) -> String {
+        self.id.clone().into()
+    }
+
     /// Resolve the target path, including the missing `/usr` prefix
     fn path(&self) -> PathBuf {
         let result = match &self.layout.entry {

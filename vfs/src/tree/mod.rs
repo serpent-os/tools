@@ -29,6 +29,7 @@ pub enum Kind {
 pub trait BlitFile: Clone + Sized + Debug + From<PathBuf> {
     fn kind(&self) -> Kind;
     fn path(&self) -> PathBuf;
+    fn id(&self) -> String;
 
     /// Clone the BlitFile and update the path
     fn cloned_to(&self, path: PathBuf) -> Self;
@@ -97,7 +98,11 @@ impl<T: BlitFile> Tree<T> {
                 })
                 .collect::<Vec<_>>();
             if !others.is_empty() {
-                Err(Error::Duplicate(node.get().path()))
+                Err(Error::Duplicate(
+                    node.get().path(),
+                    node.get().id(),
+                    others.first().unwrap().id(),
+                ))
             } else {
                 parent_node.append(node_id, &mut self.arena);
                 Ok(())
@@ -227,6 +232,6 @@ pub enum Error {
     #[error("missing parent: {0}")]
     MissingParent(PathBuf),
 
-    #[error("duplicate entry")]
-    Duplicate(PathBuf),
+    #[error("duplicate entry: {0} {1} attempts to overwrite {2}")]
+    Duplicate(PathBuf, String, String),
 }
