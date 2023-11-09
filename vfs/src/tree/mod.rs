@@ -98,11 +98,24 @@ impl<T: BlitFile> Tree<T> {
                 })
                 .collect::<Vec<_>>();
             if !others.is_empty() {
-                Err(Error::Duplicate(
-                    node.get().path(),
-                    node.get().id(),
-                    others.first().unwrap().id(),
-                ))
+                // TODO: Reenable
+                // Err(Error::Duplicate(
+                //     node.get().path(),
+                //     node.get().id(),
+                //     others.first().unwrap().id(),
+                // ))
+
+                // Report duplicate and skip for now
+                eprintln!(
+                    "error: {}",
+                    Error::Duplicate(
+                        node.get().path(),
+                        node.get().id(),
+                        others.first().unwrap().id(),
+                    )
+                );
+
+                Ok(())
             } else {
                 parent_node.append(node_id, &mut self.arena);
                 Ok(())

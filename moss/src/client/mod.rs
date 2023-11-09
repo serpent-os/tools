@@ -181,8 +181,11 @@ impl Client {
     ) -> Result<Option<State>, Error> {
         let old_state = self.installation.active_state;
 
-        self.blit_root(selections.iter().map(|s| &s.package))
-            .await?;
+        self.blit_root(
+            selections.iter().map(|s| &s.package),
+            old_state.map(state::Id::next),
+        )
+        .await?;
 
         if !self.scope.is_ephemeral() {
             // Add to db
@@ -387,6 +390,7 @@ impl Client {
     async fn blit_root(
         &self,
         packages: impl IntoIterator<Item = &package::Id>,
+        state_id: Option<state::Id>,
     ) -> Result<(), Error> {
         let progress = ProgressBar::new(1).with_style(
             ProgressStyle::with_template("\n|{bar:20.red/blue}| {pos}/{len} {msg}")
@@ -444,7 +448,7 @@ impl Client {
             close(root_dir)?;
         }
 
-        add_root_links(&blit_target).await?;
+        finalize_root(&blit_target, state_id).await?;
 
         Ok(())
     }
@@ -538,8 +542,8 @@ impl Client {
     }
 }
 
-/// Add root symlinks
-async fn add_root_links(root: &Path) -> Result<(), Error> {
+/// Add root symlinks & os-release file
+async fn finalize_root(root: &Path, state_id: Option<state::Id>) -> Result<(), Error> {
     let links = vec![
         ("usr/sbin", "sbin"),
         ("usr/bin", "bin"),
@@ -565,6 +569,23 @@ async fn add_root_links(root: &Path) -> Result<(), Error> {
         symlink(source, &staging_target).await?;
         rename(staging_target, final_target).await?;
     }
+
+    let os_release = format!(
+        r#"NAME="Serpent OS"
+VERSION="{version}"
+ID="serpentos"
+VERSION_CODENAME={version}
+VERSION_ID="{version}"
+PRETTY_NAME="Serpent OS {version} (fstx #{tx})"
+ANSI_COLOR="1;35"
+HOME_URL="https://serpentos.com"
+BUG_REPORT_URL="https://github.com/serpent-os""#,
+        version = environment::VERSION,
+        // TODO: Better id for ephemeral transactions
+        tx = state_id.unwrap_or_default()
+    );
+
+    fs::write(root.join("usr").join("lib").join("os-release"), os_release).await?;
 
     Ok(())
 }

@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use clap::Command;
-
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+use moss::environment;
 
 /// Construct the Version command
 pub fn command() -> Command {
@@ -13,5 +12,5 @@ pub fn command() -> Command {
 
 /// Print program version
 pub fn print() {
-    println!("moss {VERSION}");
+    println!("moss {}", environment::VERSION);
 }
