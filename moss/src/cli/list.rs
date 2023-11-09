@@ -63,7 +63,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     };
 
     // Grab a client for the target, enumerate packages
-    let client = Client::new_for_root(root).await?;
+    let client = Client::new(root).await?;
     let pkgs = client.registry.list(filter_flags).collect::<Vec<_>>().await;
 
     let sync_available = if sync.is_some() {

@@ -35,7 +35,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
         .collect::<Vec<_>>();
 
     // Grab a client for the target, enumerate packages
-    let client = Client::new_for_root(root).await?;
+    let client = Client::new(root).await?;
 
     let installed = client
         .registry
