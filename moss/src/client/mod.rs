@@ -187,31 +187,42 @@ impl Client {
         )
         .await?;
 
-        if !self.scope.is_ephemeral() {
-            // Add to db
-            let state = self
-                .state_db
-                .add(selections, Some(summary.to_string()), None)
-                .await?;
+        match &self.scope {
+            Scope::Stateful => {
+                // Add to db
+                let state = self
+                    .state_db
+                    .add(selections, Some(summary.to_string()), None)
+                    .await?;
 
-            // Write state id
-            {
-                let usr = self.installation.staging_path("usr");
-                fs::create_dir_all(&usr).await?;
-                let state_path = usr.join(".stateID");
-                fs::write(state_path, state.id.to_string()).await?;
+                // Write state id
+                {
+                    let usr = self.installation.staging_path("usr");
+                    fs::create_dir_all(&usr).await?;
+                    let state_path = usr.join(".stateID");
+                    fs::write(state_path, state.id.to_string()).await?;
+                }
+
+                record_os_release(&self.installation.staging_dir(), Some(state.id)).await?;
+
+                // Staging is only used with [`Scope::Stateful`]
+                self.promote_staging().await?;
+
+                // Now we got it staged, we need working rootfs
+                create_root_links(&self.installation.root).await?;
+
+                if let Some(id) = old_state {
+                    self.archive_state(id).await?;
+                }
+
+                Ok(Some(state))
             }
-
-            // Staging is only used with [`Scope::Stateful`]
-            self.promote_staging().await?;
-
-            if let Some(id) = old_state {
-                self.archive_state(id).await?;
+            Scope::Ephemeral { blit_root } => {
+                let os_root = blit_root.to_owned();
+                record_os_release(&os_root, None).await?;
+                create_root_links(&os_root).await?;
+                Ok(None)
             }
-
-            Ok(Some(state))
-        } else {
-            Ok(None)
         }
     }
 
@@ -448,8 +459,6 @@ impl Client {
             close(root_dir)?;
         }
 
-        finalize_root(&blit_target, state_id).await?;
-
         Ok(())
     }
 
@@ -543,7 +552,7 @@ impl Client {
 }
 
 /// Add root symlinks & os-release file
-async fn finalize_root(root: &Path, state_id: Option<state::Id>) -> Result<(), Error> {
+async fn create_root_links(root: &Path) -> Result<(), Error> {
     let links = vec![
         ("usr/sbin", "sbin"),
         ("usr/bin", "bin"),
@@ -570,6 +579,11 @@ async fn finalize_root(root: &Path, state_id: Option<state::Id>) -> Result<(), E
         rename(staging_target, final_target).await?;
     }
 
+    Ok(())
+}
+
+/// Record the operating system release info
+async fn record_os_release(root: &Path, state_id: Option<state::Id>) -> Result<(), Error> {
     let os_release = format!(
         r#"NAME="Serpent OS"
 VERSION="{version}"
@@ -589,7 +603,6 @@ BUG_REPORT_URL="https://github.com/serpent-os""#,
 
     Ok(())
 }
-
 enum Scope {
     Stateful,
     Ephemeral { blit_root: PathBuf },
