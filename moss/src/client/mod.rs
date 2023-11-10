@@ -218,9 +218,8 @@ impl Client {
                 Ok(Some(state))
             }
             Scope::Ephemeral { blit_root } => {
-                let os_root = blit_root.to_owned();
-                record_os_release(&os_root, None).await?;
-                create_root_links(&os_root).await?;
+                record_os_release(blit_root, None).await?;
+                create_root_links(blit_root).await?;
                 Ok(None)
             }
         }
