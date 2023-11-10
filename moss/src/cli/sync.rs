@@ -3,9 +3,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::borrow::Cow;
+use std::path::PathBuf;
 use std::{collections::BTreeSet, path::Path};
 
-use clap::{arg, ArgMatches, Command};
+use clap::{arg, value_parser, ArgMatches, Command};
 use futures::{stream, StreamExt, TryStreamExt};
 use moss::environment;
 use moss::registry::transaction;
@@ -24,12 +25,27 @@ pub fn command() -> Command {
         .about("Sync packages")
         .long_about("Sync package selections with candidates from the highest priority repository")
         .arg(arg!(--"upgrade-only" "Only sync packages that have a version upgrade"))
+        .arg(
+            arg!(--to <blit_target> "Blit this sync to the provided directory instead of the root")
+                .long_help(
+                    "Blit this sync to the provided directory instead of the root. \n\
+                     \n\
+                     This operation won't be captured as a new state",
+                )
+                .value_parser(value_parser!(PathBuf)),
+        )
 }
 
 pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
-    let client = Client::new_for_root(root).await?;
     let yes_all = *args.get_one::<bool>("yes").unwrap();
     let upgrade_only = *args.get_one::<bool>("upgrade-only").unwrap();
+
+    let mut client = Client::new(root).await?;
+
+    // Make ephemeral if a blit target was provided
+    if let Some(blit_target) = args.get_one::<PathBuf>("to").cloned() {
+        client = client.ephemeral(blit_target)?;
+    }
 
     // Grab all the existing installed packages
     let installed = client
@@ -53,10 +69,13 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
         resolve_with_sync(&client, Resolution::Explicit, upgrade_only, &installed).await?;
     let finalized = resolve_with_sync(&client, Resolution::All, upgrade_only, &first_pass).await?;
 
-    // Synced are packages that aren't installed
+    // Synced are packages are:
+    //
+    // Stateful: Not installed
+    // Ephemeral: All
     let synced = finalized
         .iter()
-        .filter(|p| !installed.iter().any(|i| i.id == p.id))
+        .filter(|p| client.is_ephemeral() || !installed.iter().any(|i| i.id == p.id))
         .collect::<Vec<_>>();
 
     if synced.is_empty() {
@@ -113,7 +132,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     };
 
     // Perfect, apply state.
-    client.apply_state(&new_selections, "Install").await?;
+    client.apply_state(&new_selections, "Sync").await?;
 
     Ok(())
 }

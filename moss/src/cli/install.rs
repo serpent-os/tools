@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use clap::{arg, ArgMatches, Command};
+use clap::{arg, value_parser, ArgMatches, Command};
 use futures::{future::join_all, StreamExt};
 use moss::{
     client::{self, Client},
@@ -22,7 +22,16 @@ pub fn command() -> Command {
     Command::new("install")
         .about("Install packages")
         .long_about("Install the requested software to the local system")
-        .arg(arg!(<NAME> ... "packages to install").value_parser(clap::value_parser!(String)))
+        .arg(arg!(<NAME> ... "packages to install").value_parser(value_parser!(String)))
+        .arg(
+            arg!(--to <blit_target> "Blit this install to the provided directory instead of the root")
+                .long_help(
+                    "Blit this install to the provided directory instead of the root. \n\
+                     \n\
+                     This operation won't be captured as a new state",
+                )
+                .value_parser(value_parser!(PathBuf)),
+        )
 }
 
 /// Handle execution of `moss install`
@@ -35,8 +44,12 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
         .collect::<Vec<_>>();
 
     // Grab a client for the root
-    let client = Client::new_for_root(root).await?;
-    let active_state = client.installation.active_state;
+    let mut client = Client::new(root).await?;
+
+    // Make ephemeral if a blit target was provided
+    if let Some(blit_target) = args.get_one::<PathBuf>("to").cloned() {
+        client = client.ephemeral(blit_target)?;
+    }
 
     // Resolve input packages
     let input = resolve_input(pkgs, &client).await?;
@@ -49,10 +62,13 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     // Resolve transaction to metadata
     let resolved = client.resolve_packages(tx.finalize()).await?;
 
-    // Get missing packages that aren't installed
+    // Get missing packages that are:
+    //
+    // Stateful: Not installed
+    // Ephemeral: all
     let missing = resolved
         .iter()
-        .filter(|p| !p.is_installed())
+        .filter(|p| client.is_ephemeral() || !p.is_installed())
         .collect::<Vec<_>>();
 
     // If no new packages exist, exit and print
@@ -87,9 +103,10 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
 
     // Calculate the new state of packages (old_state + missing)
     let new_state_pkgs = {
-        let previous_selections = match active_state {
-            Some(id) => client.state_db.get(&id).await?.selections,
-            None => vec![],
+        // Only use previous state in stateful mode
+        let previous_selections = match client.installation.active_state {
+            Some(id) if !client.is_ephemeral() => client.state_db.get(&id).await?.selections,
+            _ => vec![],
         };
         let missing_selections = missing.iter().map(|p| Selection {
             package: p.id.clone(),

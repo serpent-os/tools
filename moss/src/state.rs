@@ -10,8 +10,14 @@ use tui::{pretty, Stylize};
 use crate::package;
 
 /// Unique identifier for [`State`]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Id(i64);
+
+impl Id {
+    pub fn next(self) -> Self {
+        Self(self.0 + 1)
+    }
+}
 
 impl From<i64> for Id {
     fn from(id: i64) -> Self {

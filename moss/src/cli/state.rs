@@ -39,7 +39,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
 
 /// List all known states, newest first
 pub async fn list(root: &Path) -> Result<(), Error> {
-    let client = Client::new_for_root(root).await?;
+    let client = Client::new(root).await?;
 
     let state_ids = client.state_db.list_ids().await?;
 
@@ -56,7 +56,7 @@ pub async fn list(root: &Path) -> Result<(), Error> {
 pub async fn prune(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     let keep = *args.get_one::<u64>("keep").unwrap();
 
-    let client = Client::new_for_root(root).await?;
+    let client = Client::new(root).await?;
     client.prune(prune::Strategy::KeepRecent(keep)).await?;
 
     Ok(())

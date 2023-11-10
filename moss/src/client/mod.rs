@@ -2,7 +2,12 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{io, os::fd::RawFd, path::PathBuf, time::Duration};
+use std::{
+    io,
+    os::fd::RawFd,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use futures::{future::try_join_all, stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
@@ -34,17 +39,19 @@ pub mod prune;
 pub struct Client {
     /// Root that we operate on
     pub installation: Installation,
-    repositories: repository::Manager,
     pub registry: Registry,
 
     pub install_db: db::meta::Database,
     pub state_db: db::state::Database,
     pub layout_db: db::layout::Database,
+
+    repositories: repository::Manager,
+    scope: Scope,
 }
 
 impl Client {
     /// Construct a new Client
-    pub async fn new_for_root(root: impl Into<PathBuf>) -> Result<Client, Error> {
+    pub async fn new(root: impl Into<PathBuf>) -> Result<Client, Error> {
         let root = root.into();
 
         if !root.exists() || !root.is_dir() {
@@ -73,12 +80,36 @@ impl Client {
             install_db,
             state_db,
             layout_db,
+            scope: Scope::Stateful,
         })
     }
 
     /// Construct a new Client for the global installation
     pub async fn system() -> Result<Client, Error> {
-        Client::new_for_root("/").await
+        Client::new("/").await
+    }
+
+    pub fn is_ephemeral(&self) -> bool {
+        matches!(self.scope, Scope::Ephemeral { .. })
+    }
+
+    /// Transition to an ephemeral client that doesn't record state changes
+    /// and blits to a different root.
+    ///
+    /// This is useful for installing a root to a container (i.e. Boulder) while
+    /// using a shared cache.
+    ///
+    /// Returns an error if `blit_root` is the same as the installation root,
+    /// since the system client should always be stateful.
+    pub fn ephemeral(self, blit_root: PathBuf) -> Result<Self, Error> {
+        if blit_root.canonicalize()? == self.installation.root.canonicalize()? {
+            return Err(Error::EphemeralInstallationRoot);
+        }
+
+        Ok(Self {
+            scope: Scope::Ephemeral { blit_root },
+            ..self
+        })
     }
 
     /// Reload all configured repositories and refreshes their index file, then update
@@ -102,6 +133,10 @@ impl Client {
 
     /// Prune states with the provided [`prune::Strategy`]
     pub async fn prune(&self, strategy: prune::Strategy) -> Result<(), Error> {
+        if self.scope.is_ephemeral() {
+            return Err(Error::EphemeralProhibitedOperation);
+        }
+
         prune(
             strategy,
             &self.state_db,
@@ -137,41 +172,55 @@ impl Client {
     /// Create a new recorded state from the provided packages
     /// provided packages and write that state ID to the installation
     /// Then blit the filesystem, promote it, finally archiving the active ID
+    ///
+    /// Returns `None` if the client is ephemeral
     pub async fn apply_state(
         &self,
         selections: &[Selection],
         summary: impl ToString,
-    ) -> Result<State, Error> {
+    ) -> Result<Option<State>, Error> {
         let old_state = self.installation.active_state;
-        self.blit_root(selections.iter().map(|s| &s.package))
-            .await?;
 
-        // Add to db
-        let state = self
-            .state_db
-            .add(selections, Some(summary.to_string()), None)
-            .await?;
+        self.blit_root(
+            selections.iter().map(|s| &s.package),
+            old_state.map(state::Id::next),
+        )
+        .await?;
 
-        // Write state id
-        {
-            let usr = self.installation.staging_path("usr");
-            fs::create_dir_all(&usr).await?;
-            let state_path = usr.join(".stateID");
-            fs::write(state_path, state.id.to_string()).await?;
+        if !self.scope.is_ephemeral() {
+            // Add to db
+            let state = self
+                .state_db
+                .add(selections, Some(summary.to_string()), None)
+                .await?;
+
+            // Write state id
+            {
+                let usr = self.installation.staging_path("usr");
+                fs::create_dir_all(&usr).await?;
+                let state_path = usr.join(".stateID");
+                fs::write(state_path, state.id.to_string()).await?;
+            }
+
+            // Staging is only used with [`Scope::Stateful`]
+            self.promote_staging().await?;
+
+            if let Some(id) = old_state {
+                self.archive_state(id).await?;
+            }
+
+            Ok(Some(state))
+        } else {
+            Ok(None)
         }
-
-        self.promote_staging().await?;
-        if let Some(id) = old_state {
-            self.archive_state(id).await?;
-        }
-
-        self.update_root_layout().await?;
-
-        Ok(state)
     }
 
     /// Activate the given state
     async fn promote_staging(&self) -> Result<(), Error> {
+        if self.scope.is_ephemeral() {
+            return Err(Error::EphemeralProhibitedOperation);
+        }
+
         let usr_target = self.installation.root.join("usr");
         let usr_source = self.installation.staging_path("usr");
 
@@ -194,6 +243,10 @@ impl Client {
 
     /// Archive old states into their respective tree
     async fn archive_state(&self, id: state::Id) -> Result<(), Error> {
+        if self.scope.is_ephemeral() {
+            return Err(Error::EphemeralProhibitedOperation);
+        }
+
         // After promotion, the old active /usr is now in staging/usr
         let usr_target = self.installation.root_path(id.to_string()).join("usr");
         let usr_source = self.installation.staging_path("usr");
@@ -204,37 +257,6 @@ impl Client {
         }
         // hot swap the staging/usr into the root/$id/usr
         rename(&usr_source, &usr_target).await?;
-        Ok(())
-    }
-
-    /// Update the root fs layout to match the state
-    async fn update_root_layout(&self) -> Result<(), Error> {
-        let links = vec![
-            ("usr/sbin", "sbin"),
-            ("usr/bin", "bin"),
-            ("usr/lib", "lib"),
-            ("usr/lib", "lib64"),
-            ("usr/lib32", "lib32"),
-        ];
-
-        'linker: for (source, target) in links.into_iter() {
-            let final_target = self.installation.root.join(target);
-            let staging_target = self.installation.root.join(format!("{target}.next"));
-
-            if staging_target.exists() {
-                remove_file(&staging_target).await?;
-            }
-
-            if final_target.exists()
-                && final_target.is_symlink()
-                && final_target.read_link()?.to_string_lossy() == source
-            {
-                continue 'linker;
-            }
-            symlink(source, &staging_target).await?;
-            rename(staging_target, final_target).await?;
-        }
-
         Ok(())
     }
 
@@ -368,6 +390,7 @@ impl Client {
     async fn blit_root(
         &self,
         packages: impl IntoIterator<Item = &package::Id>,
+        state_id: Option<state::Id>,
     ) -> Result<(), Error> {
         let progress = ProgressBar::new(1).with_style(
             ProgressStyle::with_template("\n|{bar:20.red/blue}| {pos}/{len} {msg}")
@@ -400,16 +423,18 @@ impl Client {
             Mode::empty(),
         )?;
 
+        let blit_target = match &self.scope {
+            Scope::Stateful => self.installation.staging_dir(),
+            Scope::Ephemeral { blit_root } => blit_root.to_owned(),
+        };
+
         // undirt.
-        remove_dir_all(&self.installation.staging_dir()).await?;
+        remove_dir_all(&blit_target).await?;
 
         if let Some(root) = tree.structured() {
-            let _ = mkdir(
-                &self.installation.staging_dir(),
-                Mode::from_bits_truncate(0o755),
-            );
+            let _ = mkdir(&blit_target, Mode::from_bits_truncate(0o755));
             let root_dir = fcntl::open(
-                &self.installation.staging_dir(),
+                &blit_target,
                 OFlag::O_DIRECTORY | OFlag::O_RDONLY,
                 Mode::empty(),
             )?;
@@ -422,6 +447,9 @@ impl Client {
 
             close(root_dir)?;
         }
+
+        finalize_root(&blit_target, state_id).await?;
+
         Ok(())
     }
 
@@ -511,6 +539,65 @@ impl Client {
         };
 
         Ok(())
+    }
+}
+
+/// Add root symlinks & os-release file
+async fn finalize_root(root: &Path, state_id: Option<state::Id>) -> Result<(), Error> {
+    let links = vec![
+        ("usr/sbin", "sbin"),
+        ("usr/bin", "bin"),
+        ("usr/lib", "lib"),
+        ("usr/lib", "lib64"),
+        ("usr/lib32", "lib32"),
+    ];
+
+    'linker: for (source, target) in links.into_iter() {
+        let final_target = root.join(target);
+        let staging_target = root.join(format!("{target}.next"));
+
+        if staging_target.exists() {
+            remove_file(&staging_target).await?;
+        }
+
+        if final_target.exists()
+            && final_target.is_symlink()
+            && final_target.read_link()?.to_string_lossy() == source
+        {
+            continue 'linker;
+        }
+        symlink(source, &staging_target).await?;
+        rename(staging_target, final_target).await?;
+    }
+
+    let os_release = format!(
+        r#"NAME="Serpent OS"
+VERSION="{version}"
+ID="serpentos"
+VERSION_CODENAME={version}
+VERSION_ID="{version}"
+PRETTY_NAME="Serpent OS {version} (fstx #{tx})"
+ANSI_COLOR="1;35"
+HOME_URL="https://serpentos.com"
+BUG_REPORT_URL="https://github.com/serpent-os""#,
+        version = environment::VERSION,
+        // TODO: Better id for ephemeral transactions
+        tx = state_id.unwrap_or_default()
+    );
+
+    fs::write(root.join("usr").join("lib").join("os-release"), os_release).await?;
+
+    Ok(())
+}
+
+enum Scope {
+    Stateful,
+    Ephemeral { blit_root: PathBuf },
+}
+
+impl Scope {
+    fn is_ephemeral(&self) -> bool {
+        matches!(self, Self::Ephemeral { .. })
     }
 }
 
@@ -610,6 +697,10 @@ pub enum Error {
     MissingMetadata(package::Id),
     #[error("Root is invalid")]
     RootInvalid,
+    #[error("Ephemeral client not allowed on installation root")]
+    EphemeralInstallationRoot,
+    #[error("Operation not allowed with ephemeral client")]
+    EphemeralProhibitedOperation,
     #[error("cache")]
     Cache(#[from] cache::Error),
     #[error("repository manager")]

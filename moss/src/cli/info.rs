@@ -36,7 +36,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
         .collect::<Vec<_>>();
 
     let root = args.get_one::<PathBuf>("root").unwrap().clone();
-    let client = Client::new_for_root(root).await?;
+    let client = Client::new(root).await?;
 
     for pkg in pkgs {
         let lookup = name_to_provider(&pkg);
