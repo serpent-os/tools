@@ -38,3 +38,13 @@ zstd = "0.12.4"
 
 [profile.release]
 lto = 'thin'
+
+[profile.packaging]
+inherits = "release"
+lto = true
+codegen-units = 1
+opt-level = 3
+# allow packaging system to do it
+strip = "none"
+debug = true
+
