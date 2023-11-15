@@ -85,7 +85,7 @@ pub enum Kind {
 }
 
 impl Kind {
-    fn length(&self) -> usize {
+    fn size(&self) -> usize {
         match self {
             Kind::Int8(_) => std::mem::size_of::<i8>(),
             Kind::Uint8(_) => std::mem::size_of::<u8>(),
@@ -241,7 +241,7 @@ impl Record for Meta {
             Kind::Provider(_, _) => 11,
         };
 
-        writer.write_u32(self.kind.length() as u32)?;
+        writer.write_u32(self.kind.size() as u32)?;
         writer.write_u16(self.tag as u16)?;
         writer.write_u8(kind)?;
         // Padding
@@ -270,5 +270,9 @@ impl Record for Meta {
         }
 
         Ok(())
+    }
+
+    fn size(&self) -> usize {
+        4 + 2 + 1 + 1 + self.kind.size()
     }
 }

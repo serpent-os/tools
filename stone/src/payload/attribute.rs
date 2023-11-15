@@ -32,4 +32,8 @@ impl Record for Attribute {
 
         Ok(())
     }
+
+    fn size(&self) -> usize {
+        8 + 8 + self.key.len() + self.value.len()
+    }
 }

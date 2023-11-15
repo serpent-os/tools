@@ -188,6 +188,15 @@ enum Payload<'a> {
 }
 
 impl<'a> Payload<'a> {
+    fn pledged_size(&self) -> usize {
+        match self {
+            Payload::Meta(records) => payload::records_total_size(records),
+            Payload::Attributes(records) => payload::records_total_size(records),
+            Payload::Layout(records) => payload::records_total_size(records),
+            Payload::Index(records) => payload::records_total_size(records),
+        }
+    }
+
     fn num_records(&self) -> usize {
         match self {
             Payload::Meta(payload) => payload.len(),
@@ -224,6 +233,8 @@ fn encode_payload(
 ) -> Result<EncodedPayload, Error> {
     // Reset hasher (it's used across all payloads)
     hasher.reset();
+    // Set pledged size
+    encoder.set_pledged_size(Some(payload.pledged_size() as u64))?;
 
     let mut content = vec![];
 

@@ -47,6 +47,44 @@ pub enum Entry {
     Socket(String),
 }
 
+impl Entry {
+    fn source(&self) -> Vec<u8> {
+        match self {
+            Entry::Regular(hash, _) => hash.to_be_bytes().to_vec(),
+            Entry::Symlink(source, _) => source.as_bytes().to_vec(),
+            Entry::Directory(_) => vec![],
+            Entry::CharacterDevice(_) => vec![],
+            Entry::BlockDevice(_) => vec![],
+            Entry::Fifo(_) => vec![],
+            Entry::Socket(_) => vec![],
+        }
+    }
+
+    fn target(&self) -> Vec<u8> {
+        match self {
+            Entry::Regular(_, target) => target.as_bytes().to_vec(),
+            Entry::Symlink(_, target) => target.as_bytes().to_vec(),
+            Entry::Directory(target) => target.as_bytes().to_vec(),
+            Entry::CharacterDevice(target) => target.as_bytes().to_vec(),
+            Entry::BlockDevice(target) => target.as_bytes().to_vec(),
+            Entry::Fifo(target) => target.as_bytes().to_vec(),
+            Entry::Socket(target) => target.as_bytes().to_vec(),
+        }
+    }
+
+    fn file_type(&self) -> u8 {
+        match self {
+            Entry::Regular(..) => 1,
+            Entry::Symlink(..) => 2,
+            Entry::Directory(_) => 3,
+            Entry::CharacterDevice(_) => 4,
+            Entry::BlockDevice(_) => 5,
+            Entry::Fifo(_) => 6,
+            Entry::Socket(_) => 7,
+        }
+    }
+}
+
 // TODO: Strong types these fields
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Layout {
@@ -119,27 +157,20 @@ impl Record for Layout {
         writer.write_u32(self.mode)?;
         writer.write_u32(self.tag)?;
 
-        let (source, target, file_type) = match &self.entry {
-            Entry::Regular(hash, target) => {
-                (hash.to_be_bytes().to_vec(), target.as_bytes().to_vec(), 1)
-            }
-            Entry::Symlink(source, target) => {
-                (source.as_bytes().to_vec(), target.as_bytes().to_vec(), 2)
-            }
-            Entry::Directory(target) => (vec![], target.as_bytes().to_vec(), 3),
-            Entry::CharacterDevice(target) => (vec![], target.as_bytes().to_vec(), 4),
-            Entry::BlockDevice(target) => (vec![], target.as_bytes().to_vec(), 5),
-            Entry::Fifo(target) => (vec![], target.as_bytes().to_vec(), 6),
-            Entry::Socket(target) => (vec![], target.as_bytes().to_vec(), 7),
-        };
+        let source = self.entry.source();
+        let target = self.entry.target();
 
         writer.write_u16(source.len() as u16)?;
         writer.write_u16(target.len() as u16)?;
-        writer.write_u8(file_type)?;
+        writer.write_u8(self.entry.file_type())?;
         writer.write_array([0; 11])?;
         writer.write_all(&source)?;
         writer.write_all(&target)?;
 
         Ok(())
+    }
+
+    fn size(&self) -> usize {
+        4 + 4 + 4 + 4 + 2 + 2 + 1 + 11 + self.entry.source().len() + self.entry.target().len()
     }
 }

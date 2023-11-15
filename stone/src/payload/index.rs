@@ -38,4 +38,8 @@ impl Record for Index {
         writer.write_u128(self.digest)?;
         Ok(())
     }
+
+    fn size(&self) -> usize {
+        std::mem::size_of::<Self>()
+    }
 }

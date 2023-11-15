@@ -108,6 +108,7 @@ impl Header {
 pub trait Record: Sized {
     fn decode<R: Read>(reader: R) -> Result<Self, DecodeError>;
     fn encode<W: Write>(&self, writer: &mut W) -> Result<(), EncodeError>;
+    fn size(&self) -> usize;
 }
 
 pub fn decode_records<T: Record, R: Read>(
@@ -131,6 +132,10 @@ pub fn encode_records<T: Record, W: Write>(
         record.encode(writer)?;
     }
     Ok(())
+}
+
+pub fn records_total_size<T: Record>(records: &[T]) -> usize {
+    records.iter().map(T::size).sum()
 }
 
 #[derive(Debug, Error)]
