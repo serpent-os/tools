@@ -36,27 +36,9 @@ impl<W: Write> Writer<W, ()> {
         })
     }
 
-    pub fn add_meta_payload(&mut self, meta: &[Meta]) -> Result<(), Error> {
+    pub fn add_payload<'a>(&mut self, payload: impl Into<Payload<'a>>) -> Result<(), Error> {
         self.payloads.push(encode_payload(
-            Payload::Meta(meta),
-            &mut self.payload_hasher,
-            &mut self.encoder,
-        )?);
-        Ok(())
-    }
-
-    pub fn add_attributes_payload(&mut self, attributes: &[Attribute]) -> Result<(), Error> {
-        self.payloads.push(encode_payload(
-            Payload::Attributes(attributes),
-            &mut self.payload_hasher,
-            &mut self.encoder,
-        )?);
-        Ok(())
-    }
-
-    pub fn add_layout_payload(&mut self, layouts: &[Layout]) -> Result<(), Error> {
-        self.payloads.push(encode_payload(
-            Payload::Layout(layouts),
+            payload.into().into(),
             &mut self.payload_hasher,
             &mut self.encoder,
         )?);
@@ -64,12 +46,12 @@ impl<W: Write> Writer<W, ()> {
     }
 
     pub fn with_content<B>(
-        mut self,
+        self,
         buffer: B,
         pledged_size: Option<u64>,
     ) -> Result<Writer<W, Content<B>>, Error> {
-        self.encoder.set_pledged_size(pledged_size)?;
-        self.payload_hasher.reset();
+        let mut encoder = zstd::Encoder::new()?;
+        encoder.set_pledged_size(pledged_size)?;
 
         Ok(Writer {
             writer: self.writer,
@@ -79,6 +61,8 @@ impl<W: Write> Writer<W, ()> {
                 stored_size: 0,
                 indices: vec![],
                 index_hasher: digest::Hasher::new(),
+                buffer_hasher: digest::Hasher::new(),
+                encoder,
             },
             file_type: self.file_type,
             payloads: self.payloads,
@@ -97,7 +81,16 @@ where
     W: Write,
     B: Read + Write + Seek,
 {
-    pub fn add_file<R: Read>(&mut self, content: &mut R) -> Result<(), Error> {
+    pub fn add_payload<'a>(&mut self, payload: impl Into<Payload<'a>>) -> Result<(), Error> {
+        self.payloads.push(encode_payload(
+            payload.into().into(),
+            &mut self.payload_hasher,
+            &mut self.encoder,
+        )?);
+        Ok(())
+    }
+
+    pub fn add_content<R: Read>(&mut self, content: &mut R) -> Result<(), Error> {
         // Reset index hasher for this file
         self.content.index_hasher.reset();
 
@@ -111,8 +104,9 @@ where
         //
         // Bytes -> index digest -> compression -> buffer checksum -> buffer
         let mut payload_checksum_writer =
-            digest::Writer::new(&mut self.content.buffer, &mut self.payload_hasher);
-        let mut zstd_writer = zstd::Writer::new(&mut payload_checksum_writer, &mut self.encoder);
+            digest::Writer::new(&mut self.content.buffer, &mut self.content.buffer_hasher);
+        let mut zstd_writer =
+            zstd::Writer::new(&mut payload_checksum_writer, &mut self.content.encoder);
         let mut index_digest_writer =
             digest::Writer::new(&mut zstd_writer, &mut self.content.index_hasher);
 
@@ -142,16 +136,16 @@ where
         // Finish frame & get content payload checksum
         let checksum = {
             let mut writer =
-                digest::Writer::new(&mut self.content.buffer, &mut self.payload_hasher);
-            writer.write_all(&self.encoder.finish()?)?;
+                digest::Writer::new(&mut self.content.buffer, &mut self.content.buffer_hasher);
+            writer.write_all(&self.content.encoder.finish()?)?;
             writer.flush()?;
             self.content.stored_size += writer.bytes as u64;
-            self.payload_hasher.digest()
+            self.content.buffer_hasher.digest()
         };
 
         // Add index payloads
         self.payloads.push(encode_payload(
-            Payload::Index(&self.content.indices),
+            InnerPayload::Index(&self.content.indices),
             &mut self.payload_hasher,
             &mut self.encoder,
         )?);
@@ -173,6 +167,10 @@ pub struct Content<B> {
     /// Used to generate un-compressed digest of file
     /// contents used for [`Index`]
     index_hasher: digest::Hasher,
+    /// Used to generate compressed digest of file
+    /// contents used for content payload header
+    buffer_hasher: digest::Hasher,
+    encoder: zstd::Encoder,
 }
 
 struct EncodedPayload {
@@ -180,54 +178,91 @@ struct EncodedPayload {
     content: Vec<u8>,
 }
 
-enum Payload<'a> {
-    Meta(&'a [payload::Meta]),
-    Attributes(&'a [payload::Attribute]),
-    Layout(&'a [payload::Layout]),
-    Index(&'a [payload::Index]),
+pub enum Payload<'a> {
+    Meta(&'a [Meta]),
+    Attributes(&'a [Attribute]),
+    Layout(&'a [Layout]),
 }
 
-impl<'a> Payload<'a> {
+impl<'a> From<Payload<'a>> for InnerPayload<'a> {
+    fn from(payload: Payload<'a>) -> Self {
+        match payload {
+            Payload::Meta(payload) => InnerPayload::Meta(payload),
+            Payload::Attributes(payload) => InnerPayload::Attributes(payload),
+            Payload::Layout(payload) => InnerPayload::Layout(payload),
+        }
+    }
+}
+
+/// Different from [`Payload`] so public API
+/// doesn't support passing in `Index` payloads
+/// since it's a side-effect of [`Writer::add_content`]
+enum InnerPayload<'a> {
+    Meta(&'a [Meta]),
+    Attributes(&'a [Attribute]),
+    Layout(&'a [Layout]),
+    Index(&'a [Index]),
+}
+
+impl<'a> InnerPayload<'a> {
     fn pledged_size(&self) -> usize {
         match self {
-            Payload::Meta(records) => payload::records_total_size(records),
-            Payload::Attributes(records) => payload::records_total_size(records),
-            Payload::Layout(records) => payload::records_total_size(records),
-            Payload::Index(records) => payload::records_total_size(records),
+            InnerPayload::Meta(records) => payload::records_total_size(records),
+            InnerPayload::Attributes(records) => payload::records_total_size(records),
+            InnerPayload::Layout(records) => payload::records_total_size(records),
+            InnerPayload::Index(records) => payload::records_total_size(records),
         }
     }
 
     fn num_records(&self) -> usize {
         match self {
-            Payload::Meta(payload) => payload.len(),
-            Payload::Attributes(payload) => payload.len(),
-            Payload::Layout(payload) => payload.len(),
-            Payload::Index(payload) => payload.len(),
+            InnerPayload::Meta(payload) => payload.len(),
+            InnerPayload::Attributes(payload) => payload.len(),
+            InnerPayload::Layout(payload) => payload.len(),
+            InnerPayload::Index(payload) => payload.len(),
         }
     }
 
     fn encode<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         match self {
-            Payload::Meta(records) => payload::encode_records(writer, records)?,
-            Payload::Attributes(records) => payload::encode_records(writer, records)?,
-            Payload::Layout(records) => payload::encode_records(writer, records)?,
-            Payload::Index(records) => payload::encode_records(writer, records)?,
+            InnerPayload::Meta(records) => payload::encode_records(writer, records)?,
+            InnerPayload::Attributes(records) => payload::encode_records(writer, records)?,
+            InnerPayload::Layout(records) => payload::encode_records(writer, records)?,
+            InnerPayload::Index(records) => payload::encode_records(writer, records)?,
         }
         Ok(())
     }
 
     fn kind(&self) -> payload::Kind {
         match self {
-            Payload::Meta(_) => payload::Kind::Meta,
-            Payload::Attributes(_) => payload::Kind::Attributes,
-            Payload::Layout(_) => payload::Kind::Layout,
-            Payload::Index(_) => payload::Kind::Index,
+            InnerPayload::Meta(_) => payload::Kind::Meta,
+            InnerPayload::Attributes(_) => payload::Kind::Attributes,
+            InnerPayload::Layout(_) => payload::Kind::Layout,
+            InnerPayload::Index(_) => payload::Kind::Index,
         }
     }
 }
 
+impl<'a> From<&'a [Meta]> for Payload<'a> {
+    fn from(payload: &'a [Meta]) -> Self {
+        Self::Meta(payload)
+    }
+}
+
+impl<'a> From<&'a [Attribute]> for Payload<'a> {
+    fn from(payload: &'a [Attribute]) -> Self {
+        Self::Attributes(payload)
+    }
+}
+
+impl<'a> From<&'a [Layout]> for Payload<'a> {
+    fn from(payload: &'a [Layout]) -> Self {
+        Self::Layout(payload)
+    }
+}
+
 fn encode_payload(
-    payload: Payload,
+    payload: InnerPayload,
     hasher: &mut digest::Hasher,
     encoder: &mut zstd::Encoder,
 ) -> Result<EncodedPayload, Error> {

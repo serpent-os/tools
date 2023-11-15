@@ -116,23 +116,27 @@ mod test {
         reader.unpack_content(content, &mut content_buffer).unwrap();
 
         let mut out_stone = vec![];
-        let mut writer = Writer::new(&mut out_stone, header::v1::FileType::Binary).unwrap();
-        writer.add_meta_payload(meta).unwrap();
-        writer.add_layout_payload(layouts).unwrap();
-
         let mut temp_content_buffer: Vec<u8> = vec![];
-        let mut writer = writer
+        let mut writer = Writer::new(&mut out_stone, header::v1::FileType::Binary)
+            .unwrap()
             .with_content(
                 Cursor::new(&mut temp_content_buffer),
                 Some(content_buffer.len() as u64),
             )
             .unwrap();
 
+        writer.add_payload(meta).unwrap();
+
         for index in indices {
             let mut bytes = &content_buffer[index.start as usize..index.end as usize];
 
-            writer.add_file(&mut bytes).unwrap();
+            writer.add_content(&mut bytes).unwrap();
         }
+
+        // We'd typically add layouts after calling `add_content` since
+        // we will determine the layout when processing the file during
+        // that iteration
+        writer.add_payload(layouts).unwrap();
 
         writer.finalize().unwrap();
 
