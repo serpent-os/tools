@@ -11,12 +11,17 @@ use crate::{payload, Header};
 
 use self::zstd::Zstd;
 
+mod digest;
 mod zstd;
 
 pub fn read<R: Read + Seek>(mut reader: R) -> Result<Reader<R>, Error> {
     let header = Header::decode(&mut reader).map_err(Error::HeaderDecode)?;
 
-    Ok(Reader { header, reader })
+    Ok(Reader {
+        header,
+        reader,
+        hasher: digest::Hasher::new(),
+    })
 }
 
 pub fn read_bytes(bytes: &[u8]) -> Result<Reader<Cursor<&[u8]>>, Error> {
@@ -26,6 +31,7 @@ pub fn read_bytes(bytes: &[u8]) -> Result<Reader<Cursor<&[u8]>>, Error> {
 pub struct Reader<R> {
     pub header: Header,
     reader: R,
+    hasher: digest::Hasher,
 }
 
 impl<R: Read + Seek> Reader<R> {
@@ -38,7 +44,7 @@ impl<R: Read + Seek> Reader<R> {
         }
 
         Ok((0..self.header.num_payloads())
-            .flat_map(|_| PayloadKind::decode(&mut self.reader).transpose()))
+            .flat_map(|_| PayloadKind::decode(&mut self.reader, &mut self.hasher).transpose()))
     }
 
     pub fn unpack_content<W: Write>(
@@ -50,11 +56,16 @@ impl<R: Read + Seek> Reader<R> {
         W: Write,
     {
         self.reader.seek(SeekFrom::Start(content.body.offset))?;
+        self.hasher.reset();
 
-        let mut framed = (&mut self.reader).take(content.header.stored_size);
+        let mut hashed = digest::Reader::new(&mut self.reader, &mut self.hasher);
+        let mut framed = (&mut hashed).take(content.header.stored_size);
         let mut reader = PayloadReader::new(&mut framed, content.header.compression)?;
 
         io::copy(&mut reader, writer)?;
+
+        // Validate checksum
+        validate_checksum(&self.hasher, &content.header)?;
 
         Ok(())
     }
@@ -98,10 +109,15 @@ pub enum PayloadKind {
 }
 
 impl PayloadKind {
-    fn decode<R: Read + Seek>(mut reader: R) -> Result<Option<Self>, Error> {
+    fn decode<R: Read + Seek>(
+        mut reader: R,
+        hasher: &mut digest::Hasher,
+    ) -> Result<Option<Self>, Error> {
         match payload::Header::decode(&mut reader) {
             Ok(header) => {
-                let mut framed = (&mut reader).take(header.stored_size);
+                hasher.reset();
+                let mut hashed = digest::Reader::new(&mut reader, hasher);
+                let mut framed = (&mut hashed).take(header.stored_size);
 
                 let payload = match header.kind {
                     payload::Kind::Meta => PayloadKind::Meta(Payload {
@@ -145,6 +161,11 @@ impl PayloadKind {
                     }
                     payload::Kind::Dumb => unimplemented!("??"),
                 };
+
+                // Validate hash for non-content payloads
+                if !matches!(header.kind, payload::Kind::Content) {
+                    validate_checksum(hasher, &header)?;
+                }
 
                 Ok(Some(payload))
             }
@@ -198,6 +219,17 @@ impl PayloadKind {
     }
 }
 
+fn validate_checksum(hasher: &digest::Hasher, header: &payload::Header) -> Result<(), Error> {
+    let got = hasher.digest();
+    let expected = u64::from_be_bytes(header.checksum);
+
+    if got != expected {
+        Err(Error::PayloadChecksum { got, expected })
+    } else {
+        Ok(())
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Multiple content payloads not allowed")]
@@ -206,6 +238,8 @@ pub enum Error {
     HeaderDecode(#[from] header::DecodeError),
     #[error("payload decode")]
     PayloadDecode(#[from] payload::DecodeError),
+    #[error("payload checksum mismatch: got {got:02x}, expected {expected:02x}")]
+    PayloadChecksum { got: u64, expected: u64 },
     #[error("io")]
     Io(#[from] io::Error),
 }
