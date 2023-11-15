@@ -169,14 +169,14 @@ async fn refresh_index(
             let packages = payloads
                 .into_iter()
                 .filter_map(|payload| {
-                    if let stone::read::Payload::Meta(meta) = payload {
+                    if let stone::read::PayloadKind::Meta(meta) = payload {
                         Some(meta)
                     } else {
                         None
                     }
                 })
                 .map(|payload| {
-                    let meta = package::Meta::from_stone_payload(&payload)?;
+                    let meta = package::Meta::from_stone_payload(&payload.body)?;
 
                     // Create id from hash of meta
                     let hash = meta.hash.clone().ok_or(Error::MissingMetaField(

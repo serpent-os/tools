@@ -5,8 +5,8 @@
 use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 use thiserror::Error;
 
-use crate::header;
 use crate::payload::{Attribute, Compression, Index, Layout, Meta};
+use crate::{header, Payload};
 use crate::{payload, Header};
 
 use self::zstd::Zstd;
@@ -29,28 +29,30 @@ pub struct Reader<R> {
 }
 
 impl<R: Read + Seek> Reader<R> {
-    pub fn payloads(&mut self) -> Result<impl Iterator<Item = Result<Payload, Error>> + '_, Error> {
+    pub fn payloads(
+        &mut self,
+    ) -> Result<impl Iterator<Item = Result<PayloadKind, Error>> + '_, Error> {
         if self.reader.stream_position()? != Header::SIZE as u64 {
             // Rewind to start of payloads
             self.reader.seek(SeekFrom::Start(Header::SIZE as u64))?;
         }
 
         Ok((0..self.header.num_payloads())
-            .flat_map(|_| Payload::decode(&mut self.reader).transpose()))
+            .flat_map(|_| PayloadKind::decode(&mut self.reader).transpose()))
     }
 
     pub fn unpack_content<W: Write>(
         &mut self,
-        content: &Content,
+        content: &Payload<Content>,
         writer: &mut W,
     ) -> Result<(), Error>
     where
         W: Write,
     {
-        self.reader.seek(SeekFrom::Start(content.offset))?;
+        self.reader.seek(SeekFrom::Start(content.body.offset))?;
 
-        let mut framed = (&mut self.reader).take(content.length);
-        let mut reader = PayloadReader::new(&mut framed, content.compression)?;
+        let mut framed = (&mut self.reader).take(content.header.stored_size);
+        let mut reader = PayloadReader::new(&mut framed, content.header.compression)?;
 
         io::copy(&mut reader, writer)?;
 
@@ -60,10 +62,7 @@ impl<R: Read + Seek> Reader<R> {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Content {
-    pub plain_size: u64,
     offset: u64,
-    length: u64,
-    compression: Compression,
 }
 
 enum PayloadReader<R: Read> {
@@ -90,49 +89,58 @@ impl<R: Read> Read for PayloadReader<R> {
 }
 
 #[derive(Debug)]
-pub enum Payload {
-    Meta(Vec<Meta>),
-    Attributes(Vec<Attribute>),
-    Layout(Vec<Layout>),
-    Index(Vec<Index>),
-    Content(Content),
+pub enum PayloadKind {
+    Meta(Payload<Vec<Meta>>),
+    Attributes(Payload<Vec<Attribute>>),
+    Layout(Payload<Vec<Layout>>),
+    Index(Payload<Vec<Index>>),
+    Content(Payload<Content>),
 }
 
-impl Payload {
+impl PayloadKind {
     fn decode<R: Read + Seek>(mut reader: R) -> Result<Option<Self>, Error> {
         match payload::Header::decode(&mut reader) {
             Ok(header) => {
                 let mut framed = (&mut reader).take(header.stored_size);
 
                 let payload = match header.kind {
-                    payload::Kind::Meta => Payload::Meta(payload::decode_records(
-                        PayloadReader::new(&mut framed, header.compression)?,
-                        header.num_records,
-                    )?),
-                    payload::Kind::Layout => Payload::Layout(payload::decode_records(
-                        PayloadReader::new(&mut framed, header.compression)?,
-                        header.num_records,
-                    )?),
-                    payload::Kind::Index => Payload::Index(payload::decode_records(
-                        PayloadReader::new(&mut framed, header.compression)?,
-                        header.num_records,
-                    )?),
-                    payload::Kind::Attributes => Payload::Attributes(payload::decode_records(
-                        PayloadReader::new(&mut framed, header.compression)?,
-                        header.num_records,
-                    )?),
+                    payload::Kind::Meta => PayloadKind::Meta(Payload {
+                        header,
+                        body: payload::decode_records(
+                            PayloadReader::new(&mut framed, header.compression)?,
+                            header.num_records,
+                        )?,
+                    }),
+                    payload::Kind::Layout => PayloadKind::Layout(Payload {
+                        header,
+                        body: payload::decode_records(
+                            PayloadReader::new(&mut framed, header.compression)?,
+                            header.num_records,
+                        )?,
+                    }),
+                    payload::Kind::Index => PayloadKind::Index(Payload {
+                        header,
+                        body: payload::decode_records(
+                            PayloadReader::new(&mut framed, header.compression)?,
+                            header.num_records,
+                        )?,
+                    }),
+                    payload::Kind::Attributes => PayloadKind::Attributes(Payload {
+                        header,
+                        body: payload::decode_records(
+                            PayloadReader::new(&mut framed, header.compression)?,
+                            header.num_records,
+                        )?,
+                    }),
                     payload::Kind::Content => {
                         let offset = reader.stream_position()?;
-                        let length = header.stored_size;
 
                         // Skip past, these are read by user later
-                        reader.seek(SeekFrom::Current(length as i64))?;
+                        reader.seek(SeekFrom::Current(header.stored_size as i64))?;
 
-                        Payload::Content(Content {
-                            plain_size: header.plain_size,
-                            offset,
-                            length,
-                            compression: header.compression,
+                        PayloadKind::Content(Payload {
+                            header,
+                            body: Content { offset },
                         })
                     }
                     payload::Kind::Dumb => unimplemented!("??"),
@@ -149,7 +157,7 @@ impl Payload {
         }
     }
 
-    pub fn meta(&self) -> Option<&[Meta]> {
+    pub fn meta(&self) -> Option<&Payload<Vec<Meta>>> {
         if let Self::Meta(meta) = self {
             Some(meta)
         } else {
@@ -157,7 +165,7 @@ impl Payload {
         }
     }
 
-    pub fn attributes(&self) -> Option<&[Attribute]> {
+    pub fn attributes(&self) -> Option<&Payload<Vec<Attribute>>> {
         if let Self::Attributes(attributes) = self {
             Some(attributes)
         } else {
@@ -165,7 +173,7 @@ impl Payload {
         }
     }
 
-    pub fn layout(&self) -> Option<&[Layout]> {
+    pub fn layout(&self) -> Option<&Payload<Vec<Layout>>> {
         if let Self::Layout(layouts) = self {
             Some(layouts)
         } else {
@@ -173,7 +181,7 @@ impl Payload {
         }
     }
 
-    pub fn index(&self) -> Option<&[Index]> {
+    pub fn index(&self) -> Option<&Payload<Vec<Index>>> {
         if let Self::Index(indicies) = self {
             Some(indicies)
         } else {
@@ -181,7 +189,7 @@ impl Payload {
         }
     }
 
-    pub fn content(&self) -> Option<&Content> {
+    pub fn content(&self) -> Option<&Payload<Content>> {
         if let Self::Content(content) = self {
             Some(content)
         } else {
@@ -238,20 +246,24 @@ mod test {
 
         let mut unpacked_content = vec![];
 
-        if let Some(content) = payloads.iter().find_map(Payload::content) {
+        if let Some(content) = payloads.iter().find_map(PayloadKind::content) {
             stone
                 .unpack_content(content, &mut unpacked_content)
                 .expect("valid content");
 
-            for index in payloads.iter().filter_map(Payload::index).flatten() {
+            for index in payloads
+                .iter()
+                .filter_map(PayloadKind::index)
+                .flat_map(|p| &p.body)
+            {
                 let content = &unpacked_content[index.start as usize..index.end as usize];
                 let digest = xxh3_128(content);
                 assert_eq!(digest, index.digest);
 
                 payloads
                     .iter()
-                    .filter_map(Payload::layout)
-                    .flatten()
+                    .filter_map(PayloadKind::layout)
+                    .flat_map(|p| &p.body)
                     .find(|layout| {
                         if let Entry::Regular(digest, _) = &layout.entry {
                             return *digest == index.digest;

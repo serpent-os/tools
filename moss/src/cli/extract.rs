@@ -12,7 +12,7 @@ use std::{
 use clap::{arg, ArgMatches, Command};
 use moss::package::{self, MissingMetaError};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use stone::{payload::layout, read::Payload};
+use stone::{payload::layout, read::PayloadKind};
 use thiserror::{self, Error};
 use tokio::task;
 use tui::{ProgressBar, ProgressStyle};
@@ -53,14 +53,14 @@ fn extract(paths: Vec<PathBuf>) -> Result<(), Error> {
         let mut reader = stone::read(rdr).map_err(Error::Format)?;
 
         let payloads = reader.payloads()?.collect::<Result<Vec<_>, _>>()?;
-        let content = payloads.iter().find_map(Payload::content);
-        let layouts = payloads.iter().find_map(Payload::layout);
+        let content = payloads.iter().find_map(PayloadKind::content);
+        let layouts = payloads.iter().find_map(PayloadKind::layout);
         let meta = payloads
             .iter()
-            .find_map(Payload::meta)
+            .find_map(PayloadKind::meta)
             .ok_or(Error::MissingMeta)?;
 
-        let pkg = package::Meta::from_stone_payload(meta).map_err(Error::MalformedMeta)?;
+        let pkg = package::Meta::from_stone_payload(&meta.body).map_err(Error::MalformedMeta)?;
         let extraction_root = PathBuf::from(pkg.id().to_string());
 
         // Cleanup old extraction root
@@ -75,7 +75,7 @@ fn extract(paths: Vec<PathBuf>) -> Result<(), Error> {
         );
 
         if let Some(content) = content {
-            let size = content.plain_size;
+            let size = content.header.plain_size;
 
             let content_file = File::options()
                 .read(true)
@@ -89,8 +89,8 @@ fn extract(paths: Vec<PathBuf>) -> Result<(), Error> {
             // Extract all indices from the `.stoneContent` into hash-indexed unique files
             payloads
                 .par_iter()
-                .filter_map(Payload::index)
-                .flatten()
+                .filter_map(PayloadKind::index)
+                .flat_map(|p| &p.body)
                 .map(|idx| {
                     // Split file reader over index range
                     let mut file = &content_file;
@@ -109,7 +109,7 @@ fn extract(paths: Vec<PathBuf>) -> Result<(), Error> {
         }
 
         if let Some(layouts) = layouts {
-            for layout in layouts {
+            for layout in &layouts.body {
                 match &layout.entry {
                     layout::Entry::Regular(id, target) => {
                         let store_path = content_store.join(format!("{:02x}", id));

@@ -562,7 +562,7 @@ mod encoding {
 mod test {
     use std::str::FromStr;
 
-    use stone::read::Payload;
+    use stone::read::PayloadKind;
 
     use crate::dependency::Kind;
 
@@ -585,8 +585,8 @@ mod test {
             .unwrap()
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
-        let meta_payload = payloads.iter().find_map(Payload::meta).unwrap();
-        let meta = Meta::from_stone_payload(meta_payload).unwrap();
+        let meta_payload = payloads.iter().find_map(PayloadKind::meta).unwrap();
+        let meta = Meta::from_stone_payload(&meta_payload.body).unwrap();
 
         let id = package::Id::from("test".to_string());
 

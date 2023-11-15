@@ -11,14 +11,14 @@ pub mod read {
     use std::{fs::File, path::PathBuf};
 
     use futures::Stream;
-    pub use stone::read::{Error, Payload};
+    pub use stone::read::{Error, PayloadKind};
     use stone::Header;
     use tokio::{sync::mpsc, task};
     use tokio_stream::wrappers::ReceiverStream;
 
     pub async fn stream_payloads(
         path: impl Into<PathBuf>,
-    ) -> Result<(Header, impl Stream<Item = Result<Payload, Error>>), Error> {
+    ) -> Result<(Header, impl Stream<Item = Result<PayloadKind, Error>>), Error> {
         // Receive potential error when reading before payloads
         let (setup_sender, mut setup_receiver) = mpsc::channel(1);
         // Receive payloads

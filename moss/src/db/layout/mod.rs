@@ -298,7 +298,7 @@ mod encoding {
 mod test {
     use std::str::FromStr;
 
-    use stone::read::Payload;
+    use stone::read::PayloadKind;
 
     use super::*;
 
@@ -321,8 +321,8 @@ mod test {
             .unwrap();
         let layouts = payloads
             .iter()
-            .filter_map(Payload::layout)
-            .flatten()
+            .filter_map(PayloadKind::layout)
+            .flat_map(|p| &p.body)
             .cloned()
             .map(|layout| (package::Id::from("test".to_string()), layout))
             .collect::<Vec<_>>();

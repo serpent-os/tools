@@ -43,7 +43,7 @@ pub enum Compression {
     Zstd = 2,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Header {
     pub stored_size: u64,
     pub plain_size: u64,
@@ -136,6 +136,12 @@ pub fn encode_records<T: Record, W: Write>(
 
 pub fn records_total_size<T: Record>(records: &[T]) -> usize {
     records.iter().map(T::size).sum()
+}
+
+#[derive(Debug)]
+pub struct Payload<T> {
+    pub header: Header,
+    pub body: T,
 }
 
 #[derive(Debug, Error)]

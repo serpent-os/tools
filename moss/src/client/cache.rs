@@ -5,7 +5,7 @@
 use std::{io, path::PathBuf};
 
 use futures::{stream, StreamExt};
-use stone::{payload, read::Payload};
+use stone::{payload, read::PayloadKind};
 use thiserror::Error;
 use tokio::{
     fs::{self, File},
@@ -89,7 +89,7 @@ pub struct Download {
 /// Upon fetch completion we have this unpacked asset bound with
 /// an open reader
 pub struct UnpackedAsset {
-    pub payloads: Vec<Payload>,
+    pub payloads: Vec<PayloadKind>,
 }
 
 impl Download {
@@ -153,8 +153,8 @@ impl Download {
             let payloads = reader.payloads()?.collect::<Result<Vec<_>, _>>()?;
             let indicies = payloads
                 .iter()
-                .filter_map(Payload::index)
-                .flatten()
+                .filter_map(PayloadKind::index)
+                .flat_map(|p| &p.body)
                 .collect::<Vec<_>>();
 
             // If download was cached & all assets exist, we can skip unpacking
@@ -164,7 +164,7 @@ impl Download {
 
             let content = payloads
                 .iter()
-                .find_map(Payload::content)
+                .find_map(PayloadKind::content)
                 .ok_or(Error::MissingContent)?;
 
             let content_file = File::options()
@@ -175,7 +175,7 @@ impl Download {
 
             reader.unpack_content(
                 content,
-                &mut ProgressWriter::new(&content_file, content.plain_size, &on_progress),
+                &mut ProgressWriter::new(&content_file, content.header.plain_size, &on_progress),
             )?;
 
             indicies

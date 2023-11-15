@@ -10,6 +10,7 @@ pub mod read;
 pub mod write;
 
 pub use self::header::Header;
+pub use self::payload::Payload;
 pub use self::read::{read, read_bytes, Reader};
 pub use self::write::Writer;
 
@@ -106,10 +107,13 @@ mod test {
             .unwrap()
             .collect::<std::result::Result<Vec<_>, _>>()
             .unwrap();
-        let meta = payloads.iter().find_map(read::Payload::meta).unwrap();
-        let layouts = payloads.iter().find_map(read::Payload::layout).unwrap();
-        let indices = payloads.iter().find_map(read::Payload::index).unwrap();
-        let content = payloads.iter().find_map(read::Payload::content).unwrap();
+        let meta = payloads.iter().find_map(read::PayloadKind::meta).unwrap();
+        let layouts = payloads.iter().find_map(read::PayloadKind::layout).unwrap();
+        let indices = payloads.iter().find_map(read::PayloadKind::index).unwrap();
+        let content = payloads
+            .iter()
+            .find_map(read::PayloadKind::content)
+            .unwrap();
 
         let mut content_buffer = vec![];
 
@@ -125,9 +129,9 @@ mod test {
             )
             .unwrap();
 
-        writer.add_payload(meta).unwrap();
+        writer.add_payload(meta.body.as_slice()).unwrap();
 
-        for index in indices {
+        for index in &indices.body {
             let mut bytes = &content_buffer[index.start as usize..index.end as usize];
 
             writer.add_content(&mut bytes).unwrap();
@@ -136,7 +140,7 @@ mod test {
         // We'd typically add layouts after calling `add_content` since
         // we will determine the layout when processing the file during
         // that iteration
-        writer.add_payload(layouts).unwrap();
+        writer.add_payload(layouts.body.as_slice()).unwrap();
 
         writer.finalize().unwrap();
 
@@ -148,19 +152,41 @@ mod test {
             .unwrap()
             .collect::<std::result::Result<Vec<_>, _>>()
             .unwrap();
-        let rt_meta = rt_payloads.iter().find_map(read::Payload::meta).unwrap();
-        let rt_layouts = rt_payloads.iter().find_map(read::Payload::layout).unwrap();
-        let rt_indices = rt_payloads.iter().find_map(read::Payload::index).unwrap();
-        let rt_content = rt_payloads.iter().find_map(read::Payload::content).unwrap();
+        let rt_meta = rt_payloads
+            .iter()
+            .find_map(read::PayloadKind::meta)
+            .unwrap();
+        let rt_layouts = rt_payloads
+            .iter()
+            .find_map(read::PayloadKind::layout)
+            .unwrap();
+        let rt_indices = rt_payloads
+            .iter()
+            .find_map(read::PayloadKind::index)
+            .unwrap();
+        let rt_content = rt_payloads
+            .iter()
+            .find_map(read::PayloadKind::content)
+            .unwrap();
 
-        assert_eq!(rt_meta.len(), meta.len());
-        assert_eq!(rt_layouts.len(), layouts.len());
-        assert_eq!(rt_indices.len(), indices.len());
-        assert_eq!(rt_content.plain_size, content.plain_size);
+        // Stored size / digest will be different since compression from boulder
+        // isn't identical & we don't add null terminated strings
+        assert_eq!(rt_indices.header.plain_size, indices.header.plain_size);
+        assert_eq!(rt_content.header.plain_size, content.header.plain_size);
+        assert_eq!(rt_meta.body.len(), meta.body.len());
+        assert_eq!(rt_layouts.body.len(), layouts.body.len());
 
-        assert!(meta.iter().zip(rt_meta).all(|(a, b)| a == b));
-        assert!(layouts.iter().zip(rt_layouts).all(|(a, b)| a == b));
-        assert!(indices.iter().zip(rt_indices).all(|(a, b)| a == b));
+        assert!(meta.body.iter().zip(&rt_meta.body).all(|(a, b)| a == b));
+        assert!(layouts
+            .body
+            .iter()
+            .zip(&rt_layouts.body)
+            .all(|(a, b)| a == b));
+        assert!(indices
+            .body
+            .iter()
+            .zip(&rt_indices.body)
+            .all(|(a, b)| a == b));
 
         let mut rt_content_buffer = vec![];
 

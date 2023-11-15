@@ -27,7 +27,7 @@ fn read<R: Read + Seek>(reader: R) {
         .collect::<Result<Vec<_>, _>>()
         .unwrap();
 
-    if let Some(content) = payloads.iter().find_map(stone::read::Payload::content) {
+    if let Some(content) = payloads.iter().find_map(stone::read::PayloadKind::content) {
         stone.unpack_content(content, &mut sink()).unwrap();
     }
 }
