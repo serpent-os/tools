@@ -2,16 +2,16 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::io::Read;
+use std::io::{Read, Write};
 
-use super::{DecodeError, Record};
-use crate::ReadExt;
+use super::{DecodeError, EncodeError, Record};
+use crate::{ReadExt, WriteExt};
 
 /// An IndexEntry (a series of sequential entries within the IndexPayload)
 /// record offsets to unique files within the ContentPayload when decompressed
 /// This is used to split the file into the content store on disk before promoting
 /// to a transaction
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Index {
     /// Start pf the entry within the ContentPayload
     pub start: u64,
@@ -30,5 +30,12 @@ impl Record for Index {
         let digest = reader.read_u128()?;
 
         Ok(Self { start, end, digest })
+    }
+
+    fn encode<W: Write>(&self, writer: &mut W) -> Result<(), EncodeError> {
+        writer.write_u64(self.start)?;
+        writer.write_u64(self.end)?;
+        writer.write_u128(self.digest)?;
+        Ok(())
     }
 }

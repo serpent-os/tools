@@ -2,11 +2,11 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 
 use thiserror::Error;
 
-use crate::ReadExt;
+use crate::{ReadExt, WriteExt};
 
 pub mod v1;
 
@@ -51,9 +51,17 @@ impl AgnosticHeader {
             version,
         })
     }
+
+    fn encode<W: Write>(&self, writer: &mut W) -> Result<(), io::Error> {
+        writer.write_array(self.magic)?;
+        writer.write_array(self.data)?;
+        writer.write_array(self.version)?;
+
+        Ok(())
+    }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Header {
     V1(v1::Header),
 }
@@ -74,7 +82,7 @@ impl Header {
         }
     }
 
-    pub fn encode(&self) -> AgnosticHeader {
+    pub fn encode<W: Write>(&self, writer: &mut W) -> Result<(), io::Error> {
         let version = u32::to_be_bytes(self.version() as u32);
 
         let data = match self {
@@ -86,6 +94,7 @@ impl Header {
             data,
             version,
         }
+        .encode(writer)
     }
 
     pub fn decode<R: Read>(reader: R) -> Result<Self, DecodeError> {

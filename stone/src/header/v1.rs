@@ -16,11 +16,8 @@ const INTEGRITY_CHECK: [u8; 21] = [
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileType {
-    /// Sanity: Unknown container type
-    Unknown,
-
     /// Binary package
-    Binary,
+    Binary = 1,
 
     /// Delta package
     Delta,
@@ -33,7 +30,7 @@ pub enum FileType {
 }
 
 /// Header for the v1 format version
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Header {
     pub num_payloads: u16,
     pub file_type: FileType,
@@ -50,7 +47,6 @@ impl Header {
 
         let num_payloads = u16::from_be_bytes(num_payloads.try_into().unwrap());
         let file_type = match file_type[0] {
-            0 => FileType::Unknown,
             1 => FileType::Binary,
             2 => FileType::Delta,
             3 => FileType::Repository,

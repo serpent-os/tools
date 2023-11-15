@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::io::Read;
+use std::io::{Read, Write};
 
-use super::{DecodeError, Record};
-use crate::ReadExt;
+use super::{DecodeError, EncodeError, Record};
+use crate::{ReadExt, WriteExt};
 
 /// Layout entries record their target file type so they can be rebuilt on
 /// the target installation.
@@ -34,7 +34,7 @@ pub enum FileType {
     Socket,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Entry {
     Regular(u128, String),
     Symlink(String, String),
@@ -48,7 +48,7 @@ pub enum Entry {
 }
 
 // TODO: Strong types these fields
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Layout {
     pub uid: u32,
     pub gid: u32,
@@ -111,5 +111,35 @@ impl Record for Layout {
             tag,
             entry,
         })
+    }
+
+    fn encode<W: Write>(&self, writer: &mut W) -> Result<(), EncodeError> {
+        writer.write_u32(self.uid)?;
+        writer.write_u32(self.gid)?;
+        writer.write_u32(self.mode)?;
+        writer.write_u32(self.tag)?;
+
+        let (source, target, file_type) = match &self.entry {
+            Entry::Regular(hash, target) => {
+                (hash.to_be_bytes().to_vec(), target.as_bytes().to_vec(), 1)
+            }
+            Entry::Symlink(source, target) => {
+                (source.as_bytes().to_vec(), target.as_bytes().to_vec(), 2)
+            }
+            Entry::Directory(target) => (vec![], target.as_bytes().to_vec(), 3),
+            Entry::CharacterDevice(target) => (vec![], target.as_bytes().to_vec(), 4),
+            Entry::BlockDevice(target) => (vec![], target.as_bytes().to_vec(), 5),
+            Entry::Fifo(target) => (vec![], target.as_bytes().to_vec(), 6),
+            Entry::Socket(target) => (vec![], target.as_bytes().to_vec(), 7),
+        };
+
+        writer.write_u16(source.len() as u16)?;
+        writer.write_u16(target.len() as u16)?;
+        writer.write_u8(file_type)?;
+        writer.write_array([0; 11])?;
+        writer.write_all(&source)?;
+        writer.write_all(&target)?;
+
+        Ok(())
     }
 }

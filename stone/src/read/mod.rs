@@ -13,22 +13,22 @@ use self::zstd::Zstd;
 
 mod zstd;
 
-pub fn read<R: Read + Seek>(mut reader: R) -> Result<Stone<R>, Error> {
+pub fn read<R: Read + Seek>(mut reader: R) -> Result<Reader<R>, Error> {
     let header = Header::decode(&mut reader).map_err(Error::HeaderDecode)?;
 
-    Ok(Stone { header, reader })
+    Ok(Reader { header, reader })
 }
 
-pub fn read_bytes(bytes: &[u8]) -> Result<Stone<Cursor<&[u8]>>, Error> {
+pub fn read_bytes(bytes: &[u8]) -> Result<Reader<Cursor<&[u8]>>, Error> {
     read(Cursor::new(bytes))
 }
 
-pub struct Stone<R> {
+pub struct Reader<R> {
     pub header: Header,
     reader: R,
 }
 
-impl<R: Read + Seek> Stone<R> {
+impl<R: Read + Seek> Reader<R> {
     pub fn payloads(&mut self) -> Result<impl Iterator<Item = Result<Payload, Error>> + '_, Error> {
         if self.reader.stream_position()? != Header::SIZE as u64 {
             // Rewind to start of payloads
