@@ -10,12 +10,15 @@ use zstd::zstd_safe::CParameter;
 type RawEncoder = zstd::stream::raw::Encoder<'static>;
 type ZstdWriter<'a, W> = zstd::stream::zio::Writer<W, &'a mut Encoder>;
 
+/// Transparent encapsulation of zstd compression with the purpose
+/// of encoding moss (.stone) payloads to a stream
 pub struct Writer<'a, W: Write> {
     writer: ZstdWriter<'a, W>,
     pub plain_bytes: usize,
 }
 
 impl<'a, W: Write> Writer<'a, W> {
+    /// Construct a new Writerfor the given writer
     pub fn new(writer: W, encoder: &'a mut Encoder) -> Self {
         Self {
             writer: ZstdWriter::new(writer, encoder),
@@ -23,6 +26,7 @@ impl<'a, W: Write> Writer<'a, W> {
         }
     }
 
+    /// Finish all encoding and flush underlying writer
     pub fn finish(self) -> Result<()> {
         let (mut writer, encoder) = self.writer.into_inner();
         let footer = encoder.finish()?;
@@ -32,12 +36,14 @@ impl<'a, W: Write> Writer<'a, W> {
 }
 
 impl<'a, W: Write> Write for Writer<'a, W> {
+    /// Handle transparent encoding, record offsets
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
         self.plain_bytes += buf.len();
 
         self.writer.write(buf)
     }
 
+    /// Flush the stream
     fn flush(&mut self) -> Result<()> {
         self.writer.flush()
     }
@@ -46,16 +52,19 @@ impl<'a, W: Write> Write for Writer<'a, W> {
 pub struct Encoder(RawEncoder);
 
 impl Encoder {
+    /// Concrete zstd encoder
     pub fn new() -> Result<Self> {
         let mut encoder = RawEncoder::new(18)?;
         encoder.set_parameter(CParameter::WindowLog(31))?;
         Ok(Self(encoder))
     }
 
+    /// Let zstd know of the final uncompressed size, to optimise compression
     pub fn set_pledged_size(&mut self, pledged_size: Option<u64>) -> Result<()> {
         self.0.set_pledged_src_size(pledged_size)
     }
 
+    /// Flush everything
     pub fn finish(&mut self) -> Result<Vec<u8>> {
         let mut footer = vec![];
         let mut writer = ZstdWriter::new(&mut footer, self);
