@@ -5,54 +5,67 @@
 use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 use thiserror::Error;
 
-use crate::header;
 use crate::payload::{Attribute, Compression, Index, Layout, Meta};
+use crate::{header, Payload};
 use crate::{payload, Header};
 
 use self::zstd::Zstd;
 
+mod digest;
 mod zstd;
 
-pub fn read<R: Read + Seek>(mut reader: R) -> Result<Stone<R>, Error> {
+pub fn read<R: Read + Seek>(mut reader: R) -> Result<Reader<R>, Error> {
     let header = Header::decode(&mut reader).map_err(Error::HeaderDecode)?;
 
-    Ok(Stone { header, reader })
+    Ok(Reader {
+        header,
+        reader,
+        hasher: digest::Hasher::new(),
+    })
 }
 
-pub fn read_bytes(bytes: &[u8]) -> Result<Stone<Cursor<&[u8]>>, Error> {
+pub fn read_bytes(bytes: &[u8]) -> Result<Reader<Cursor<&[u8]>>, Error> {
     read(Cursor::new(bytes))
 }
 
-pub struct Stone<R> {
+pub struct Reader<R> {
     pub header: Header,
     reader: R,
+    hasher: digest::Hasher,
 }
 
-impl<R: Read + Seek> Stone<R> {
-    pub fn payloads(&mut self) -> Result<impl Iterator<Item = Result<Payload, Error>> + '_, Error> {
+impl<R: Read + Seek> Reader<R> {
+    pub fn payloads(
+        &mut self,
+    ) -> Result<impl Iterator<Item = Result<PayloadKind, Error>> + '_, Error> {
         if self.reader.stream_position()? != Header::SIZE as u64 {
             // Rewind to start of payloads
             self.reader.seek(SeekFrom::Start(Header::SIZE as u64))?;
         }
 
         Ok((0..self.header.num_payloads())
-            .flat_map(|_| Payload::decode(&mut self.reader).transpose()))
+            .flat_map(|_| PayloadKind::decode(&mut self.reader, &mut self.hasher).transpose()))
     }
 
     pub fn unpack_content<W: Write>(
         &mut self,
-        content: &Content,
+        content: &Payload<Content>,
         writer: &mut W,
     ) -> Result<(), Error>
     where
         W: Write,
     {
-        self.reader.seek(SeekFrom::Start(content.offset))?;
+        self.reader.seek(SeekFrom::Start(content.body.offset))?;
+        self.hasher.reset();
 
-        let mut framed = (&mut self.reader).take(content.length);
-        let mut reader = PayloadReader::new(&mut framed, content.compression)?;
+        let mut hashed = digest::Reader::new(&mut self.reader, &mut self.hasher);
+        let mut framed = (&mut hashed).take(content.header.stored_size);
+        let mut reader = PayloadReader::new(&mut framed, content.header.compression)?;
 
         io::copy(&mut reader, writer)?;
+
+        // Validate checksum
+        validate_checksum(&self.hasher, &content.header)?;
 
         Ok(())
     }
@@ -60,10 +73,7 @@ impl<R: Read + Seek> Stone<R> {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Content {
-    pub plain_size: u64,
     offset: u64,
-    length: u64,
-    compression: Compression,
 }
 
 enum PayloadReader<R: Read> {
@@ -90,53 +100,72 @@ impl<R: Read> Read for PayloadReader<R> {
 }
 
 #[derive(Debug)]
-pub enum Payload {
-    Meta(Vec<Meta>),
-    Attributes(Vec<Attribute>),
-    Layout(Vec<Layout>),
-    Index(Vec<Index>),
-    Content(Content),
+pub enum PayloadKind {
+    Meta(Payload<Vec<Meta>>),
+    Attributes(Payload<Vec<Attribute>>),
+    Layout(Payload<Vec<Layout>>),
+    Index(Payload<Vec<Index>>),
+    Content(Payload<Content>),
 }
 
-impl Payload {
-    fn decode<R: Read + Seek>(mut reader: R) -> Result<Option<Self>, Error> {
+impl PayloadKind {
+    fn decode<R: Read + Seek>(
+        mut reader: R,
+        hasher: &mut digest::Hasher,
+    ) -> Result<Option<Self>, Error> {
         match payload::Header::decode(&mut reader) {
             Ok(header) => {
-                let mut framed = (&mut reader).take(header.stored_size);
+                hasher.reset();
+                let mut hashed = digest::Reader::new(&mut reader, hasher);
+                let mut framed = (&mut hashed).take(header.stored_size);
 
                 let payload = match header.kind {
-                    payload::Kind::Meta => Payload::Meta(payload::decode_records(
-                        PayloadReader::new(&mut framed, header.compression)?,
-                        header.num_records,
-                    )?),
-                    payload::Kind::Layout => Payload::Layout(payload::decode_records(
-                        PayloadReader::new(&mut framed, header.compression)?,
-                        header.num_records,
-                    )?),
-                    payload::Kind::Index => Payload::Index(payload::decode_records(
-                        PayloadReader::new(&mut framed, header.compression)?,
-                        header.num_records,
-                    )?),
-                    payload::Kind::Attributes => Payload::Attributes(payload::decode_records(
-                        PayloadReader::new(&mut framed, header.compression)?,
-                        header.num_records,
-                    )?),
+                    payload::Kind::Meta => PayloadKind::Meta(Payload {
+                        header,
+                        body: payload::decode_records(
+                            PayloadReader::new(&mut framed, header.compression)?,
+                            header.num_records,
+                        )?,
+                    }),
+                    payload::Kind::Layout => PayloadKind::Layout(Payload {
+                        header,
+                        body: payload::decode_records(
+                            PayloadReader::new(&mut framed, header.compression)?,
+                            header.num_records,
+                        )?,
+                    }),
+                    payload::Kind::Index => PayloadKind::Index(Payload {
+                        header,
+                        body: payload::decode_records(
+                            PayloadReader::new(&mut framed, header.compression)?,
+                            header.num_records,
+                        )?,
+                    }),
+                    payload::Kind::Attributes => PayloadKind::Attributes(Payload {
+                        header,
+                        body: payload::decode_records(
+                            PayloadReader::new(&mut framed, header.compression)?,
+                            header.num_records,
+                        )?,
+                    }),
                     payload::Kind::Content => {
                         let offset = reader.stream_position()?;
-                        let length = header.stored_size;
 
                         // Skip past, these are read by user later
-                        reader.seek(SeekFrom::Current(length as i64))?;
+                        reader.seek(SeekFrom::Current(header.stored_size as i64))?;
 
-                        Payload::Content(Content {
-                            plain_size: header.plain_size,
-                            offset,
-                            length,
-                            compression: header.compression,
+                        PayloadKind::Content(Payload {
+                            header,
+                            body: Content { offset },
                         })
                     }
                     payload::Kind::Dumb => unimplemented!("??"),
                 };
+
+                // Validate hash for non-content payloads
+                if !matches!(header.kind, payload::Kind::Content) {
+                    validate_checksum(hasher, &header)?;
+                }
 
                 Ok(Some(payload))
             }
@@ -149,7 +178,7 @@ impl Payload {
         }
     }
 
-    pub fn meta(&self) -> Option<&[Meta]> {
+    pub fn meta(&self) -> Option<&Payload<Vec<Meta>>> {
         if let Self::Meta(meta) = self {
             Some(meta)
         } else {
@@ -157,7 +186,7 @@ impl Payload {
         }
     }
 
-    pub fn attributes(&self) -> Option<&[Attribute]> {
+    pub fn attributes(&self) -> Option<&Payload<Vec<Attribute>>> {
         if let Self::Attributes(attributes) = self {
             Some(attributes)
         } else {
@@ -165,7 +194,7 @@ impl Payload {
         }
     }
 
-    pub fn layout(&self) -> Option<&[Layout]> {
+    pub fn layout(&self) -> Option<&Payload<Vec<Layout>>> {
         if let Self::Layout(layouts) = self {
             Some(layouts)
         } else {
@@ -173,7 +202,7 @@ impl Payload {
         }
     }
 
-    pub fn index(&self) -> Option<&[Index]> {
+    pub fn index(&self) -> Option<&Payload<Vec<Index>>> {
         if let Self::Index(indicies) = self {
             Some(indicies)
         } else {
@@ -181,12 +210,23 @@ impl Payload {
         }
     }
 
-    pub fn content(&self) -> Option<&Content> {
+    pub fn content(&self) -> Option<&Payload<Content>> {
         if let Self::Content(content) = self {
             Some(content)
         } else {
             None
         }
+    }
+}
+
+fn validate_checksum(hasher: &digest::Hasher, header: &payload::Header) -> Result<(), Error> {
+    let got = hasher.digest();
+    let expected = u64::from_be_bytes(header.checksum);
+
+    if got != expected {
+        Err(Error::PayloadChecksum { got, expected })
+    } else {
+        Ok(())
     }
 }
 
@@ -198,6 +238,8 @@ pub enum Error {
     HeaderDecode(#[from] header::DecodeError),
     #[error("payload decode")]
     PayloadDecode(#[from] payload::DecodeError),
+    #[error("payload checksum mismatch: got {got:02x}, expected {expected:02x}")]
+    PayloadChecksum { got: u64, expected: u64 },
     #[error("io")]
     Io(#[from] io::Error),
 }
@@ -238,20 +280,24 @@ mod test {
 
         let mut unpacked_content = vec![];
 
-        if let Some(content) = payloads.iter().find_map(Payload::content) {
+        if let Some(content) = payloads.iter().find_map(PayloadKind::content) {
             stone
                 .unpack_content(content, &mut unpacked_content)
                 .expect("valid content");
 
-            for index in payloads.iter().filter_map(Payload::index).flatten() {
+            for index in payloads
+                .iter()
+                .filter_map(PayloadKind::index)
+                .flat_map(|p| &p.body)
+            {
                 let content = &unpacked_content[index.start as usize..index.end as usize];
                 let digest = xxh3_128(content);
                 assert_eq!(digest, index.digest);
 
                 payloads
                     .iter()
-                    .filter_map(Payload::layout)
-                    .flatten()
+                    .filter_map(PayloadKind::layout)
+                    .flat_map(|p| &p.body)
                     .find(|layout| {
                         if let Entry::Regular(digest, _) = &layout.entry {
                             return *digest == index.digest;

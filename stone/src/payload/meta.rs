@@ -2,23 +2,26 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{fmt::Display, io::Read};
+use std::{
+    fmt::Display,
+    io::{Read, Write},
+};
 
-use super::{DecodeError, Record};
-use crate::ReadExt;
+use super::{DecodeError, EncodeError, Record};
+use crate::{ReadExt, WriteExt};
 
 /// The Meta payload contains a series of sequential records with
 /// strong types and context tags, i.e. their use such as Name.
 /// These record all metadata for every .stone packages and provide
 /// no content
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Meta {
     pub tag: Tag,
     pub kind: Kind,
 }
 
 #[repr(u8)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dependency {
     /// Just the plain name of a package
     PackageName = 0,
@@ -79,6 +82,26 @@ pub enum Kind {
     String(String),
     Dependency(Dependency, String),
     Provider(Dependency, String),
+}
+
+impl Kind {
+    fn size(&self) -> usize {
+        match self {
+            Kind::Int8(_) => std::mem::size_of::<i8>(),
+            Kind::Uint8(_) => std::mem::size_of::<u8>(),
+            Kind::Int16(_) => std::mem::size_of::<i16>(),
+            Kind::Uint16(_) => std::mem::size_of::<u16>(),
+            Kind::Int32(_) => std::mem::size_of::<i32>(),
+            Kind::Uint32(_) => std::mem::size_of::<u32>(),
+            Kind::Int64(_) => std::mem::size_of::<i64>(),
+            Kind::Uint64(_) => std::mem::size_of::<u64>(),
+            Kind::String(s) => s.len(),
+            // Plus dep size
+            Kind::Dependency(_, s) => s.len() + 1,
+            // Plus dep size
+            Kind::Provider(_, s) => s.len() + 1,
+        }
+    }
 }
 
 #[repr(u16)]
@@ -201,5 +224,55 @@ impl Record for Meta {
         };
 
         Ok(Self { tag, kind })
+    }
+
+    fn encode<W: Write>(&self, writer: &mut W) -> Result<(), EncodeError> {
+        let kind = match self.kind {
+            Kind::Int8(_) => 1,
+            Kind::Uint8(_) => 2,
+            Kind::Int16(_) => 3,
+            Kind::Uint16(_) => 4,
+            Kind::Int32(_) => 5,
+            Kind::Uint32(_) => 6,
+            Kind::Int64(_) => 7,
+            Kind::Uint64(_) => 8,
+            Kind::String(_) => 9,
+            Kind::Dependency(_, _) => 10,
+            Kind::Provider(_, _) => 11,
+        };
+
+        writer.write_u32(self.kind.size() as u32)?;
+        writer.write_u16(self.tag as u16)?;
+        writer.write_u8(kind)?;
+        // Padding
+        writer.write_array::<1>([0])?;
+
+        match &self.kind {
+            Kind::Int8(i) => writer.write_u8(*i as u8)?,
+            Kind::Uint8(i) => writer.write_u8(*i)?,
+            Kind::Int16(i) => writer.write_u16(*i as u16)?,
+            Kind::Uint16(i) => writer.write_u16(*i)?,
+            Kind::Int32(i) => writer.write_u32(*i as u32)?,
+            Kind::Uint32(i) => writer.write_u32(*i)?,
+            Kind::Int64(i) => writer.write_u64(*i as u64)?,
+            Kind::Uint64(i) => writer.write_u64(*i)?,
+            Kind::String(s) => {
+                writer.write_all(s.as_bytes())?;
+                // TODO: Do we want to add null byte?
+                // writer.write_u8(b'\0')?;
+            }
+            Kind::Dependency(dep, s) | Kind::Provider(dep, s) => {
+                writer.write_u8(*dep as u8)?;
+                writer.write_all(s.as_bytes())?;
+                // TODO: Do we want to add null byte?
+                // writer.write_u8(b'\0')?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn size(&self) -> usize {
+        4 + 2 + 1 + 1 + self.kind.size()
     }
 }

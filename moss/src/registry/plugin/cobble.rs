@@ -7,7 +7,7 @@ use std::{collections::HashMap, path::PathBuf};
 use crate::package::{self, meta, Meta, MissingMetaError, Package};
 use crate::registry::job::Job;
 use crate::{stone, Provider};
-use ::stone::read::Payload;
+use ::stone::read::PayloadKind;
 use futures::StreamExt;
 use thiserror::Error;
 
@@ -27,7 +27,7 @@ impl Cobble {
         // Grab the metapayload
         let metadata = payloads
             .filter_map(|result| async {
-                if let Ok(Payload::Meta(meta)) = result {
+                if let Ok(PayloadKind::Meta(meta)) = result {
                     Some(meta)
                 } else {
                     None
@@ -39,7 +39,7 @@ impl Cobble {
             .ok_or(Error::MissingMetaPayload)?;
 
         // Whack it into the cobbler
-        let meta = Meta::from_stone_payload(&metadata)?;
+        let meta = Meta::from_stone_payload(&metadata.body)?;
         let id = meta.id();
         let ret = id.clone();
 

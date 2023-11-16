@@ -7,7 +7,7 @@ use futures::StreamExt;
 use moss::stone;
 use moss::stone::payload::layout;
 use moss::stone::payload::meta;
-use moss::stone::read::Payload;
+use moss::stone::read::PayloadKind;
 use std::path::PathBuf;
 use thiserror::Error;
 
@@ -52,11 +52,11 @@ async fn inspect(paths: Vec<PathBuf>) -> Result<(), Error> {
             let mut provs = vec![];
 
             match payload {
-                Payload::Layout(l) => layouts = l,
-                Payload::Meta(meta) => {
+                PayloadKind::Layout(l) => layouts = l.body,
+                PayloadKind::Meta(meta) => {
                     println!();
 
-                    for record in meta {
+                    for record in meta.body {
                         let name = format!("{:?}", record.tag);
 
                         match &record.kind {

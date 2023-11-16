@@ -17,7 +17,7 @@ use nix::{
     sys::stat::{fchmodat, mkdirat, Mode},
     unistd::{close, linkat, mkdir, symlinkat},
 };
-use stone::{payload::layout, read::Payload};
+use stone::{payload::layout, read::PayloadKind};
 use thiserror::Error;
 use tokio::fs::{self, create_dir_all, remove_dir_all, remove_file, rename, symlink};
 use tui::{MultiProgress, ProgressBar, ProgressStyle, Stylize};
@@ -348,7 +348,8 @@ impl Client {
                 unpacked
                     .payloads
                     .iter()
-                    .find_map(Payload::layout)
+                    .find_map(PayloadKind::layout)
+                    .map(|p| &p.body)
                     .ok_or(Error::CorruptedPackage)?
                     .chunks(environment::DB_BATCH_SIZE),
             ) {

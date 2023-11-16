@@ -34,6 +34,7 @@ tokio = { version = "1.33", features = ["full"] }
 tokio-stream = { version = "0.1.14", features = ["time"] }
 tokio-util = { version = "0.7.9", features = ["io"] }
 url = { version = "2.4.1", features = ["serde"] }
+xxhash-rust = { version = "0.8.5", features = ["xxh3"] }
 zstd = "0.12.4"
 
 [profile.release]

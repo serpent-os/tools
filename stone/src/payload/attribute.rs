@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::io::Read;
+use std::io::{Read, Write};
 
-use super::{DecodeError, Record};
-use crate::ReadExt;
+use super::{DecodeError, EncodeError, Record};
+use crate::{ReadExt, WriteExt};
 
 #[derive(Debug, Clone)]
 pub struct Attribute {
@@ -22,5 +22,18 @@ impl Record for Attribute {
         let value = reader.read_vec(value_length as usize)?;
 
         Ok(Self { key, value })
+    }
+
+    fn encode<W: Write>(&self, writer: &mut W) -> Result<(), EncodeError> {
+        writer.write_u64(self.key.len() as u64)?;
+        writer.write_u64(self.value.len() as u64)?;
+        writer.write_all(&self.key)?;
+        writer.write_all(&self.value)?;
+
+        Ok(())
+    }
+
+    fn size(&self) -> usize {
+        8 + 8 + self.key.len() + self.value.len()
     }
 }

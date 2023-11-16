@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::io::Read;
+use std::io::{Read, Write};
 
-use super::{DecodeError, Record};
-use crate::ReadExt;
+use super::{DecodeError, EncodeError, Record};
+use crate::{ReadExt, WriteExt};
 
 /// Layout entries record their target file type so they can be rebuilt on
 /// the target installation.
@@ -34,7 +34,7 @@ pub enum FileType {
     Socket,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Entry {
     Regular(u128, String),
     Symlink(String, String),
@@ -47,8 +47,46 @@ pub enum Entry {
     Socket(String),
 }
 
+impl Entry {
+    fn source(&self) -> Vec<u8> {
+        match self {
+            Entry::Regular(hash, _) => hash.to_be_bytes().to_vec(),
+            Entry::Symlink(source, _) => source.as_bytes().to_vec(),
+            Entry::Directory(_) => vec![],
+            Entry::CharacterDevice(_) => vec![],
+            Entry::BlockDevice(_) => vec![],
+            Entry::Fifo(_) => vec![],
+            Entry::Socket(_) => vec![],
+        }
+    }
+
+    fn target(&self) -> Vec<u8> {
+        match self {
+            Entry::Regular(_, target) => target.as_bytes().to_vec(),
+            Entry::Symlink(_, target) => target.as_bytes().to_vec(),
+            Entry::Directory(target) => target.as_bytes().to_vec(),
+            Entry::CharacterDevice(target) => target.as_bytes().to_vec(),
+            Entry::BlockDevice(target) => target.as_bytes().to_vec(),
+            Entry::Fifo(target) => target.as_bytes().to_vec(),
+            Entry::Socket(target) => target.as_bytes().to_vec(),
+        }
+    }
+
+    fn file_type(&self) -> u8 {
+        match self {
+            Entry::Regular(..) => 1,
+            Entry::Symlink(..) => 2,
+            Entry::Directory(_) => 3,
+            Entry::CharacterDevice(_) => 4,
+            Entry::BlockDevice(_) => 5,
+            Entry::Fifo(_) => 6,
+            Entry::Socket(_) => 7,
+        }
+    }
+}
+
 // TODO: Strong types these fields
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Layout {
     pub uid: u32,
     pub gid: u32,
@@ -111,5 +149,28 @@ impl Record for Layout {
             tag,
             entry,
         })
+    }
+
+    fn encode<W: Write>(&self, writer: &mut W) -> Result<(), EncodeError> {
+        writer.write_u32(self.uid)?;
+        writer.write_u32(self.gid)?;
+        writer.write_u32(self.mode)?;
+        writer.write_u32(self.tag)?;
+
+        let source = self.entry.source();
+        let target = self.entry.target();
+
+        writer.write_u16(source.len() as u16)?;
+        writer.write_u16(target.len() as u16)?;
+        writer.write_u8(self.entry.file_type())?;
+        writer.write_array([0; 11])?;
+        writer.write_all(&source)?;
+        writer.write_all(&target)?;
+
+        Ok(())
+    }
+
+    fn size(&self) -> usize {
+        4 + 4 + 4 + 4 + 2 + 2 + 1 + 11 + self.entry.source().len() + self.entry.target().len()
     }
 }

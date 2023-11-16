@@ -7,7 +7,7 @@ mod index;
 pub mod layout;
 pub mod meta;
 
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 
 use thiserror::Error;
 
@@ -15,7 +15,7 @@ pub use self::attribute::Attribute;
 pub use self::index::Index;
 pub use self::layout::Layout;
 pub use self::meta::Meta;
-use crate::ReadExt;
+use crate::{ReadExt, WriteExt};
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,7 +43,7 @@ pub enum Compression {
     Zstd = 2,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Header {
     pub stored_size: u64,
     pub plain_size: u64,
@@ -91,10 +91,24 @@ impl Header {
             compression,
         })
     }
+
+    pub fn encode<W: Write>(&self, writer: &mut W) -> Result<(), EncodeError> {
+        writer.write_u64(self.stored_size)?;
+        writer.write_u64(self.plain_size)?;
+        writer.write_array(self.checksum)?;
+        writer.write_u32(self.num_records as u32)?;
+        writer.write_u16(self.version)?;
+        writer.write_u8(self.kind as u8)?;
+        writer.write_u8(self.compression as u8)?;
+
+        Ok(())
+    }
 }
 
 pub trait Record: Sized {
     fn decode<R: Read>(reader: R) -> Result<Self, DecodeError>;
+    fn encode<W: Write>(&self, writer: &mut W) -> Result<(), EncodeError>;
+    fn size(&self) -> usize;
 }
 
 pub fn decode_records<T: Record, R: Read>(
@@ -108,6 +122,26 @@ pub fn decode_records<T: Record, R: Read>(
     }
 
     Ok(records)
+}
+
+pub fn encode_records<T: Record, W: Write>(
+    writer: &mut W,
+    records: &[T],
+) -> Result<(), EncodeError> {
+    for record in records {
+        record.encode(writer)?;
+    }
+    Ok(())
+}
+
+pub fn records_total_size<T: Record>(records: &[T]) -> usize {
+    records.iter().map(T::size).sum()
+}
+
+#[derive(Debug)]
+pub struct Payload<T> {
+    pub header: Header,
+    pub body: T,
 }
 
 #[derive(Debug, Error)]
@@ -124,6 +158,12 @@ pub enum DecodeError {
     UnknownFileType(u8),
     #[error("Unknown dependency type: {0}")]
     UnknownDependency(u8),
+    #[error("io")]
+    Io(#[from] io::Error),
+}
+
+#[derive(Debug, Error)]
+pub enum EncodeError {
     #[error("io")]
     Io(#[from] io::Error),
 }
