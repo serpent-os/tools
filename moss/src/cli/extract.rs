@@ -10,7 +10,7 @@ use std::{
 };
 
 use clap::{arg, ArgMatches, Command};
-use moss::package::{self, MissingMetaError};
+use moss::package::{self, MissingMetaFieldError};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use stone::{payload::layout, read::PayloadKind};
 use thiserror::{self, Error};
@@ -158,7 +158,7 @@ pub enum Error {
     MissingMeta,
 
     #[error("malformed meta")]
-    MalformedMeta(#[from] MissingMetaError),
+    MalformedMeta(#[from] MissingMetaFieldError),
 
     #[error("io")]
     IO(#[from] std::io::Error),

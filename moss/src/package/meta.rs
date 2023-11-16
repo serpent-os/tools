@@ -20,7 +20,7 @@ impl fmt::Display for Id {
 }
 
 /// The name of a [`Package`]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Name(String);
 
 impl From<String> for Name {
@@ -83,7 +83,9 @@ pub struct Meta {
 }
 
 impl Meta {
-    pub fn from_stone_payload(payload: &[stone::payload::Meta]) -> Result<Self, MissingMetaError> {
+    pub fn from_stone_payload(
+        payload: &[stone::payload::Meta],
+    ) -> Result<Self, MissingMetaFieldError> {
         let name = find_meta_string(payload, payload::meta::Tag::Name)?;
         let version_identifier = find_meta_string(payload, payload::meta::Tag::Version)?;
         let source_release = find_meta_u64(payload, payload::meta::Tag::Release)?;
@@ -131,6 +133,53 @@ impl Meta {
         })
     }
 
+    pub fn to_stone_payload(self) -> Vec<payload::Meta> {
+        use payload::meta::{Kind, Tag};
+
+        vec![
+            (Tag::Name, Kind::String(self.name.to_string())),
+            (Tag::Version, Kind::String(self.version_identifier)),
+            (Tag::Release, Kind::Uint64(self.source_release)),
+            (Tag::BuildRelease, Kind::Uint64(self.build_release)),
+            (Tag::Architecture, Kind::String(self.architecture)),
+            (Tag::Summary, Kind::String(self.summary)),
+            (Tag::Description, Kind::String(self.description)),
+            (Tag::SourceID, Kind::String(self.source_id)),
+            (Tag::Homepage, Kind::String(self.homepage)),
+        ]
+        .into_iter()
+        .chain(self.uri.map(|uri| (Tag::PackageURI, Kind::String(uri))))
+        .chain(self.hash.map(|hash| (Tag::PackageHash, Kind::String(hash))))
+        .chain(
+            self.download_size
+                .map(|size| (Tag::PackageSize, Kind::Uint64(size))),
+        )
+        .chain(
+            self.licenses
+                .into_iter()
+                .map(|license| (Tag::License, Kind::String(license))),
+        )
+        .chain(
+            self.dependencies
+                .into_iter()
+                .map(|dep| (Tag::Depends, Kind::Dependency(dep.kind.into(), dep.name))),
+        )
+        .chain(
+            self.providers
+                .into_iter()
+                // We re-add this on ingestion / it's implied
+                .filter(|provider| provider.kind != dependency::Kind::PackageName)
+                .map(|provider| {
+                    (
+                        Tag::Provides,
+                        Kind::Provider(provider.kind.into(), provider.name),
+                    )
+                }),
+        )
+        .map(|(tag, kind)| payload::Meta { tag, kind })
+        .collect()
+    }
+
     /// Return a reusable ID
     pub fn id(&self) -> Id {
         Id(format!(
@@ -143,16 +192,19 @@ impl Meta {
 fn find_meta_string(
     meta: &[payload::Meta],
     tag: payload::meta::Tag,
-) -> Result<String, MissingMetaError> {
+) -> Result<String, MissingMetaFieldError> {
     meta.iter()
         .find_map(|meta| meta_string(meta, tag))
-        .ok_or(MissingMetaError(tag))
+        .ok_or(MissingMetaFieldError(tag))
 }
 
-fn find_meta_u64(meta: &[payload::Meta], tag: payload::meta::Tag) -> Result<u64, MissingMetaError> {
+fn find_meta_u64(
+    meta: &[payload::Meta],
+    tag: payload::meta::Tag,
+) -> Result<u64, MissingMetaFieldError> {
     meta.iter()
         .find_map(|meta| meta_u64(meta, tag))
-        .ok_or(MissingMetaError(tag))
+        .ok_or(MissingMetaFieldError(tag))
 }
 
 fn meta_u64(meta: &payload::Meta, tag: payload::meta::Tag) -> Option<u64> {
@@ -204,4 +256,4 @@ fn meta_provider(meta: &payload::Meta) -> Option<Provider> {
 
 #[derive(Debug, Error)]
 #[error("Missing metadata field: {0:?}")]
-pub struct MissingMetaError(pub payload::meta::Tag);
+pub struct MissingMetaFieldError(pub payload::meta::Tag);

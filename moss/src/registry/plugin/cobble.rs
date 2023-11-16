@@ -4,7 +4,7 @@
 
 use std::{collections::HashMap, path::PathBuf};
 
-use crate::package::{self, meta, Meta, MissingMetaError, Package};
+use crate::package::{self, meta, Meta, MissingMetaFieldError, Package};
 use crate::registry::job::Job;
 use crate::{stone, Provider};
 use ::stone::read::PayloadKind;
@@ -115,5 +115,5 @@ pub enum Error {
     Io(#[from] stone::read::Error),
 
     #[error("metadata")]
-    Metadata(#[from] MissingMetaError),
+    Metadata(#[from] MissingMetaFieldError),
 }

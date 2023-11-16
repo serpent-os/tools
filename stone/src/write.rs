@@ -334,6 +334,8 @@ fn finalize<W: Write, B: Read + Seek>(
         io::copy(&mut content.buffer, writer)?;
     }
 
+    writer.flush()?;
+
     Ok(())
 }
 
