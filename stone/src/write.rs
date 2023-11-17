@@ -137,7 +137,7 @@ where
         let checksum = {
             let mut writer =
                 digest::Writer::new(&mut self.content.buffer, &mut self.content.buffer_hasher);
-            writer.write_all(&self.content.encoder.finish()?)?;
+            self.content.encoder.finish(&mut writer)?;
             writer.flush()?;
             self.content.stored_size += writer.bytes as u64;
             self.content.buffer_hasher.digest()

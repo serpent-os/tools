@@ -2,18 +2,19 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::io::{Result, Write};
+use std::io::{self, Result, Write};
 
-use zstd::stream::raw::Operation;
-use zstd::zstd_safe::CParameter;
+use zstd::zstd_safe::zstd_sys::ZSTD_EndDirective;
+use zstd::zstd_safe::{self, InBuffer, OutBuffer};
+use zstd::zstd_safe::{CParameter, ResetDirective};
 
-type RawEncoder = zstd::stream::raw::Encoder<'static>;
-type ZstdWriter<'a, W> = zstd::stream::zio::Writer<W, &'a mut Encoder>;
+type Context = zstd::zstd_safe::CCtx<'static>;
 
 /// Transparent encapsulation of zstd compression with the purpose
 /// of encoding moss (.stone) payloads to a stream
 pub struct Writer<'a, W: Write> {
-    writer: ZstdWriter<'a, W>,
+    writer: W,
+    encoder: &'a mut Encoder,
     pub plain_bytes: usize,
 }
 
@@ -21,17 +22,17 @@ impl<'a, W: Write> Writer<'a, W> {
     /// Construct a new Writerfor the given writer
     pub fn new(writer: W, encoder: &'a mut Encoder) -> Self {
         Self {
-            writer: ZstdWriter::new(writer, encoder),
+            writer,
+            encoder,
             plain_bytes: 0,
         }
     }
 
-    /// Finish all encoding and flush underlying writer
-    pub fn finish(self) -> Result<()> {
-        let (mut writer, encoder) = self.writer.into_inner();
-        let footer = encoder.finish()?;
-        writer.write_all(&footer)?;
-        writer.flush()
+    /// Finish a frame to this writer
+    pub fn finish(mut self) -> Result<()> {
+        self.encoder.finish(&mut self.writer)?;
+        self.writer.flush()?;
+        Ok(())
     }
 }
 
@@ -40,7 +41,28 @@ impl<'a, W: Write> Write for Writer<'a, W> {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
         self.plain_bytes += buf.len();
 
-        self.writer.write(buf)
+        let mut input = InBuffer::around(&buf[0..usize::min(self.encoder.read_size, buf.len())]);
+        let mut finished = false;
+
+        while !finished {
+            let mut output_buffer = OutBuffer::around(&mut self.encoder.output);
+
+            let remaining = self
+                .encoder
+                .context
+                .compress_stream2(
+                    &mut output_buffer,
+                    &mut input,
+                    ZSTD_EndDirective::ZSTD_e_continue,
+                )
+                .map_err(map_error_code)?;
+
+            self.writer.write_all(output_buffer.as_slice())?;
+
+            finished = remaining == 0;
+        }
+
+        Ok(input.pos)
     }
 
     /// Flush the stream
@@ -49,65 +71,70 @@ impl<'a, W: Write> Write for Writer<'a, W> {
     }
 }
 
-pub struct Encoder(RawEncoder);
+pub struct Encoder {
+    context: Context,
+    output: Vec<u8>,
+    read_size: usize,
+}
 
 impl Encoder {
     /// Concrete zstd encoder
     pub fn new() -> Result<Self> {
-        let mut encoder = RawEncoder::new(18)?;
-        encoder.set_parameter(CParameter::WindowLog(31))?;
-        Ok(Self(encoder))
+        let mut context = Context::create();
+        context
+            .set_parameter(CParameter::CompressionLevel(18))
+            .map_err(map_error_code)?;
+        context
+            .set_parameter(CParameter::WindowLog(31))
+            .map_err(map_error_code)?;
+        Ok(Self {
+            context,
+            output: vec![0; Context::out_size()],
+            read_size: Context::in_size(),
+        })
     }
 
     /// Let zstd know of the final uncompressed size, to optimise compression
     pub fn set_pledged_size(&mut self, pledged_size: Option<u64>) -> Result<()> {
-        self.0.set_pledged_src_size(pledged_size)
+        self.context
+            .set_pledged_src_size(pledged_size)
+            .map_err(map_error_code)?;
+        Ok(())
     }
 
-    /// Flush everything
-    pub fn finish(&mut self) -> Result<Vec<u8>> {
-        let mut footer = vec![];
-        let mut writer = ZstdWriter::new(&mut footer, self);
-        writer.finish()?;
-        self.0.reinit()?;
-        self.0.set_pledged_src_size(None)?;
-        Ok(footer)
+    /// Manually finish a frame to the provided writer
+    pub fn finish<W: Write>(&mut self, writer: &mut W) -> Result<()> {
+        let mut finished = false;
+
+        while !finished {
+            let mut output_buffer = OutBuffer::around(&mut self.output);
+
+            let remaining = self
+                .context
+                .compress_stream2(
+                    &mut output_buffer,
+                    &mut InBuffer::around(&[]),
+                    ZSTD_EndDirective::ZSTD_e_end,
+                )
+                .map_err(map_error_code)?;
+
+            writer.write_all(output_buffer.as_slice())?;
+
+            finished = remaining == 0;
+        }
+
+        self.context
+            .reset(ResetDirective::SessionOnly)
+            .map_err(map_error_code)?;
+        self.context
+            .set_pledged_src_size(None)
+            .map_err(map_error_code)?;
+
+        Ok(())
     }
 }
 
-impl<'a> Operation for &'a mut Encoder {
-    fn run<C: zstd::zstd_safe::WriteBuf + ?Sized>(
-        &mut self,
-        input: &mut zstd::zstd_safe::InBuffer<'_>,
-        output: &mut zstd::zstd_safe::OutBuffer<'_, C>,
-    ) -> std::io::Result<usize> {
-        self.0.run(input, output)
-    }
-
-    fn run_on_buffers(
-        &mut self,
-        input: &[u8],
-        output: &mut [u8],
-    ) -> std::io::Result<zstd::stream::raw::Status> {
-        self.0.run_on_buffers(input, output)
-    }
-
-    fn flush<C: zstd::zstd_safe::WriteBuf + ?Sized>(
-        &mut self,
-        output: &mut zstd::zstd_safe::OutBuffer<'_, C>,
-    ) -> std::io::Result<usize> {
-        self.0.flush(output)
-    }
-
-    fn reinit(&mut self) -> std::io::Result<()> {
-        self.0.reinit()
-    }
-
-    fn finish<C: zstd::zstd_safe::WriteBuf + ?Sized>(
-        &mut self,
-        output: &mut zstd::zstd_safe::OutBuffer<'_, C>,
-        finished_frame: bool,
-    ) -> std::io::Result<usize> {
-        self.0.finish(output, finished_frame)
-    }
+fn map_error_code(code: usize) -> io::Error {
+    let msg = zstd_safe::get_error_name(code);
+    io::Error::new(io::ErrorKind::Other, msg.to_string())
 }
