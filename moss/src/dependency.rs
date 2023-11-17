@@ -91,6 +91,22 @@ impl From<payload::meta::Dependency> for Kind {
     }
 }
 
+impl From<Kind> for payload::meta::Dependency {
+    fn from(kind: Kind) -> Self {
+        match kind {
+            Kind::PackageName => Self::PackageName,
+            Kind::SharedLibary => Self::SharedLibary,
+            Kind::PkgConfig => Self::PkgConfig,
+            Kind::Interpreter => Self::Interpreter,
+            Kind::CMake => Self::CMake,
+            Kind::Python => Self::Python,
+            Kind::Binary => Self::Binary,
+            Kind::SystemBinary => Self::SystemBinary,
+            Kind::PkgConfig32 => Self::PkgConfig32,
+        }
+    }
+}
+
 /// A Dependency in moss is simplistic in that it only contains
 /// a target and a Kind, ie. `pkgconfig(zlib)`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

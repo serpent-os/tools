@@ -34,10 +34,10 @@ impl Repository {
                 meta: package::Meta {
                     // TODO: Is there a more type-safe way to do this vs mutation? Can
                     // a new type help here?
-                    uri: meta
+                    uri: dbg!(meta
                         .uri
                         .and_then(|relative| self.active.repository.uri.join(&relative).ok())
-                        .map(|url| url.to_string()),
+                        .map(|url| url.to_string())),
                     ..meta
                 },
                 flags: package::Flags::AVAILABLE,

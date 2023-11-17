@@ -221,8 +221,8 @@ pub enum Error {
     UnknownRepo(repository::Id),
 }
 
-impl From<package::MissingMetaError> for Error {
-    fn from(error: package::MissingMetaError) -> Self {
+impl From<package::MissingMetaFieldError> for Error {
+    fn from(error: package::MissingMetaFieldError) -> Self {
         Self::MissingMetaField(error.0)
     }
 }

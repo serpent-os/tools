@@ -9,6 +9,7 @@ use moss::Provider;
 use thiserror::Error;
 
 mod extract;
+mod index;
 mod info;
 mod inspect;
 mod install;
@@ -61,6 +62,7 @@ fn command() -> Command {
         )
         .arg_required_else_help(true)
         .subcommand(extract::command())
+        .subcommand(index::command())
         .subcommand(info::command())
         .subcommand(inspect::command())
         .subcommand(install::command())
@@ -84,24 +86,28 @@ pub async fn process() -> Result<(), Error> {
 
     match command().get_matches().subcommand() {
         Some(("extract", args)) => extract::handle(args).await.map_err(Error::Extract),
+        Some(("index", args)) => index::handle(args).await.map_err(Error::Index),
         Some(("info", args)) => info::handle(args).await.map_err(Error::Info),
         Some(("inspect", args)) => inspect::handle(args).await.map_err(Error::Inspect),
         Some(("install", args)) => install::handle(args, root).await.map_err(Error::Install),
-        Some(("version", _)) => {
-            version::print();
-            Ok(())
-        }
         Some(("list", args)) => list::handle(args).await.map_err(Error::List),
         Some(("remove", args)) => remove::handle(args, root).await.map_err(Error::Remove),
         Some(("repo", args)) => repo::handle(args, root).await.map_err(Error::Repo),
         Some(("state", args)) => state::handle(args, root).await.map_err(Error::State),
         Some(("sync", args)) => sync::handle(args, root).await.map_err(Error::Sync),
+        Some(("version", _)) => {
+            version::print();
+            Ok(())
+        }
         _ => unreachable!(),
     }
 }
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("index")]
+    Index(#[from] index::Error),
+
     #[error("info")]
     Info(#[from] info::Error),
 

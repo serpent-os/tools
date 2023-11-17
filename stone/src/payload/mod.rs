@@ -138,7 +138,7 @@ pub fn records_total_size<T: Record>(records: &[T]) -> usize {
     records.iter().map(T::size).sum()
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Payload<T> {
     pub header: Header,
     pub body: T,

@@ -5,7 +5,7 @@
 use bitflags::bitflags;
 use itertools::Itertools;
 
-pub use self::meta::{Meta, MissingMetaError, Name};
+pub use self::meta::{Meta, MissingMetaFieldError, Name};
 
 pub mod meta;
 pub mod render;
