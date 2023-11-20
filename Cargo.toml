@@ -1,10 +1,15 @@
 [workspace]
 members = [
+    "container",
+    "boulder",
     "dag",
     "moss",
     "stone",
     "tui",
     "vfs",
+]
+default-members = [
+    "moss"
 ]
 resolver = "2"
 
@@ -15,14 +20,14 @@ edition = "2021"
 bitflags = "2.4.1"
 bytes = "1.5.0"
 chrono = "0.4.30"
-clap = "4.4.8"
+clap = { version = "4.4.8", features = ["derive"] }
 crossterm = "0.27.0"
 indicatif = "0.17.7"
 itertools = "0.11.0"
 futures = "0.3.28"
 hex = "0.4.3"
 log = "0.4"
-nix = { version = "0.27.1", features = ["user", "fs"] }
+nix = { version = "0.27.1", features = ["user", "fs", "sched", "process", "mount", "hostname"] }
 once_cell = "1.18.0"
 petgraph = "0.6.4"
 rayon = "1.8"

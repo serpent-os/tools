@@ -23,6 +23,7 @@ use tokio::fs::{self, create_dir_all, remove_dir_all, remove_file, rename, symli
 use tui::{MultiProgress, ProgressBar, ProgressStyle, Stylize};
 use vfs::tree::{builder::TreeBuilder, BlitFile, Element};
 
+use self::install::install;
 use self::prune::prune;
 use crate::{
     db, environment, package,
@@ -33,6 +34,7 @@ use crate::{
 };
 
 pub mod cache;
+pub mod install;
 pub mod prune;
 
 /// A Client is a connection to the underlying package management systems
@@ -93,6 +95,10 @@ impl Client {
         matches!(self.scope, Scope::Ephemeral { .. })
     }
 
+    pub async fn install(&mut self, packages: &[&str], yes: bool) -> Result<(), install::Error> {
+        install(self, packages, yes).await
+    }
+
     /// Transition to an ephemeral client that doesn't record state changes
     /// and blits to a different root.
     ///
@@ -101,7 +107,9 @@ impl Client {
     ///
     /// Returns an error if `blit_root` is the same as the installation root,
     /// since the system client should always be stateful.
-    pub fn ephemeral(self, blit_root: PathBuf) -> Result<Self, Error> {
+    pub fn ephemeral(self, blit_root: impl Into<PathBuf>) -> Result<Self, Error> {
+        let blit_root = blit_root.into();
+
         if blit_root.canonicalize()? == self.installation.root.canonicalize()? {
             return Err(Error::EphemeralInstallationRoot);
         }

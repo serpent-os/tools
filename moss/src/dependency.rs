@@ -141,6 +141,19 @@ pub struct Provider {
     pub name: String,
 }
 
+impl Provider {
+    pub fn from_name(name: &str) -> Result<Self, ParseError> {
+        if name.contains('(') {
+            Provider::from_str(name)
+        } else {
+            Ok(Provider {
+                kind: Kind::PackageName,
+                name: name.to_owned(),
+            })
+        }
+    }
+}
+
 impl fmt::Display for Provider {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}({})", self.kind, self.name)
