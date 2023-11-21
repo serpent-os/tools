@@ -75,6 +75,6 @@ jobs:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         file: release/moss*
         file_glob: true
-        tag: ${{ github.ref }}
+        tag: nightly-${{ steps.get_date.outputs.date }}
         overwrite: true
         prerelease: true
