@@ -44,30 +44,37 @@ jobs:
         cargo +nightly -Z build-std=std build --target=x86_64-unknown-linux-musl --profile packaging
         mkdir release
         strip target/x86_64-unknown-linux-musl/packaging/moss
-        sha256sum target/x86_64-unknown-linux-musl/packaging/moss > release/moss_sha256sum.txt
         tar czvf release/moss.tar.gz -C target/x86_64-unknown-linux-musl/packaging moss
+        sha256sum release/moss.tar.gz > release/moss_sha256sum.txt
 
-    - name: Bump version and push tag
-      id: tag_version
+    - name: Generate tag
+      run: |
+        echo "date=$(date '+%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+      id: get_date
+
+    - name: Push nightly tag
       uses: mathieudutour/github-tag-action@v6.1
+      id: create_tag
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        custom_tag: nightly-
+        custom_tag: ${{ steps.get_date.outputs.date }}
+        tag_prefix: nightly-
 
-    # - name: 'Clean up nightly releases'
-    #   uses: dev-drprasad/delete-older-releases@v0.3.2
-    #   with:
-    #     keep_latest: 5
-    #     delete_tags: true
-    #     delete_tag_pattern: nightly
-    #   env:
-    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Clean up nightly releases
+      uses: dev-drprasad/delete-older-releases@v0.3.2
+      with:
+        keep_latest: 5
+        delete_tags: true
+        delete_tag_pattern: nightly
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    # - name: Upload binaries to nightly release
-    #   uses: svenstaro/upload-release-action@v2
-    #   with:
-    #     repo_token: ${{ secrets.GITHUB_TOKEN }}
-    #     file: release/mos*
-    #     file_glob: true
-    #     tag: ${{ github.ref }}
-    #     overwrite: true
+    - name: Upload binaries to nightly release
+      uses: svenstaro/upload-release-action@v2
+      with:
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        file: release/moss*
+        file_glob: true
+        tag: ${{ github.ref }}
+        overwrite: true
+        prerelease: true
