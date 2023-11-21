@@ -13,7 +13,8 @@ use futures::{future::try_join_all, stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use nix::{
     errno::Errno,
-    fcntl::{self, renameat2, OFlag, RenameFlags},
+    fcntl::{self, OFlag},
+    libc::{syscall, SYS_renameat2, AT_FDCWD, RENAME_EXCHANGE},
     sys::stat::{fchmodat, mkdirat, Mode},
     unistd::{close, linkat, mkdir, symlinkat},
 };
@@ -248,15 +249,31 @@ impl Client {
         }
 
         // Now swap staging with live
-        renameat2(
-            None,
-            &usr_source,
-            None,
-            &usr_target,
-            RenameFlags::RENAME_EXCHANGE,
-        )?;
+        Self::atomic_swap(&usr_source, &usr_target)?;
 
         Ok(())
+    }
+
+    /// syscall based wrapper for renameat2 so we can support musl libc which
+    /// unfortunately does not expose the API.
+    /// largely modelled on existing renameat2 API in nix crae
+    fn atomic_swap<A: ?Sized + nix::NixPath, B: ?Sized + nix::NixPath>(
+        old_path: &A,
+        new_path: &B,
+    ) -> nix::Result<()> {
+        let result = old_path.with_nix_path(|old| {
+            new_path.with_nix_path(|new| unsafe {
+                syscall(
+                    SYS_renameat2,
+                    AT_FDCWD,
+                    old.as_ptr(),
+                    AT_FDCWD,
+                    new.as_ptr(),
+                    RENAME_EXCHANGE,
+                )
+            })
+        })?? as i32;
+        Errno::result(result).map(drop)
     }
 
     /// Archive old states into their respective tree
