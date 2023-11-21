@@ -19,6 +19,9 @@ jobs:
     - name: Checkout source
       uses: actions/checkout@v3
 
+    - name: Install musl
+      run: sudo apt-get install musl-tools
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@nightly
       with:
