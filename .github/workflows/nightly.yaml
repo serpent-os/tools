@@ -42,10 +42,10 @@ jobs:
     - name: Build project
       run: |
         cargo +nightly -Z build-std=std build --target=x86_64-unknown-linux-musl --profile packaging
-        mkdir release
         strip target/x86_64-unknown-linux-musl/packaging/moss
-        tar czvf release/moss.tar.gz -C target/x86_64-unknown-linux-musl/packaging moss
-        sha256sum release/moss.tar.gz > release/moss_sha256sum.txt
+        mkdir release && cd release
+        tar czvf moss.tar.gz -C ../target/x86_64-unknown-linux-musl/packaging moss
+        sha256sum moss.tar.gz > moss_sha256sum.txt
 
     - name: Generate tag
       run: |
@@ -79,3 +79,4 @@ jobs:
         overwrite: true
         prerelease: true
         release_name: "Nightly release ${{ steps.get_date.outputs.date }}"
+        body: "Nightly release of moss"
