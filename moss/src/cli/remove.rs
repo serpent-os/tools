@@ -12,11 +12,10 @@ use moss::{
     package::Flags,
     registry::transaction,
     state::Selection,
+    Provider,
 };
 use thiserror::Error;
 use tui::{pretty::print_to_columns, Stylize};
-
-use super::name_to_provider;
 
 pub fn command() -> Command {
     Command::new("remove")
@@ -31,7 +30,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
         .get_many::<String>("NAME")
         .into_iter()
         .flatten()
-        .map(|name| name_to_provider(name))
+        .map(|name| Provider::from_name(name).unwrap())
         .collect::<Vec<_>>();
 
     // Grab a client for the target, enumerate packages

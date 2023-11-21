@@ -10,12 +10,10 @@ use itertools::Itertools;
 use moss::{
     client::{self, Client},
     package::Flags,
-    Package,
+    Package, Provider,
 };
 use thiserror::Error;
 use tui::Stylize;
-
-use super::name_to_provider;
 
 const COLUMN_WIDTH: usize = 20;
 
@@ -39,7 +37,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     let client = Client::new(root).await?;
 
     for pkg in pkgs {
-        let lookup = name_to_provider(&pkg);
+        let lookup = Provider::from_name(&pkg).unwrap();
         let resolved = client
             .registry
             .by_provider(&lookup, Flags::NONE)
