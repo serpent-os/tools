@@ -98,7 +98,7 @@ mod test {
 
     #[test]
     fn roundtrip() {
-        let in_stone = include_bytes!("../../test/bash-completion-2.11-1-1-x86_64.stone");
+        let in_stone = include_bytes!("../../../test/bash-completion-2.11-1-1-x86_64.stone");
 
         let mut reader = read_bytes(in_stone).unwrap();
 
