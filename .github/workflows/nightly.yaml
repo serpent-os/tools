@@ -1,0 +1,80 @@
+name: Nightly Build
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+    name: Build nightly release
+
+    steps:
+    - name: Checkout source
+      uses: actions/checkout@v3
+
+    - name: Install musl
+      run: sudo apt-get install musl-tools
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@nightly
+      with:
+        targets: x86_64-unknown-linux-musl
+        components: rust-src
+
+    - name: Cargo Cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          target/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Build project
+      run: |
+        cargo +nightly -Z build-std=std build --target=x86_64-unknown-linux-musl --profile packaging
+        strip target/x86_64-unknown-linux-musl/packaging/moss
+        mkdir release && cd release
+        tar czvf moss.tar.gz -C ../target/x86_64-unknown-linux-musl/packaging moss
+        sha256sum moss.tar.gz > moss.tar.gz.sha256
+
+    - name: Generate tag
+      run: |
+        echo "date=$(date '+%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+      id: get_date
+
+    - name: Push nightly tag
+      uses: mathieudutour/github-tag-action@v6.1
+      id: create_tag
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        custom_tag: ${{ steps.get_date.outputs.date }}
+        tag_prefix: nightly-
+
+    - name: Upload binaries to nightly release
+      uses: svenstaro/upload-release-action@v2
+      with:
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        file: release/moss*
+        file_glob: true
+        tag: nightly-${{ steps.get_date.outputs.date }}
+        overwrite: true
+        prerelease: true
+        release_name: "Nightly release ${{ steps.get_date.outputs.date }}"
+        body: "Nightly release of moss"
+
+    - name: Clean up old nightly releases
+      uses: dev-drprasad/delete-older-releases@v0.3.2
+      with:
+        keep_latest: 5
+        delete_tags: true
+        delete_tag_pattern: nightly
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
