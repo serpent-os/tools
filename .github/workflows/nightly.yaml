@@ -45,6 +45,7 @@ jobs:
         mkdir release
         strip target/x86_64-unknown-linux-musl/packaging/moss -o release/moss
         sha256sum target/x86_64-unknown-linux-musl/packaging/moss > release/moss_sha256sum.txt
+        tar czvf release/moss.tar.gz release/moss
         ls -la release
 
     # - name: Bump version and push tag
