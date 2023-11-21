@@ -6,6 +6,8 @@ on:
   schedule:
     - cron: '0 1 * * *'
   workflow_dispatch:
+permissions:
+  contents: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -38,4 +40,33 @@ jobs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
     - name: Build project
-      run: cargo +nightly -Z build-std=std build --target=x86_64-unknown-linux-musl --profile packaging; ls -la target/x86_64-unknown-linux-musl/packaging; strip target/x86_64-unknown-linux-musl/packaging/moss; ls -la target/x86_64-unknown-linux-musl/packaging
+      run: |
+        cargo +nightly -Z build-std=std build --target=x86_64-unknown-linux-musl --profile packaging
+        mkdir release
+        strip target/x86_64-unknown-linux-musl/packaging/moss -o release/moss
+        sha256sum target/x86_64-unknown-linux-musl/packaging/moss > release/moss_sha256sum.txt
+        ls -la release
+
+    # - name: Bump version and push tag
+    #   id: tag_version
+    #   uses: mathieudutour/github-tag-action@v6.1
+    #   with:
+    #     github_token: ${{ secrets.GITHUB_TOKEN }}
+
+    # - name: 'Clean up nightly releases'
+    #   uses: dev-drprasad/delete-older-releases@v0.3.2
+    #   with:
+    #     keep_latest: 5
+    #     delete_tags: true
+    #     delete_tag_pattern: nightly
+    #   env:
+    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    # - name: Upload binaries to nightly release
+    #   uses: svenstaro/upload-release-action@v2
+    #   with:
+    #     repo_token: ${{ secrets.GITHUB_TOKEN }}
+    #     file: release/mos*
+    #     file_glob: true
+    #     tag: ${{ github.ref }}
+    #     overwrite: true
