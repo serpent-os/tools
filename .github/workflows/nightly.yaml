@@ -38,4 +38,4 @@ jobs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
     - name: Build project
-      run: cargo +nightly -Z build-std=std build --target=x86_64-unknown-linux-musl --profile packaging; ls -la; strip moss-rs; ls -la
+      run: cargo +nightly -Z build-std=std build --target=x86_64-unknown-linux-musl --profile packaging; ls -la target/x86_64-unknown-linux-musl/packaging; strip target/x86_64-unknown-linux-musl/packaging/moss; ls -la target/x86_64-unknown-linux-musl/packaging
