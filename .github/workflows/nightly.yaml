@@ -78,3 +78,4 @@ jobs:
         tag: nightly-${{ steps.get_date.outputs.date }}
         overwrite: true
         prerelease: true
+        release_name: "Nightly release ${{ steps.get_date.outputs.date }}"
