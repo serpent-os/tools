@@ -9,24 +9,23 @@ use thiserror::Error;
 use tokio::{fs, io};
 
 use crate::db::meta;
-use crate::{config, package, Installation};
 use crate::{environment, stone};
+use crate::{package, Installation};
 
 use crate::repository::{self, Repository};
 
 /// Manage a bunch of repositories
 pub struct Manager {
+    config: config::Manager,
     installation: Installation,
     repositories: HashMap<repository::Id, repository::Active>,
 }
 
 impl Manager {
     /// Create a [`Manager`] for the supplied [`Installation`]
-    pub async fn new(installation: Installation) -> Result<Self, Error> {
+    pub async fn new(config: config::Manager, installation: Installation) -> Result<Self, Error> {
         // Load all configs, default if none exist
-        let configs = config::load::<repository::Map>(&installation.root)
-            .await
-            .unwrap_or_default();
+        let configs = config.load::<repository::Map>().await.unwrap_or_default();
 
         // Open all repo meta dbs and collect into hash map
         let repositories =
@@ -40,6 +39,7 @@ impl Manager {
             .collect();
 
         Ok(Self {
+            config,
             installation,
             repositories,
         })
@@ -57,7 +57,8 @@ impl Manager {
         {
             let map = repository::Map::with([(id.clone(), repository.clone())]);
 
-            config::save(&self.installation.root, &id, &map)
+            self.config
+                .save(&id, &map)
                 .await
                 .map_err(Error::SaveConfig)?;
         }

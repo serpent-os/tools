@@ -4,6 +4,7 @@
 
 use std::{collections::HashMap, fmt, path::Path};
 
+use config::Config;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -13,7 +14,7 @@ use tokio::{
 };
 use url::Url;
 
-use crate::{db::meta, request, Config};
+use crate::{db::meta, request};
 
 pub use self::manager::Manager;
 

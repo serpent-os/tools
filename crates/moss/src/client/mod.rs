@@ -48,6 +48,7 @@ pub struct Client {
     pub state_db: db::state::Database,
     pub layout_db: db::layout::Database,
 
+    config: config::Manager,
     repositories: repository::Manager,
     scope: Scope,
 }
@@ -61,8 +62,9 @@ impl Client {
             return Err(Error::RootInvalid);
         }
 
+        let config = config::Manager::system(&root, "moss");
         let installation = Installation::open(root);
-        let repositories = repository::Manager::new(installation.clone()).await?;
+        let repositories = repository::Manager::new(config.clone(), installation.clone()).await?;
         let install_db =
             db::meta::Database::new(installation.db_path("install"), installation.read_only())
                 .await?;
@@ -77,6 +79,7 @@ impl Client {
         let registry = build_registry(&repositories, &install_db, state).await?;
 
         Ok(Client {
+            config,
             installation,
             repositories,
             registry,
@@ -125,7 +128,8 @@ impl Client {
     /// registry with all active repositories.
     pub async fn refresh_repositories(&mut self) -> Result<(), Error> {
         // Reload manager and refresh all repositories
-        self.repositories = repository::Manager::new(self.installation.clone()).await?;
+        self.repositories =
+            repository::Manager::new(self.config.clone(), self.installation.clone()).await?;
         self.repositories.refresh_all().await?;
 
         // Refresh State DB
