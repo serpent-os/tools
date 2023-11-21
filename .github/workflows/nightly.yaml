@@ -1,10 +1,8 @@
 name: Nightly Build
 
 on:
-  pull_request:
-    branches: [ "main" ]
   schedule:
-    - cron: '0 1 * * *'
+    - cron: '0 0 * * *'
   workflow_dispatch:
 permissions:
   contents: write
@@ -13,9 +11,9 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  nightly:
     runs-on: ubuntu-latest
-    name: Build & Test Project
+    name: Build nightly release
 
     steps:
     - name: Checkout source
@@ -45,7 +43,7 @@ jobs:
         strip target/x86_64-unknown-linux-musl/packaging/moss
         mkdir release && cd release
         tar czvf moss.tar.gz -C ../target/x86_64-unknown-linux-musl/packaging moss
-        sha256sum moss.tar.gz > moss_sha256sum.txt
+        sha256sum moss.tar.gz > moss.tar.gz.sha256
 
     - name: Generate tag
       run: |
@@ -60,15 +58,6 @@ jobs:
         custom_tag: ${{ steps.get_date.outputs.date }}
         tag_prefix: nightly-
 
-    - name: Clean up nightly releases
-      uses: dev-drprasad/delete-older-releases@v0.3.2
-      with:
-        keep_latest: 5
-        delete_tags: true
-        delete_tag_pattern: nightly
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
     - name: Upload binaries to nightly release
       uses: svenstaro/upload-release-action@v2
       with:
@@ -80,3 +69,12 @@ jobs:
         prerelease: true
         release_name: "Nightly release ${{ steps.get_date.outputs.date }}"
         body: "Nightly release of moss"
+
+    - name: Clean up old nightly releases
+      uses: dev-drprasad/delete-older-releases@v0.3.2
+      with:
+        keep_latest: 5
+        delete_tags: true
+        delete_tag_pattern: nightly
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
