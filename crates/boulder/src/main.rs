@@ -1,24 +1,40 @@
-use std::{path::PathBuf, process::Command};
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 use clap::Parser;
-use tokio::fs::{create_dir, remove_dir_all};
+use color_eyre::eyre::{eyre, Result};
+use tokio::fs::{create_dir_all, remove_dir_all};
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     let args = Args::parse();
 
-    if args.chroot.exists() {
-        remove_dir_all(&args.chroot).await?;
-    }
-    create_dir(&args.chroot).await?;
+    color_eyre::install()?;
 
-    let mut client = moss::Client::new(&args.root)
+    let is_root = is_root();
+
+    let _config = if let Some(dir) = args.config_dir {
+        config::Manager::custom(dir)
+    } else if is_root {
+        config::Manager::system("/", "boulder")
+    } else {
+        config::Manager::user("boulder")?
+    };
+
+    let cache = cache_dir(is_root, args.cache_dir)?;
+
+    let ephemeral_root = cache.join("test-root");
+    recreate_dir(&ephemeral_root).await?;
+
+    let mut client = moss::Client::new(&args.moss_root)
         .await?
-        .ephemeral(&args.chroot)?;
+        .ephemeral(&ephemeral_root)?;
 
     client.install(BASE_PACKAGES, true).await?;
 
-    container::run(args.chroot, move || {
+    container::run(&ephemeral_root, move || {
         let mut child = Command::new("/bin/bash")
             .arg("--login")
             .env_clear()
@@ -30,7 +46,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         child.wait()?;
 
         Ok(())
-    })?;
+    })
+    .map_err(|e| eyre!("container error: {e}"))?;
 
     Ok(())
 }
@@ -38,9 +55,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[derive(Debug, Parser)]
 #[command()]
 struct Args {
-    #[arg(short = 'D', long = "directory", global = true, default_value = "/")]
-    root: PathBuf,
-    chroot: PathBuf,
+    #[arg(long, default_value = "/")]
+    moss_root: PathBuf,
+    #[arg(long)]
+    config_dir: Option<PathBuf>,
+    #[arg(long)]
+    cache_dir: Option<PathBuf>,
 }
 
 const BASE_PACKAGES: &[&str] = &[
@@ -78,3 +98,29 @@ const BASE_PACKAGES: &[&str] = &[
     "wget",
     "which",
 ];
+
+fn is_root() -> bool {
+    use nix::unistd::Uid;
+
+    Uid::effective().is_root()
+}
+
+fn cache_dir(is_root: bool, custom: Option<PathBuf>) -> Result<PathBuf> {
+    if let Some(dir) = custom {
+        Ok(dir)
+    } else if is_root {
+        Ok(PathBuf::from("/var/cache/boulder"))
+    } else {
+        Ok(dirs::cache_dir()
+            .ok_or_else(|| eyre!("cannot find cache dir, $XDG_CACHE_HOME or $HOME env not set"))?
+            .join("boulder"))
+    }
+}
+
+async fn recreate_dir(path: &Path) -> Result<()> {
+    if path.exists() {
+        remove_dir_all(&path).await?;
+    }
+    create_dir_all(&path).await?;
+    Ok(())
+}

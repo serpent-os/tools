@@ -23,23 +23,38 @@ pub trait Config: DeserializeOwned {
 
 #[derive(Debug, Clone)]
 pub struct Manager {
-    program: String,
     scope: Scope,
 }
 
 impl Manager {
+    /// Config is loaded / merged from `usr/share` & `etc` relative to `root`
+    /// and saved to `etc/{program}/{domain}.d/{name}.yaml
     pub fn system(root: impl Into<PathBuf>, program: impl ToString) -> Self {
         Self {
-            program: program.to_string(),
-            scope: Scope::System(root.into()),
+            scope: Scope::System {
+                root: root.into(),
+                program: program.to_string(),
+            },
         }
     }
 
-    pub fn user(program: impl ToString) -> Option<Self> {
-        Some(Self {
-            program: program.to_string(),
-            scope: Scope::User(dirs::config_dir()?),
+    /// Config is loaded from $XDG_CONFIG_HOME and saved to
+    /// $XDG_CONFIG_HOME/{program}/{domain}.d/{name}.yaml
+    pub fn user(program: impl ToString) -> Result<Self, CreateUserError> {
+        Ok(Self {
+            scope: Scope::User {
+                config: dirs::config_dir().ok_or(CreateUserError)?,
+                program: program.to_string(),
+            },
         })
+    }
+
+    /// Config is loaded from `path` and saved to
+    /// `path`/{domain}.d/{name}.yaml
+    pub fn custom(path: impl Into<PathBuf>) -> Self {
+        Self {
+            scope: Scope::Custom(path.into()),
+        }
     }
 
     pub async fn load<T: Config>(&self) -> Option<T> {
@@ -47,45 +62,8 @@ impl Manager {
 
         let mut configs = vec![];
 
-        let searches = match &self.scope {
-            // System we search / merge all base file / .d files
-            // from vendor then admin
-            Scope::System(root) => vec![
-                (
-                    Entry::File,
-                    Search::System {
-                        root,
-                        base: Base::Vendor,
-                    },
-                ),
-                (
-                    Entry::Directory,
-                    Search::System {
-                        root,
-                        base: Base::Vendor,
-                    },
-                ),
-                (
-                    Entry::File,
-                    Search::System {
-                        root,
-                        base: Base::Admin,
-                    },
-                ),
-                (
-                    Entry::Directory,
-                    Search::System {
-                        root,
-                        base: Base::Admin,
-                    },
-                ),
-            ],
-            // User we only get configs from directory
-            Scope::User(root) => vec![(Entry::Directory, Search::Home(root))],
-        };
-
-        for (entry, search) in searches {
-            for path in enumerate_paths(entry, search, &self.program, &domain).await {
+        for (entry, resolve) in self.scope.load_with() {
+            for path in enumerate_paths(entry, resolve, &domain).await {
                 if let Some(config) = read_config(path).await {
                     configs.push(config);
                 }
@@ -102,14 +80,7 @@ impl Manager {
     ) -> Result<(), SaveError> {
         let domain = T::domain();
 
-        let search = match &self.scope {
-            Scope::System(root) => Search::System {
-                root,
-                base: Base::Admin,
-            },
-            Scope::User(root) => Search::Home(root),
-        };
-        let dir = search.dir(&self.program, &domain);
+        let dir = self.scope.save_dir(&domain);
 
         fs::create_dir_all(&dir)
             .await
@@ -128,6 +99,10 @@ impl Manager {
 }
 
 #[derive(Debug, Error)]
+#[error("$HOME or $XDG_CONFIG_HOME env not set")]
+pub struct CreateUserError;
+
+#[derive(Debug, Error)]
 pub enum SaveError {
     #[error("create config dir {0:?}")]
     CreateDir(PathBuf, #[source] io::Error),
@@ -137,15 +112,10 @@ pub enum SaveError {
     Write(PathBuf, #[source] io::Error),
 }
 
-async fn enumerate_paths(
-    entry: Entry,
-    search: Search<'_>,
-    program: &str,
-    domain: &str,
-) -> Vec<PathBuf> {
+async fn enumerate_paths(entry: Entry, resolve: Resolve<'_>, domain: &str) -> Vec<PathBuf> {
     match entry {
         Entry::File => {
-            let file = search.file(program, domain);
+            let file = resolve.file(domain);
 
             if file.exists() {
                 vec![file]
@@ -154,7 +124,7 @@ async fn enumerate_paths(
             }
         }
         Entry::Directory => {
-            if let Ok(read_dir) = fs::read_dir(search.dir(program, domain)).await {
+            if let Ok(read_dir) = fs::read_dir(resolve.dir(domain)).await {
                 ReadDirStream::new(read_dir)
                     .filter_map(|entry| async {
                         let entry = entry.ok()?;
@@ -184,17 +154,90 @@ async fn read_config<T: Config>(path: PathBuf) -> Option<T> {
     serde_yaml::from_slice(&bytes).ok()
 }
 
+#[derive(Debug, Clone)]
+enum Scope {
+    System { program: String, root: PathBuf },
+    User { program: String, config: PathBuf },
+    Custom(PathBuf),
+}
+
+impl Scope {
+    fn save_dir<'a>(&'a self, domain: &'a str) -> PathBuf {
+        match &self {
+            Scope::System { root, program } => Resolve::System {
+                root,
+                base: SystemBase::Admin,
+                program,
+            },
+            Scope::User { config, program } => Resolve::User { config, program },
+            Scope::Custom(dir) => Resolve::Custom(dir),
+        }
+        .dir(domain)
+    }
+
+    fn load_with(&self) -> Vec<(Entry, Resolve)> {
+        match &self {
+            // System we search / merge all base file / .d files
+            // from vendor then admin
+            Scope::System { root, program } => vec![
+                (
+                    Entry::File,
+                    Resolve::System {
+                        root,
+                        base: SystemBase::Vendor,
+                        program,
+                    },
+                ),
+                (
+                    Entry::Directory,
+                    Resolve::System {
+                        root,
+                        base: SystemBase::Vendor,
+                        program,
+                    },
+                ),
+                (
+                    Entry::File,
+                    Resolve::System {
+                        root,
+                        base: SystemBase::Admin,
+                        program,
+                    },
+                ),
+                (
+                    Entry::Directory,
+                    Resolve::System {
+                        root,
+                        base: SystemBase::Admin,
+                        program,
+                    },
+                ),
+            ],
+            Scope::User { config, program } => {
+                vec![
+                    (Entry::File, Resolve::User { config, program }),
+                    (Entry::Directory, Resolve::User { config, program }),
+                ]
+            }
+            Scope::Custom(root) => vec![
+                (Entry::File, Resolve::Custom(root)),
+                (Entry::Directory, Resolve::Custom(root)),
+            ],
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
-enum Base {
+enum SystemBase {
     Admin,
     Vendor,
 }
 
-impl Base {
+impl SystemBase {
     fn path(&self) -> &'static str {
         match self {
-            Base::Admin => "etc",
-            Base::Vendor => "usr/share",
+            SystemBase::Admin => "etc",
+            SystemBase::Vendor => "usr/share",
         }
     }
 }
@@ -204,33 +247,37 @@ enum Entry {
     Directory,
 }
 
-enum Search<'a> {
-    System { root: &'a Path, base: Base },
-    Home(&'a Path),
+enum Resolve<'a> {
+    System {
+        root: &'a Path,
+        base: SystemBase,
+        program: &'a str,
+    },
+    User {
+        config: &'a Path,
+        program: &'a str,
+    },
+    Custom(&'a Path),
 }
 
-impl<'a> Search<'a> {
-    fn file(&self, program: &str, domain: &str) -> PathBuf {
+impl<'a> Resolve<'a> {
+    fn config_dir(&self) -> PathBuf {
         match self {
-            Search::System { root, base } => root.join(base.path()).join(program),
-            Search::Home(root) => root.join(program),
-        }
-        .join(format!("{domain}.{EXTENSION}"))
-    }
-
-    fn dir(&self, program: &str, domain: &str) -> PathBuf {
-        match self {
-            Search::System { root, base } => root
-                .join(base.path())
-                .join(program)
-                .join(format!("{domain}.d")),
-            Search::Home(root) => root.join(program).join("{domain}"),
+            Resolve::System {
+                root,
+                base,
+                program,
+            } => root.join(base.path()).join(program),
+            Resolve::User { config, program } => config.join(program),
+            Resolve::Custom(dir) => dir.to_path_buf(),
         }
     }
-}
 
-#[derive(Debug, Clone)]
-enum Scope {
-    System(PathBuf),
-    User(PathBuf),
+    fn file(&self, domain: &str) -> PathBuf {
+        self.config_dir().join(format!("{domain}.{EXTENSION}"))
+    }
+
+    fn dir(&self, domain: &str) -> PathBuf {
+        self.config_dir().join(format!("{domain}.d"))
+    }
 }

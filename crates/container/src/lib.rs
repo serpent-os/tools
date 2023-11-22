@@ -6,7 +6,7 @@ use nix::libc::SIGCHLD;
 use nix::mount::{mount, umount2, MntFlags, MsFlags};
 use nix::sched::{clone, CloneFlags};
 use nix::sys::wait::waitpid;
-use nix::unistd::{close, getgid, getuid, pipe, pivot_root, read, sethostname};
+use nix::unistd::{close, getgid, getuid, pipe, pivot_root, read, sethostname, Uid};
 
 type Error = Box<dyn std::error::Error>;
 
@@ -14,9 +14,19 @@ pub fn run(root: impl AsRef<Path>, mut f: impl FnMut() -> Result<(), Error>) -> 
     static mut STACK: [u8; 4 * 1024 * 1024] = [0u8; 4 * 1024 * 1024];
 
     let root = root.as_ref();
+    let rootless = !Uid::effective().is_root();
 
     // Pipe to synchronize parent & child
     let sync = pipe()?;
+
+    let mut flags = CloneFlags::CLONE_NEWNS
+        | CloneFlags::CLONE_NEWPID
+        | CloneFlags::CLONE_NEWIPC
+        | CloneFlags::CLONE_NEWUTS;
+
+    if rootless {
+        flags |= CloneFlags::CLONE_NEWUSER;
+    }
 
     let pid = unsafe {
         clone(
@@ -28,19 +38,17 @@ pub fn run(root: impl AsRef<Path>, mut f: impl FnMut() -> Result<(), Error>) -> 
                 }
             }),
             &mut STACK,
-            CloneFlags::CLONE_NEWNS
-                | CloneFlags::CLONE_NEWPID
-                | CloneFlags::CLONE_NEWIPC
-                | CloneFlags::CLONE_NEWUTS
-                | CloneFlags::CLONE_NEWUSER,
+            flags,
             Some(SIGCHLD),
         )?
     };
 
-    // Update uid / gid map to map current user to root in container
-    write(format!("/proc/{pid}/setgroups"), "deny")?;
-    write(format!("/proc/{pid}/uid_map"), format!("0 {} 1", getuid()))?;
-    write(format!("/proc/{pid}/gid_map"), format!("0 {} 1", getgid()))?;
+    if rootless {
+        // Update uid / gid map to map current user to root in container
+        write(format!("/proc/{pid}/setgroups"), "deny")?;
+        write(format!("/proc/{pid}/uid_map"), format!("0 {} 1", getuid()))?;
+        write(format!("/proc/{pid}/gid_map"), format!("0 {} 1", getgid()))?;
+    }
 
     // Allow child to continue
     close(sync.1)?;
