@@ -9,10 +9,10 @@ edition.workspace = true
 config = { path = "../config" }
 container = { path = "../container" }
 moss = { path = "../moss" }
+tui = { path = "../tui" }
 
 clap.workspace = true
 dirs.workspace = true
-color-eyre.workspace = true
 nix.workspace = true
 thiserror.workspace = true
 tokio.workspace = true

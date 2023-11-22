@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright © 2020-2023 Serpent OS Developers
+//
+// SPDX-License-Identifier: MPL-2.0
 use std::env::set_current_dir;
 use std::fs::{copy, create_dir, remove_dir, write};
 use std::path::Path;
@@ -8,7 +11,7 @@ use nix::sched::{clone, CloneFlags};
 use nix::sys::wait::waitpid;
 use nix::unistd::{close, getgid, getuid, pipe, pivot_root, read, sethostname, Uid};
 
-type Error = Box<dyn std::error::Error>;
+type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 pub fn run(root: impl AsRef<Path>, mut f: impl FnMut() -> Result<(), Error>) -> Result<(), Error> {
     static mut STACK: [u8; 4 * 1024 * 1024] = [0u8; 4 * 1024 * 1024];
