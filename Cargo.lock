@@ -198,11 +198,14 @@ dependencies = [
  "config",
  "container",
  "dirs",
+ "itertools 0.11.0",
  "moss",
  "nix",
+ "serde",
  "thiserror",
  "tokio",
  "tui",
+ "url",
 ]
 
 [[package]]

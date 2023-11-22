@@ -12,7 +12,7 @@ use tokio::task;
 use super::Global;
 
 #[derive(Debug, Parser)]
-#[command(about = "chroot into the build environment")]
+#[command(about = "Chroot into the build environment")]
 pub struct Command {}
 
 pub async fn handle(_command: Command, global: Global) -> Result<(), Error> {

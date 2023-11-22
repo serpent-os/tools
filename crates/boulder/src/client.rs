@@ -6,9 +6,12 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
+use crate::profile;
+
 pub struct Client {
     pub config: config::Manager,
     pub cache: PathBuf,
+    pub profiles: profile::Map,
 }
 
 impl Client {
@@ -26,9 +29,15 @@ impl Client {
             config::Manager::user("boulder")?
         };
 
+        let profiles = config.load::<profile::Map>().await.unwrap_or_default();
+
         let cache = resolve_cache_dir(is_root, cache_dir)?;
 
-        Ok(Self { config, cache })
+        Ok(Self {
+            config,
+            cache,
+            profiles,
+        })
     }
 }
 

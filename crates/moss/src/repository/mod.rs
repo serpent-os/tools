@@ -93,7 +93,7 @@ impl Ord for Priority {
 }
 
 /// A map of repositories
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Map(HashMap<Id, Repository>);
 
 impl Map {
@@ -107,6 +107,10 @@ impl Map {
 
     pub fn add(&mut self, id: Id, repo: Repository) {
         self.0.insert(id, repo);
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&Id, &Repository)> {
+        self.0.iter()
     }
 }
 

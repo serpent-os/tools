@@ -16,7 +16,7 @@ use tokio::{
 use super::Global;
 
 #[derive(Debug, Parser)]
-#[command(about = "build ... TODO")]
+#[command(about = "Build ... TODO")]
 pub struct Command {}
 
 pub async fn handle(_command: Command, global: Global) -> Result<(), Error> {

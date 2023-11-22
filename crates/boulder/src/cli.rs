@@ -8,6 +8,7 @@ use thiserror::Error;
 
 mod build;
 mod chroot;
+mod profile;
 
 #[derive(Debug, Parser)]
 #[command()]
@@ -32,6 +33,7 @@ pub struct Global {
 pub enum Subcommand {
     Build(build::Command),
     Chroot(chroot::Command),
+    Profile(profile::Command),
 }
 
 pub async fn process() -> Result<(), Error> {
@@ -40,6 +42,7 @@ pub async fn process() -> Result<(), Error> {
     match subcommand {
         Subcommand::Build(command) => build::handle(command, global).await?,
         Subcommand::Chroot(command) => chroot::handle(command, global).await?,
+        Subcommand::Profile(command) => profile::handle(command, global).await?,
     }
 
     Ok(())
@@ -51,4 +54,6 @@ pub enum Error {
     Build(#[from] build::Error),
     #[error("chroot")]
     Chroot(#[from] chroot::Error),
+    #[error("profile")]
+    Profile(#[from] profile::Error),
 }
