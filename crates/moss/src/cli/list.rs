@@ -11,6 +11,7 @@ use thiserror::Error;
 
 use moss::{
     client::{self, Client},
+    environment,
     package::Flags,
 };
 use tui::Stylize;
@@ -63,7 +64,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     };
 
     // Grab a client for the target, enumerate packages
-    let client = Client::new(root).await?;
+    let client = Client::new(environment::NAME, root).await?;
     let pkgs = client.registry.list(filter_flags).collect::<Vec<_>>().await;
 
     let sync_available = if sync.is_some() {

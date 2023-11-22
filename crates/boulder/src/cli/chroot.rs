@@ -19,10 +19,10 @@ pub async fn handle(_command: Command, global: Global) -> Result<(), Error> {
     let Global {
         config_dir,
         cache_dir,
-        ..
+        moss_root,
     } = global;
 
-    let client = Client::new(config_dir, cache_dir).await?;
+    let client = Client::new(config_dir, cache_dir, moss_root).await?;
 
     let ephemeral_root = client.cache.join("test-root");
 

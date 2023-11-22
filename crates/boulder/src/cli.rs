@@ -21,8 +21,8 @@ pub struct Command {
 
 #[derive(Debug, Args)]
 pub struct Global {
-    #[arg(long, global = true, default_value = "/")]
-    pub moss_root: PathBuf,
+    #[arg(long, global = true)]
+    pub moss_root: Option<PathBuf>,
     #[arg(long, global = true)]
     pub config_dir: Option<PathBuf>,
     #[arg(long, global = true)]

@@ -31,3 +31,4 @@ tokio-stream.workspace = true
 tokio-util.workspace = true
 thiserror.workspace = true 
 url.workspace = true
+xxhash-rust.workspace = true

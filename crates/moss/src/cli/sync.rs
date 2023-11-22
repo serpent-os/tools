@@ -40,7 +40,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     let yes_all = *args.get_one::<bool>("yes").unwrap();
     let upgrade_only = *args.get_one::<bool>("upgrade-only").unwrap();
 
-    let mut client = Client::new(root).await?;
+    let mut client = Client::new(environment::NAME, root).await?;
 
     // Make ephemeral if a blit target was provided
     if let Some(blit_target) = args.get_one::<PathBuf>("to").cloned() {

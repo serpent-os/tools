@@ -114,7 +114,7 @@ async fn add(
 ) -> Result<(), Error> {
     let installation = Installation::open(root);
 
-    let mut manager = repository::Manager::new(config, installation).await?;
+    let mut manager = repository::Manager::system(config, installation).await?;
 
     manager
         .add_repository(
@@ -135,7 +135,7 @@ async fn add(
 /// List the repositories and pretty print them
 async fn list(root: &Path, config: config::Manager) -> Result<(), Error> {
     let installation = Installation::open(root);
-    let manager = repository::Manager::new(config, installation).await?;
+    let manager = repository::Manager::system(config, installation).await?;
 
     let configured_repos = manager.list();
     if configured_repos.len() == 0 {
@@ -155,7 +155,7 @@ async fn list(root: &Path, config: config::Manager) -> Result<(), Error> {
 /// Update specific repos or all
 async fn update(root: &Path, config: config::Manager, which: Option<String>) -> Result<(), Error> {
     let installation = Installation::open(root);
-    let mut manager = repository::Manager::new(config, installation).await?;
+    let mut manager = repository::Manager::system(config, installation).await?;
 
     match which {
         Some(repo) => manager.refresh(&repository::Id::new(repo)).await?,

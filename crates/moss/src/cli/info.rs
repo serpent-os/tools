@@ -9,6 +9,7 @@ use futures::StreamExt;
 use itertools::Itertools;
 use moss::{
     client::{self, Client},
+    environment,
     package::Flags,
     Package, Provider,
 };
@@ -34,7 +35,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
         .collect::<Vec<_>>();
 
     let root = args.get_one::<PathBuf>("root").unwrap().clone();
-    let client = Client::new(root).await?;
+    let client = Client::new(environment::NAME, root).await?;
 
     for pkg in pkgs {
         let lookup = Provider::from_name(&pkg).unwrap();

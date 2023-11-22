@@ -30,6 +30,12 @@ impl fmt::Display for Id {
     }
 }
 
+impl From<String> for Id {
+    fn from(value: String) -> Self {
+        Self::new(value)
+    }
+}
+
 /// Profile configuration data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Profile {

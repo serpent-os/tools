@@ -5,7 +5,7 @@
 use std::process;
 use std::{io, path::Path};
 
-use boulder::{client, Client};
+use boulder::{client, profile, Client};
 use clap::Parser;
 use thiserror::Error;
 use tokio::{
@@ -17,21 +17,29 @@ use super::Global;
 
 #[derive(Debug, Parser)]
 #[command(about = "Build ... TODO")]
-pub struct Command {}
+pub struct Command {
+    #[arg(short, long)]
+    profile: profile::Id,
+}
 
-pub async fn handle(_command: Command, global: Global) -> Result<(), Error> {
+pub async fn handle(command: Command, global: Global) -> Result<(), Error> {
+    let Command { profile } = command;
     let Global {
         moss_root,
         config_dir,
         cache_dir,
     } = global;
 
-    let client = Client::new(config_dir, cache_dir).await?;
+    let client = Client::new(config_dir, cache_dir, moss_root).await?;
 
     let ephemeral_root = client.cache.join("test-root");
     recreate_dir(&ephemeral_root).await?;
 
-    let mut moss_client = moss::Client::new(&moss_root)
+    let repos = client.repositories(&profile)?.clone();
+
+    let mut moss_client = moss::Client::new("boulder", &client.moss)
+        .await?
+        .explicit_repositories(repos)
         .await?
         .ephemeral(&ephemeral_root)?;
 

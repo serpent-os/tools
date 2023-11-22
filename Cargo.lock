@@ -1260,6 +1260,7 @@ dependencies = [
  "tui",
  "url",
  "vfs",
+ "xxhash-rust",
 ]
 
 [[package]]

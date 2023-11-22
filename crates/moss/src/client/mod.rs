@@ -40,6 +40,7 @@ pub mod prune;
 
 /// A Client is a connection to the underlying package management systems
 pub struct Client {
+    pub name: String,
     /// Root that we operate on
     pub installation: Installation,
     pub registry: Registry,
@@ -51,11 +52,15 @@ pub struct Client {
     config: config::Manager,
     repositories: repository::Manager,
     scope: Scope,
+    explicit_repo_config: Option<repository::Map>,
 }
 
 impl Client {
     /// Construct a new Client
-    pub async fn new(root: impl Into<PathBuf>) -> Result<Client, Error> {
+    pub async fn new(
+        client_name: impl ToString,
+        root: impl Into<PathBuf>,
+    ) -> Result<Client, Error> {
         let root = root.into();
 
         if !root.exists() || !root.is_dir() {
@@ -64,7 +69,8 @@ impl Client {
 
         let config = config::Manager::system(&root, "moss");
         let installation = Installation::open(root);
-        let repositories = repository::Manager::new(config.clone(), installation.clone()).await?;
+        let repositories =
+            repository::Manager::system(config.clone(), installation.clone()).await?;
         let install_db =
             db::meta::Database::new(installation.db_path("install"), installation.read_only())
                 .await?;
@@ -79,6 +85,7 @@ impl Client {
         let registry = build_registry(&repositories, &install_db, state).await?;
 
         Ok(Client {
+            name: client_name.to_string(),
             config,
             installation,
             repositories,
@@ -87,12 +94,8 @@ impl Client {
             state_db,
             layout_db,
             scope: Scope::Stateful,
+            explicit_repo_config: None,
         })
-    }
-
-    /// Construct a new Client for the global installation
-    pub async fn system() -> Result<Client, Error> {
-        Client::new("/").await
     }
 
     pub fn is_ephemeral(&self) -> bool {
@@ -124,12 +127,26 @@ impl Client {
         })
     }
 
+    /// Transition the client to use the provided explicit repositories, instead of loading
+    /// repository configuration from moss config folders
+    pub async fn explicit_repositories(
+        mut self,
+        repositories: repository::Map,
+    ) -> Result<Self, Error> {
+        self.explicit_repo_config = Some(repositories);
+        self.refresh_repositories().await?;
+        Ok(self)
+    }
+
     /// Reload all configured repositories and refreshes their index file, then update
     /// registry with all active repositories.
     pub async fn refresh_repositories(&mut self) -> Result<(), Error> {
         // Reload manager and refresh all repositories
-        self.repositories =
-            repository::Manager::new(self.config.clone(), self.installation.clone()).await?;
+        self.repositories = if let Some(repos) = self.explicit_repo_config.clone() {
+            repository::Manager::explicit(&self.name, repos, self.installation.clone()).await?
+        } else {
+            repository::Manager::system(self.config.clone(), self.installation.clone()).await?
+        };
         self.repositories.refresh_all().await?;
 
         // Refresh State DB
@@ -632,6 +649,7 @@ BUG_REPORT_URL="https://github.com/serpent-os""#,
 
     Ok(())
 }
+
 enum Scope {
     Stateful,
     Ephemeral { blit_root: PathBuf },
