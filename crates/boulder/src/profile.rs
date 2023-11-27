@@ -59,8 +59,8 @@ impl Map {
         self.0.get(id)
     }
 
-    pub fn add(&mut self, id: Id, repo: Profile) {
-        self.0.insert(id, repo);
+    pub fn add(&mut self, id: Id, profile: Profile) {
+        self.0.insert(id, profile);
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&Id, &Profile)> {

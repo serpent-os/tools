@@ -36,13 +36,13 @@ pub enum Subcommand {
     Profile(profile::Command),
 }
 
-pub async fn process() -> Result<(), Error> {
+pub fn process() -> Result<(), Error> {
     let Command { global, subcommand } = Command::parse();
 
     match subcommand {
-        Subcommand::Build(command) => build::handle(command, global).await?,
-        Subcommand::Chroot(command) => chroot::handle(command, global).await?,
-        Subcommand::Profile(command) => profile::handle(command, global).await?,
+        Subcommand::Build(command) => build::handle(command, global)?,
+        Subcommand::Chroot(command) => chroot::handle(command, global)?,
+        Subcommand::Profile(command) => profile::handle(command, global)?,
     }
 
     Ok(())

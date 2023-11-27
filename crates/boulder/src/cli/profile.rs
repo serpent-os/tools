@@ -39,6 +39,11 @@ pub enum Subcommand {
         )]
         repos: Vec<(repository::Id, Repository)>,
     },
+    #[command(about = "Update a profiles repositories")]
+    Update {
+        #[arg(short, long)]
+        profile: profile::Id,
+    },
 }
 
 /// Parse a single key-value pair
@@ -71,18 +76,19 @@ fn parse_repository(s: &str) -> Result<(repository::Id, Repository), String> {
     ))
 }
 
-pub async fn handle(command: Command, global: Global) -> Result<(), Error> {
+pub fn handle(command: Command, global: Global) -> Result<(), Error> {
     let Global {
         config_dir,
         cache_dir,
         moss_root,
     } = global;
 
-    let client = Client::new(config_dir, cache_dir, moss_root).await?;
+    let client = Client::new(config_dir, cache_dir, moss_root)?;
 
     match command.subcommand {
         Subcommand::List => list(client),
-        Subcommand::Add { name, repos } => add(client, name, repos).await,
+        Subcommand::Add { name, repos } => add(client, name, repos),
+        Subcommand::Update { profile } => update(client, &profile),
     }
 }
 
@@ -107,31 +113,48 @@ pub fn list(client: Client) -> Result<(), Error> {
     Ok(())
 }
 
-pub async fn add(
-    client: Client,
+pub fn add(
+    mut client: Client,
     name: String,
     repos: Vec<(repository::Id, Repository)>,
 ) -> Result<(), Error> {
     let id = profile::Id::new(name);
 
-    let map = profile::Map::with([(
+    client.save_profile(
         id.clone(),
         Profile {
             collections: repository::Map::with(repos),
         },
-    )]);
+    )?;
 
-    client.config.save(&id, &map).await?;
+    update(client, &id)?;
 
     println!("Profile \"{id}\" has been added");
 
     Ok(())
 }
 
+pub fn update(client: Client, profile: &profile::Id) -> Result<(), Error> {
+    let repos = client.repositories(profile)?.clone();
+
+    client.block_on(async {
+        let mut moss_client = moss::Client::new("boulder", &client.moss)
+            .await?
+            .explicit_repositories(repos)
+            .await?;
+        moss_client.refresh_repositories().await?;
+
+        Ok(()) as Result<(), Error>
+    })?;
+
+    Ok(())
+}
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("client")]
     Client(#[from] client::Error),
     #[error("config")]
     Config(#[from] config::SaveError),
+    #[error("moss client")]
+    MossClient(#[from] moss::client::Error),
 }

@@ -18,7 +18,7 @@ use crate::repository::{self, Repository};
 
 enum Source {
     System(config::Manager),
-    External {
+    Explicit {
         identifier: String,
         repos: repository::Map,
     },
@@ -28,7 +28,7 @@ impl Source {
     fn identifier(&self) -> &str {
         match self {
             Source::System(_) => environment::NAME,
-            Source::External { identifier, .. } => identifier,
+            Source::Explicit { identifier, .. } => identifier,
         }
     }
 }
@@ -41,6 +41,10 @@ pub struct Manager {
 }
 
 impl Manager {
+    pub fn is_explicit(&self) -> bool {
+        matches!(self.source, Source::Explicit { .. })
+    }
+
     /// Create a [`Manager`] for the supplied [`Installation`] using system configurations
     pub async fn system(
         config: config::Manager,
@@ -58,7 +62,7 @@ impl Manager {
         installation: Installation,
     ) -> Result<Self, Error> {
         Self::new(
-            Source::External {
+            Source::Explicit {
                 identifier: identifier.to_string(),
                 repos,
             },
@@ -74,7 +78,7 @@ impl Manager {
             {
                 config.load::<repository::Map>().await.unwrap_or_default()
             }
-            Source::External { repos, .. } => repos.clone(),
+            Source::Explicit { repos, .. } => repos.clone(),
         };
 
         // Open all repo meta dbs and collect into hash map

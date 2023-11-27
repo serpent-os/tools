@@ -3,15 +3,15 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::process;
-use std::{io, path::Path};
+use std::{
+    fs::{create_dir_all, remove_dir_all},
+    io,
+    path::Path,
+};
 
 use boulder::{client, profile, Client};
 use clap::Parser;
 use thiserror::Error;
-use tokio::{
-    fs::{create_dir_all, remove_dir_all},
-    task,
-};
 
 use super::Global;
 
@@ -22,7 +22,7 @@ pub struct Command {
     profile: profile::Id,
 }
 
-pub async fn handle(command: Command, global: Global) -> Result<(), Error> {
+pub fn handle(command: Command, global: Global) -> Result<(), Error> {
     let Command { profile } = command;
     let Global {
         moss_root,
@@ -30,38 +30,41 @@ pub async fn handle(command: Command, global: Global) -> Result<(), Error> {
         cache_dir,
     } = global;
 
-    let client = Client::new(config_dir, cache_dir, moss_root).await?;
+    let client = Client::new(config_dir, cache_dir, moss_root)?;
 
     let ephemeral_root = client.cache.join("test-root");
-    recreate_dir(&ephemeral_root).await?;
+    recreate_dir(&ephemeral_root)?;
 
     let repos = client.repositories(&profile)?.clone();
 
-    let mut moss_client = moss::Client::new("boulder", &client.moss)
-        .await?
-        .explicit_repositories(repos)
-        .await?
-        .ephemeral(&ephemeral_root)?;
+    client.block_on(async {
+        let mut moss_client = moss::Client::new("boulder", &client.moss)
+            .await?
+            .explicit_repositories(repos)
+            .await?
+            .ephemeral(&ephemeral_root)?;
 
-    moss_client.install(BASE_PACKAGES, true).await?;
+        moss_client.install(BASE_PACKAGES, true).await?;
 
-    task::spawn_blocking(move || {
-        container::run(ephemeral_root, move || {
-            let mut child = process::Command::new("/bin/bash")
-                .arg("--login")
-                .env_clear()
-                .env("HOME", "/root")
-                .env("PATH", "/usr/bin:/usr/sbin")
-                .env("TERM", "xterm-256color")
-                .spawn()?;
+        Ok(()) as Result<(), Error>
+    })?;
 
-            child.wait()?;
+    // Drop client = drop async runtime
+    drop(client);
 
-            Ok(())
-        })
+    container::run(ephemeral_root, move || {
+        let mut child = process::Command::new("/bin/bash")
+            .arg("--login")
+            .env_clear()
+            .env("HOME", "/root")
+            .env("PATH", "/usr/bin:/usr/sbin")
+            .env("TERM", "xterm-256color")
+            .spawn()?;
+
+        child.wait()?;
+
+        Ok(())
     })
-    .await
-    .expect("join handle")
     .map_err(Error::Container)?;
 
     Ok(())
@@ -103,11 +106,11 @@ const BASE_PACKAGES: &[&str] = &[
     "which",
 ];
 
-async fn recreate_dir(path: &Path) -> Result<(), Error> {
+fn recreate_dir(path: &Path) -> Result<(), Error> {
     if path.exists() {
-        remove_dir_all(&path).await?;
+        remove_dir_all(path)?;
     }
-    create_dir_all(&path).await?;
+    create_dir_all(path)?;
     Ok(())
 }
 

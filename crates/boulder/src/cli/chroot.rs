@@ -7,7 +7,6 @@ use std::process;
 use boulder::{client, Client};
 use clap::Parser;
 use thiserror::Error;
-use tokio::task;
 
 use super::Global;
 
@@ -15,34 +14,32 @@ use super::Global;
 #[command(about = "Chroot into the build environment")]
 pub struct Command {}
 
-pub async fn handle(_command: Command, global: Global) -> Result<(), Error> {
+pub fn handle(_command: Command, global: Global) -> Result<(), Error> {
     let Global {
         config_dir,
         cache_dir,
         moss_root,
     } = global;
 
-    let client = Client::new(config_dir, cache_dir, moss_root).await?;
+    let client = Client::new(config_dir, cache_dir, moss_root)?;
 
     let ephemeral_root = client.cache.join("test-root");
 
-    task::spawn_blocking(move || {
-        container::run(ephemeral_root, move || {
-            let mut child = process::Command::new("/bin/bash")
-                .arg("--login")
-                .env_clear()
-                .env("HOME", "/root")
-                .env("PATH", "/usr/bin:/usr/sbin")
-                .env("TERM", "xterm-256color")
-                .spawn()?;
+    drop(client);
 
-            child.wait()?;
+    container::run(ephemeral_root, move || {
+        let mut child = process::Command::new("/bin/bash")
+            .arg("--login")
+            .env_clear()
+            .env("HOME", "/root")
+            .env("PATH", "/usr/bin:/usr/sbin")
+            .env("TERM", "xterm-256color")
+            .spawn()?;
 
-            Ok(())
-        })
+        child.wait()?;
+
+        Ok(())
     })
-    .await
-    .expect("join handle")
     .map_err(Error::Container)?;
 
     Ok(())

@@ -3,25 +3,29 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
+    fs::create_dir,
+    future::Future,
     io,
     path::{Path, PathBuf},
 };
 
 use moss::repository;
 use thiserror::Error;
-use tokio::fs::create_dir;
+use tokio::runtime;
 
-use crate::profile;
+use crate::{profile, Profile};
 
 pub struct Client {
     pub config: config::Manager,
     pub cache: PathBuf,
     pub moss: PathBuf,
     pub profiles: profile::Map,
+
+    runtime: tokio::runtime::Runtime,
 }
 
 impl Client {
-    pub async fn new(
+    pub fn new(
         config_dir: Option<PathBuf>,
         cache_dir: Option<PathBuf>,
         moss_root: Option<PathBuf>,
@@ -36,19 +40,24 @@ impl Client {
             config::Manager::user("boulder")?
         };
 
-        let profiles = config.load::<profile::Map>().await.unwrap_or_default();
-
         let cache = resolve_cache_dir(is_root, cache_dir)?;
         let moss = resolve_moss_root(is_root, moss_root)?;
 
-        ensure_dir_exists(&cache).await?;
-        ensure_dir_exists(&moss).await?;
+        ensure_dir_exists(&cache)?;
+        ensure_dir_exists(&moss)?;
+
+        let runtime = runtime::Builder::new_multi_thread().enable_all().build()?;
+
+        let profiles = runtime
+            .block_on(config.load::<profile::Map>())
+            .unwrap_or_default();
 
         Ok(Self {
             config,
             cache,
             moss,
             profiles,
+            runtime,
         })
     }
 
@@ -57,6 +66,24 @@ impl Client {
             .get(profile)
             .map(|profile| &profile.collections)
             .ok_or(Error::MissingProfile)
+    }
+
+    pub fn save_profile(&mut self, id: profile::Id, profile: Profile) -> Result<(), Error> {
+        // Save config
+        let map = profile::Map::with([(id.clone(), profile.clone())]);
+        self.runtime.block_on(self.config.save(id.clone(), &map))?;
+
+        // Add to profile map
+        self.profiles.add(id, profile);
+
+        Ok(())
+    }
+
+    pub fn block_on<T, F>(&self, f: F) -> T
+    where
+        F: Future<Output = T>,
+    {
+        self.runtime.block_on(f)
     }
 }
 
@@ -86,9 +113,9 @@ fn resolve_moss_root(is_root: bool, custom: Option<PathBuf>) -> Result<PathBuf, 
     }
 }
 
-async fn ensure_dir_exists(path: &Path) -> Result<(), Error> {
+fn ensure_dir_exists(path: &Path) -> Result<(), Error> {
     if !path.exists() {
-        create_dir(&path).await?;
+        create_dir(path)?;
     }
     Ok(())
 }
@@ -101,6 +128,8 @@ pub enum Error {
     UserCache,
     #[error("cannot find config dir, $XDG_CONFIG_HOME or $HOME env not set")]
     UserConfig,
+    #[error("save config")]
+    SaveConfig(#[from] config::SaveError),
     #[error("io")]
     Io(#[from] io::Error),
 }
