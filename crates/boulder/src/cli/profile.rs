@@ -138,7 +138,7 @@ pub fn update(client: Client, profile: &profile::Id) -> Result<(), Error> {
     let repos = client.repositories(profile)?.clone();
 
     client.block_on(async {
-        let mut moss_client = moss::Client::new("boulder", &client.moss)
+        let mut moss_client = moss::Client::new("boulder", &client.moss_dir)
             .await?
             .explicit_repositories(repos)
             .await?;

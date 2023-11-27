@@ -32,13 +32,13 @@ pub fn handle(command: Command, global: Global) -> Result<(), Error> {
 
     let client = Client::new(config_dir, cache_dir, moss_root)?;
 
-    let ephemeral_root = client.cache.join("test-root");
+    let ephemeral_root = client.cache_dir.join("test-root");
     recreate_dir(&ephemeral_root)?;
 
     let repos = client.repositories(&profile)?.clone();
 
     client.block_on(async {
-        let mut moss_client = moss::Client::new("boulder", &client.moss)
+        let mut moss_client = moss::Client::new("boulder", &client.moss_dir)
             .await?
             .explicit_repositories(repos)
             .await?

@@ -23,7 +23,7 @@ pub fn handle(_command: Command, global: Global) -> Result<(), Error> {
 
     let client = Client::new(config_dir, cache_dir, moss_root)?;
 
-    let ephemeral_root = client.cache.join("test-root");
+    let ephemeral_root = client.cache_dir.join("test-root");
 
     drop(client);
 

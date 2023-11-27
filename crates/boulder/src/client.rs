@@ -17,8 +17,8 @@ use crate::{profile, Profile};
 
 pub struct Client {
     pub config: config::Manager,
-    pub cache: PathBuf,
-    pub moss: PathBuf,
+    pub cache_dir: PathBuf,
+    pub moss_dir: PathBuf,
     pub profiles: profile::Map,
 
     runtime: tokio::runtime::Runtime,
@@ -40,11 +40,11 @@ impl Client {
             config::Manager::user("boulder")?
         };
 
-        let cache = resolve_cache_dir(is_root, cache_dir)?;
-        let moss = resolve_moss_root(is_root, moss_root)?;
+        let cache_dir = resolve_cache_dir(is_root, cache_dir)?;
+        let moss_dir = resolve_moss_root(is_root, moss_root)?;
 
-        ensure_dir_exists(&cache)?;
-        ensure_dir_exists(&moss)?;
+        ensure_dir_exists(&cache_dir)?;
+        ensure_dir_exists(&moss_dir)?;
 
         let runtime = runtime::Builder::new_multi_thread().enable_all().build()?;
 
@@ -54,8 +54,8 @@ impl Client {
 
         Ok(Self {
             config,
-            cache,
-            moss,
+            cache_dir,
+            moss_dir,
             profiles,
             runtime,
         })
