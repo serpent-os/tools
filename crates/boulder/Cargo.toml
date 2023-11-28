@@ -9,6 +9,7 @@ edition.workspace = true
 config = { path = "../config" }
 container = { path = "../container" }
 moss = { path = "../moss" }
+stone_recipe = { path = "../stone_recipe" }
 tui = { path = "../tui" }
 
 clap.workspace = true

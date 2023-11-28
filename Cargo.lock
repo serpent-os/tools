@@ -202,6 +202,7 @@ dependencies = [
  "moss",
  "nix",
  "serde",
+ "stone_recipe",
  "thiserror",
  "tokio",
  "tui",

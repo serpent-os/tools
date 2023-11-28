@@ -2,14 +2,15 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::process;
+use std::path::PathBuf;
+use std::{fs, process};
 use std::{
     fs::{create_dir_all, remove_dir_all},
     io,
     path::Path,
 };
 
-use boulder::{client, profile, Client};
+use boulder::{env, profile, Cache, Env, Runtime};
 use clap::Parser;
 use thiserror::Error;
 
@@ -20,39 +21,66 @@ use super::Global;
 pub struct Command {
     #[arg(short, long)]
     profile: profile::Id,
+    #[arg(
+        short,
+        long,
+        default_value = ".",
+        help = "Directory to store build results"
+    )]
+    output: PathBuf,
+    #[arg(default_value = "./stone.yml", help = "Path to recipe file")]
+    recipe: PathBuf,
 }
 
 pub fn handle(command: Command, global: Global) -> Result<(), Error> {
-    let Command { profile } = command;
+    let Command {
+        profile,
+        output,
+        recipe,
+    } = command;
     let Global {
         moss_root,
         config_dir,
         cache_dir,
     } = global;
 
-    let client = Client::new(config_dir, cache_dir, moss_root)?;
+    if !output.exists() {
+        return Err(Error::MissingOutput(output));
+    }
+    if !recipe.exists() {
+        return Err(Error::MissingRecipe(recipe));
+    }
 
-    let ephemeral_root = client.cache_dir.join("test-root");
-    recreate_dir(&ephemeral_root)?;
+    let recipe_bytes = fs::read(&recipe)?;
+    let recipe = stone_recipe::from_slice(&recipe_bytes)?;
 
-    let repos = client.repositories(&profile)?.clone();
+    let runtime = Runtime::new()?;
+    let env = Env::new(config_dir, cache_dir, moss_root)?;
 
-    client.block_on(async {
-        let mut moss_client = moss::Client::new("boulder", &client.moss_dir)
+    let profiles = profile::Manager::new(&runtime, &env);
+    let repos = profiles.repositories(&profile)?.clone();
+
+    let cache = Cache::new(&recipe, &env.cache_dir, "/mason");
+    let rootfs = cache.rootfs().host;
+
+    recreate_dir(&rootfs)?;
+
+    runtime.block_on(async {
+        let mut moss_client = moss::Client::new("boulder", &env.moss_dir)
             .await?
             .explicit_repositories(repos)
             .await?
-            .ephemeral(&ephemeral_root)?;
+            .ephemeral(&rootfs)?;
 
         moss_client.install(BASE_PACKAGES, true).await?;
 
         Ok(()) as Result<(), Error>
     })?;
 
-    // Drop client = drop async runtime
-    drop(client);
+    // Drop async runtime
+    drop(runtime);
 
-    container::run(ephemeral_root, move || {
+    container::run(rootfs, move || {
         let mut child = process::Command::new("/bin/bash")
             .arg("--login")
             .env_clear()
@@ -116,14 +144,22 @@ fn recreate_dir(path: &Path) -> Result<(), Error> {
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("output directory does not exist: {0:?}")]
+    MissingOutput(PathBuf),
+    #[error("recipe file does not exist: {0:?}")]
+    MissingRecipe(PathBuf),
     #[error("container")]
     Container(Box<dyn std::error::Error + Send + Sync + 'static>),
-    #[error("client")]
-    Client(#[from] client::Error),
+    #[error("env")]
+    Env(#[from] env::Error),
+    #[error("profile")]
+    Profile(#[from] profile::Error),
     #[error("moss client")]
     MossClient(#[from] moss::client::Error),
     #[error("moss install")]
     MossInstall(#[from] moss::client::install::Error),
+    #[error("stone recipe")]
+    StoneRecipe(#[from] stone_recipe::Error),
     #[error("io")]
     Io(#[from] io::Error),
 }

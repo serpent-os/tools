@@ -4,27 +4,19 @@
 
 use std::{
     fs::create_dir,
-    future::Future,
     io,
     path::{Path, PathBuf},
 };
 
-use moss::repository;
 use thiserror::Error;
-use tokio::runtime;
 
-use crate::{profile, Profile};
-
-pub struct Client {
-    pub config: config::Manager,
+pub struct Env {
     pub cache_dir: PathBuf,
     pub moss_dir: PathBuf,
-    pub profiles: profile::Map,
-
-    runtime: tokio::runtime::Runtime,
+    pub config: config::Manager,
 }
 
-impl Client {
+impl Env {
     pub fn new(
         config_dir: Option<PathBuf>,
         cache_dir: Option<PathBuf>,
@@ -46,44 +38,11 @@ impl Client {
         ensure_dir_exists(&cache_dir)?;
         ensure_dir_exists(&moss_dir)?;
 
-        let runtime = runtime::Builder::new_multi_thread().enable_all().build()?;
-
-        let profiles = runtime
-            .block_on(config.load::<profile::Map>())
-            .unwrap_or_default();
-
         Ok(Self {
             config,
             cache_dir,
             moss_dir,
-            profiles,
-            runtime,
         })
-    }
-
-    pub fn repositories(&self, profile: &profile::Id) -> Result<&repository::Map, Error> {
-        self.profiles
-            .get(profile)
-            .map(|profile| &profile.collections)
-            .ok_or(Error::MissingProfile)
-    }
-
-    pub fn save_profile(&mut self, id: profile::Id, profile: Profile) -> Result<(), Error> {
-        // Save config
-        let map = profile::Map::with([(id.clone(), profile.clone())]);
-        self.runtime.block_on(self.config.save(id.clone(), &map))?;
-
-        // Add to profile map
-        self.profiles.add(id, profile);
-
-        Ok(())
-    }
-
-    pub fn block_on<T, F>(&self, f: F) -> T
-    where
-        F: Future<Output = T>,
-    {
-        self.runtime.block_on(f)
     }
 }
 
@@ -122,14 +81,10 @@ fn ensure_dir_exists(path: &Path) -> Result<(), Error> {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("cannot find the provided profile")]
-    MissingProfile,
     #[error("cannot find cache dir, $XDG_CACHE_HOME or $HOME env not set")]
     UserCache,
     #[error("cannot find config dir, $XDG_CONFIG_HOME or $HOME env not set")]
     UserConfig,
-    #[error("save config")]
-    SaveConfig(#[from] config::SaveError),
     #[error("io")]
     Io(#[from] io::Error),
 }

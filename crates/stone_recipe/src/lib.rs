@@ -8,7 +8,9 @@ use serde::Deserialize;
 use thiserror::Error;
 use url::Url;
 
-pub fn from_slice(bytes: &[u8]) -> Result<Recipe, serde_yaml::Error> {
+pub use serde_yaml::Error;
+
+pub fn from_slice(bytes: &[u8]) -> Result<Recipe, Error> {
     serde_yaml::from_slice(bytes)
 }
 

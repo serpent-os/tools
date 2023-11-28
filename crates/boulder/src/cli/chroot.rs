@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::process;
+use std::{fs, io, path::PathBuf, process};
 
-use boulder::{client, Client};
+use boulder::{env, Cache, Env};
 use clap::Parser;
 use thiserror::Error;
 
@@ -12,22 +12,35 @@ use super::Global;
 
 #[derive(Debug, Parser)]
 #[command(about = "Chroot into the build environment")]
-pub struct Command {}
+pub struct Command {
+    #[arg(default_value = "./stone.yml", help = "Path to recipe file")]
+    recipe: PathBuf,
+}
 
-pub fn handle(_command: Command, global: Global) -> Result<(), Error> {
+pub fn handle(command: Command, global: Global) -> Result<(), Error> {
+    let Command { recipe } = command;
     let Global {
         config_dir,
         cache_dir,
         moss_root,
     } = global;
 
-    let client = Client::new(config_dir, cache_dir, moss_root)?;
+    if !recipe.exists() {
+        return Err(Error::MissingRecipe(recipe));
+    }
 
-    let ephemeral_root = client.cache_dir.join("test-root");
+    let recipe_bytes = fs::read(&recipe)?;
+    let recipe = stone_recipe::from_slice(&recipe_bytes)?;
 
-    drop(client);
+    let env = Env::new(config_dir, cache_dir, moss_root)?;
+    let cache = Cache::new(&recipe, &env.cache_dir, "/mason");
+    let rootfs = cache.rootfs().host;
 
-    container::run(ephemeral_root, move || {
+    if !rootfs.exists() {
+        return Err(Error::MissingRootFs);
+    }
+
+    container::run(rootfs, move || {
         let mut child = process::Command::new("/bin/bash")
             .arg("--login")
             .env_clear()
@@ -47,8 +60,16 @@ pub fn handle(_command: Command, global: Global) -> Result<(), Error> {
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("recipe file does not exist: {0:?}")]
+    MissingRecipe(PathBuf),
+    #[error("build root doesn't exist, make sure to run build first")]
+    MissingRootFs,
     #[error("container")]
     Container(Box<dyn std::error::Error + Send + Sync + 'static>),
-    #[error("client")]
-    Client(#[from] client::Error),
+    #[error("env")]
+    Env(#[from] env::Error),
+    #[error("stone recipe")]
+    StoneRecipe(#[from] stone_recipe::Error),
+    #[error("io")]
+    Io(#[from] io::Error),
 }

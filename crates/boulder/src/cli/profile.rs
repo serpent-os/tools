@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::collections::HashMap;
+use std::{collections::HashMap, io};
 
-use boulder::{client, profile, Client, Profile};
+use boulder::{env, profile, Env, Profile, Runtime};
 use clap::Parser;
 use itertools::Itertools;
 use moss::{repository, Repository};
@@ -83,22 +83,24 @@ pub fn handle(command: Command, global: Global) -> Result<(), Error> {
         moss_root,
     } = global;
 
-    let client = Client::new(config_dir, cache_dir, moss_root)?;
+    let runtime = Runtime::new()?;
+    let env = Env::new(config_dir, cache_dir, moss_root)?;
+    let manager = profile::Manager::new(&runtime, &env);
 
     match command.subcommand {
-        Subcommand::List => list(client),
-        Subcommand::Add { name, repos } => add(client, name, repos),
-        Subcommand::Update { profile } => update(client, &profile),
+        Subcommand::List => list(manager),
+        Subcommand::Add { name, repos } => add(&runtime, &env, manager, name, repos),
+        Subcommand::Update { profile } => update(&runtime, &env, manager, &profile),
     }
 }
 
-pub fn list(client: Client) -> Result<(), Error> {
-    if client.profiles.is_empty() {
+pub fn list(manager: profile::Manager) -> Result<(), Error> {
+    if manager.profiles.is_empty() {
         println!("No profiles have been configured yet");
         return Ok(());
     }
 
-    for (id, profile) in client.profiles.iter() {
+    for (id, profile) in manager.profiles.iter() {
         println!("{id}:");
 
         for (id, repo) in profile
@@ -114,31 +116,38 @@ pub fn list(client: Client) -> Result<(), Error> {
 }
 
 pub fn add(
-    mut client: Client,
+    runtime: &Runtime,
+    env: &Env,
+    mut manager: profile::Manager,
     name: String,
     repos: Vec<(repository::Id, Repository)>,
 ) -> Result<(), Error> {
     let id = profile::Id::new(name);
 
-    client.save_profile(
+    manager.save_profile(
         id.clone(),
         Profile {
             collections: repository::Map::with(repos),
         },
     )?;
 
-    update(client, &id)?;
+    update(runtime, env, manager, &id)?;
 
     println!("Profile \"{id}\" has been added");
 
     Ok(())
 }
 
-pub fn update(client: Client, profile: &profile::Id) -> Result<(), Error> {
-    let repos = client.repositories(profile)?.clone();
+pub fn update(
+    runtime: &Runtime,
+    env: &Env,
+    manager: profile::Manager,
+    profile: &profile::Id,
+) -> Result<(), Error> {
+    let repos = manager.repositories(profile)?.clone();
 
-    client.block_on(async {
-        let mut moss_client = moss::Client::new("boulder", &client.moss_dir)
+    runtime.block_on(async {
+        let mut moss_client = moss::Client::new("boulder", &env.moss_dir)
             .await?
             .explicit_repositories(repos)
             .await?;
@@ -151,10 +160,14 @@ pub fn update(client: Client, profile: &profile::Id) -> Result<(), Error> {
 }
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("client")]
-    Client(#[from] client::Error),
+    #[error("env")]
+    Env(#[from] env::Error),
     #[error("config")]
     Config(#[from] config::SaveError),
+    #[error("profile")]
+    Profile(#[from] profile::Error),
     #[error("moss client")]
     MossClient(#[from] moss::client::Error),
+    #[error("io")]
+    Io(#[from] io::Error),
 }
