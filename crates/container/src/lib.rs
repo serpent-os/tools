@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 use std::env::set_current_dir;
-use std::fs::{copy, create_dir, remove_dir, write};
-use std::path::Path;
+use std::fs::{copy, create_dir_all, remove_dir, write};
+use std::path::{Path, PathBuf};
 
 use nix::libc::SIGCHLD;
 use nix::mount::{mount, umount2, MntFlags, MsFlags};
@@ -11,58 +11,108 @@ use nix::sched::{clone, CloneFlags};
 use nix::sys::wait::waitpid;
 use nix::unistd::{close, getgid, getuid, pipe, pivot_root, read, sethostname, Uid};
 
-type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
+pub type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
-pub fn run(root: impl AsRef<Path>, mut f: impl FnMut() -> Result<(), Error>) -> Result<(), Error> {
-    static mut STACK: [u8; 4 * 1024 * 1024] = [0u8; 4 * 1024 * 1024];
+pub struct Container {
+    root: PathBuf,
+    work_dir: Option<PathBuf>,
+    // TODO: Strongly typed & ro variant
+    binds: Vec<(PathBuf, PathBuf)>,
+    networking: bool,
+    hostname: Option<String>,
+}
 
-    let root = root.as_ref();
-    let rootless = !Uid::effective().is_root();
-
-    // Pipe to synchronize parent & child
-    let sync = pipe()?;
-
-    let mut flags = CloneFlags::CLONE_NEWNS
-        | CloneFlags::CLONE_NEWPID
-        | CloneFlags::CLONE_NEWIPC
-        | CloneFlags::CLONE_NEWUTS;
-
-    if rootless {
-        flags |= CloneFlags::CLONE_NEWUSER;
+impl Container {
+    pub fn new(root: impl Into<PathBuf>) -> Self {
+        Self {
+            root: root.into(),
+            work_dir: None,
+            binds: vec![],
+            networking: false,
+            hostname: None,
+        }
     }
 
-    let pid = unsafe {
-        clone(
-            Box::new(|| match enter(root, sync, &mut f) {
-                Ok(_) => 0,
-                Err(e) => {
-                    eprintln!("Error: {e}");
-                    1
-                }
-            }),
-            &mut STACK,
-            flags,
-            Some(SIGCHLD),
-        )?
-    };
-
-    if rootless {
-        // Update uid / gid map to map current user to root in container
-        write(format!("/proc/{pid}/setgroups"), "deny")?;
-        write(format!("/proc/{pid}/uid_map"), format!("0 {} 1", getuid()))?;
-        write(format!("/proc/{pid}/gid_map"), format!("0 {} 1", getgid()))?;
+    pub fn work_dir(self, work_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            work_dir: Some(work_dir.into()),
+            ..self
+        }
     }
 
-    // Allow child to continue
-    close(sync.1)?;
+    pub fn bind(mut self, host: impl Into<PathBuf>, guest: impl Into<PathBuf>) -> Self {
+        self.binds.push((host.into(), guest.into()));
+        self
+    }
 
-    waitpid(pid, None)?;
+    pub fn networking(self, enabled: bool) -> Self {
+        Self {
+            networking: enabled,
+            ..self
+        }
+    }
 
-    Ok(())
+    pub fn hostname(self, hostname: impl ToString) -> Self {
+        Self {
+            hostname: Some(hostname.to_string()),
+            ..self
+        }
+    }
+
+    pub fn run(self, mut f: impl FnMut() -> Result<(), Error>) -> Result<(), Error> {
+        static mut STACK: [u8; 4 * 1024 * 1024] = [0u8; 4 * 1024 * 1024];
+
+        let rootless = !Uid::effective().is_root();
+
+        // Pipe to synchronize parent & child
+        let sync = pipe()?;
+
+        let mut flags = CloneFlags::CLONE_NEWNS
+            | CloneFlags::CLONE_NEWPID
+            | CloneFlags::CLONE_NEWIPC
+            | CloneFlags::CLONE_NEWUTS;
+
+        if rootless {
+            flags |= CloneFlags::CLONE_NEWUSER;
+        }
+
+        if !self.networking {
+            flags |= CloneFlags::CLONE_NEWNET;
+        }
+
+        let pid = unsafe {
+            clone(
+                Box::new(|| match enter(&self, sync, &mut f) {
+                    Ok(_) => 0,
+                    Err(e) => {
+                        eprintln!("Error: {e}");
+                        1
+                    }
+                }),
+                &mut STACK,
+                flags,
+                Some(SIGCHLD),
+            )?
+        };
+
+        if rootless {
+            // Update uid / gid map to map current user to root in container
+            write(format!("/proc/{pid}/setgroups"), "deny")?;
+            write(format!("/proc/{pid}/uid_map"), format!("0 {} 1", getuid()))?;
+            write(format!("/proc/{pid}/gid_map"), format!("0 {} 1", getgid()))?;
+        }
+
+        // Allow child to continue
+        close(sync.1)?;
+
+        waitpid(pid, None)?;
+
+        Ok(())
+    }
 }
 
 fn enter(
-    root: &Path,
+    container: &Container,
     sync: (i32, i32),
     mut f: impl FnMut() -> Result<(), Error>,
 ) -> Result<(), Error> {
@@ -72,30 +122,44 @@ fn enter(
     read(sync.0, &mut [0u8; 1])?;
     close(sync.0)?;
 
-    setup(root)?;
+    setup(container)?;
 
     f()
 }
 
-fn setup(root: &Path) -> Result<(), Error> {
-    // TODO: conditional networking
-    setup_networking(root)?;
+fn setup(container: &Container) -> Result<(), Error> {
+    if container.networking {
+        setup_networking(&container.root)?;
+    }
 
-    pivot(root)?;
+    pivot(&container.root, &container.binds)?;
 
     setup_root_user()?;
-    sethostname("boulder")?;
+
+    if let Some(hostname) = &container.hostname {
+        sethostname(hostname)?;
+    }
+
+    if let Some(dir) = &container.work_dir {
+        set_current_dir(dir)?;
+    }
 
     Ok(())
 }
 
-fn pivot(root: &Path) -> Result<(), Error> {
+fn pivot(root: &Path, binds: &[(PathBuf, PathBuf)]) -> Result<(), Error> {
     const OLD_PATH: &str = "old_root";
 
     let old_root = root.join(OLD_PATH);
 
     add_mount(None, "/", None, MsFlags::MS_REC | MsFlags::MS_PRIVATE)?;
     add_mount(Some(root), root, None, MsFlags::MS_BIND)?;
+
+    for (host, guest) in binds {
+        let source = host.canonicalize()?;
+        let target = root.join(guest.strip_prefix("/").unwrap_or(guest));
+        add_mount(Some(source), target, None, MsFlags::MS_BIND)?;
+    }
 
     enusure_directory(&old_root)?;
     pivot_root(root, &old_root)?;
@@ -124,9 +188,9 @@ fn pivot(root: &Path) -> Result<(), Error> {
 }
 
 fn setup_root_user() -> Result<(), Error> {
-    write("/etc/passwd", "root:x:0:0:root:/root:/bin/bash")?;
+    enusure_directory("/etc")?;
+    write("/etc/passwd", "root:x:0:0:root::/bin/bash")?;
     write("/etc/group", "root:x:0:")?;
-    enusure_directory("/root")?;
     Ok(())
 }
 
@@ -140,7 +204,7 @@ fn setup_networking(root: &Path) -> Result<(), Error> {
 fn enusure_directory(path: impl AsRef<Path>) -> Result<(), Error> {
     let path = path.as_ref();
     if !path.exists() {
-        create_dir(path)?;
+        create_dir_all(path)?;
     }
     Ok(())
 }

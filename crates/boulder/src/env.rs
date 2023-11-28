@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
-    fs::create_dir,
+    fs::{create_dir_all, remove_dir_all},
     io,
     path::{Path, PathBuf},
 };
@@ -72,10 +72,18 @@ fn resolve_moss_root(is_root: bool, custom: Option<PathBuf>) -> Result<PathBuf, 
     }
 }
 
-fn ensure_dir_exists(path: &Path) -> Result<(), Error> {
+pub fn ensure_dir_exists(path: &Path) -> Result<(), io::Error> {
     if !path.exists() {
-        create_dir(path)?;
+        create_dir_all(path)?;
     }
+    Ok(())
+}
+
+pub fn recreate_dir(path: &Path) -> Result<(), io::Error> {
+    if path.exists() {
+        remove_dir_all(path)?;
+    }
+    create_dir_all(path)?;
     Ok(())
 }
 

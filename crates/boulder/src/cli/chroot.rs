@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{fs, io, path::PathBuf, process};
+use std::{fs, io, path::PathBuf};
 
-use boulder::{env, Cache, Env};
+use boulder::{container, env, Cache, Env};
 use clap::Parser;
 use thiserror::Error;
 
@@ -33,27 +33,15 @@ pub fn handle(command: Command, global: Global) -> Result<(), Error> {
     let recipe = stone_recipe::from_slice(&recipe_bytes)?;
 
     let env = Env::new(config_dir, cache_dir, moss_root)?;
-    let cache = Cache::new(&recipe, &env.cache_dir, "/mason");
+    let cache = Cache::new(&recipe, env.cache_dir, "/mason")?;
     let rootfs = cache.rootfs().host;
 
-    if !rootfs.exists() {
+    // Has rootfs been setup?
+    if !rootfs.join("usr").exists() {
         return Err(Error::MissingRootFs);
     }
 
-    container::run(rootfs, move || {
-        let mut child = process::Command::new("/bin/bash")
-            .arg("--login")
-            .env_clear()
-            .env("HOME", "/root")
-            .env("PATH", "/usr/bin:/usr/sbin")
-            .env("TERM", "xterm-256color")
-            .spawn()?;
-
-        child.wait()?;
-
-        Ok(())
-    })
-    .map_err(Error::Container)?;
+    container::chroot(&cache).map_err(Error::Container)?;
 
     Ok(())
 }

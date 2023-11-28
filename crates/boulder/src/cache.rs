@@ -2,9 +2,11 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::path::PathBuf;
+use std::{io, path::PathBuf};
 
 use stone_recipe::Recipe;
+
+use crate::env;
 
 struct Id(String);
 
@@ -28,12 +30,19 @@ impl Cache {
         recipe: &Recipe,
         host_root: impl Into<PathBuf>,
         guest_root: impl Into<PathBuf>,
-    ) -> Self {
-        Self {
+    ) -> io::Result<Self> {
+        let cache = Self {
             id: Id::new(recipe),
             host_root: host_root.into(),
             guest_root: guest_root.into(),
-        }
+        };
+
+        env::ensure_dir_exists(&cache.rootfs().host)?;
+        env::ensure_dir_exists(&cache.artefacts().host)?;
+        env::ensure_dir_exists(&cache.build().host)?;
+        env::ensure_dir_exists(&cache.ccache().host)?;
+
+        Ok(cache)
     }
 
     pub fn rootfs(&self) -> Mapping {

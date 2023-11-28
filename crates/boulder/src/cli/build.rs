@@ -2,15 +2,11 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::fs;
+use std::io;
 use std::path::PathBuf;
-use std::{fs, process};
-use std::{
-    fs::{create_dir_all, remove_dir_all},
-    io,
-    path::Path,
-};
 
-use boulder::{env, profile, Cache, Env, Runtime};
+use boulder::{container, env, profile, Cache, Env, Runtime};
 use clap::Parser;
 use thiserror::Error;
 
@@ -60,10 +56,10 @@ pub fn handle(command: Command, global: Global) -> Result<(), Error> {
     let profiles = profile::Manager::new(&runtime, &env);
     let repos = profiles.repositories(&profile)?.clone();
 
-    let cache = Cache::new(&recipe, &env.cache_dir, "/mason");
+    let cache = Cache::new(&recipe, &env.cache_dir, "/mason")?;
     let rootfs = cache.rootfs().host;
 
-    recreate_dir(&rootfs)?;
+    env::recreate_dir(&rootfs)?;
 
     runtime.block_on(async {
         let mut moss_client = moss::Client::new("boulder", &env.moss_dir)
@@ -80,20 +76,8 @@ pub fn handle(command: Command, global: Global) -> Result<(), Error> {
     // Drop async runtime
     drop(runtime);
 
-    container::run(rootfs, move || {
-        let mut child = process::Command::new("/bin/bash")
-            .arg("--login")
-            .env_clear()
-            .env("HOME", "/root")
-            .env("PATH", "/usr/bin:/usr/sbin")
-            .env("TERM", "xterm-256color")
-            .spawn()?;
-
-        child.wait()?;
-
-        Ok(())
-    })
-    .map_err(Error::Container)?;
+    // TODO: Exec build scripts
+    container::chroot(&cache).map_err(Error::Container)?;
 
     Ok(())
 }
@@ -133,14 +117,6 @@ const BASE_PACKAGES: &[&str] = &[
     "wget",
     "which",
 ];
-
-fn recreate_dir(path: &Path) -> Result<(), Error> {
-    if path.exists() {
-        remove_dir_all(path)?;
-    }
-    create_dir_all(path)?;
-    Ok(())
-}
 
 #[derive(Debug, Error)]
 pub enum Error {

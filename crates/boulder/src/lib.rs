@@ -7,6 +7,7 @@ pub use self::profile::Profile;
 pub use self::runtime::Runtime;
 
 pub mod cache;
+pub mod container;
 pub mod env;
 pub mod profile;
 mod runtime;
