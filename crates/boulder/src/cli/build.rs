@@ -6,7 +6,7 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 
-use boulder::{container, env, profile, Cache, Env, Runtime};
+use boulder::{container, env, profile, root, Cache, Env, Runtime};
 use clap::Parser;
 use thiserror::Error;
 
@@ -52,26 +52,13 @@ pub fn handle(command: Command, global: Global) -> Result<(), Error> {
 
     let runtime = Runtime::new()?;
     let env = Env::new(config_dir, cache_dir, moss_root)?;
+    let cache = Cache::new(&recipe, &env.cache_dir, "/mason")?;
 
     let profiles = profile::Manager::new(&runtime, &env);
     let repos = profiles.repositories(&profile)?.clone();
 
-    let cache = Cache::new(&recipe, &env.cache_dir, "/mason")?;
-    let rootfs = cache.rootfs().host;
-
-    env::recreate_dir(&rootfs)?;
-
-    runtime.block_on(async {
-        let mut moss_client = moss::Client::new("boulder", &env.moss_dir)
-            .await?
-            .explicit_repositories(repos)
-            .await?
-            .ephemeral(&rootfs)?;
-
-        moss_client.install(BASE_PACKAGES, true).await?;
-
-        Ok(()) as Result<(), Error>
-    })?;
+    // TODO: ccache config
+    root::populate(&runtime, &env, &cache, repos, &recipe, false)?;
 
     // Drop async runtime
     drop(runtime);
@@ -81,42 +68,6 @@ pub fn handle(command: Command, global: Global) -> Result<(), Error> {
 
     Ok(())
 }
-
-const BASE_PACKAGES: &[&str] = &[
-    "bash",
-    "boulder",
-    "coreutils",
-    "dash",
-    "dbus",
-    "dbus-broker",
-    "file",
-    "gawk",
-    "git",
-    "grep",
-    "gzip",
-    "inetutils",
-    "iproute2",
-    "less",
-    "linux-kvm",
-    "moss",
-    "moss-container",
-    "nano",
-    "neofetch",
-    "nss",
-    "openssh",
-    "procps",
-    "python",
-    "screen",
-    "sed",
-    "shadow",
-    "sudo",
-    "systemd",
-    "unzip",
-    "util-linux",
-    "vim",
-    "wget",
-    "which",
-];
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -130,10 +81,8 @@ pub enum Error {
     Env(#[from] env::Error),
     #[error("profile")]
     Profile(#[from] profile::Error),
-    #[error("moss client")]
-    MossClient(#[from] moss::client::Error),
-    #[error("moss install")]
-    MossInstall(#[from] moss::client::install::Error),
+    #[error("root")]
+    Root(#[from] root::Error),
     #[error("stone recipe")]
     StoneRecipe(#[from] stone_recipe::Error),
     #[error("io")]

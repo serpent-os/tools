@@ -8,6 +8,8 @@ pub use self::runtime::Runtime;
 
 pub mod cache;
 pub mod container;
+mod dependency;
 pub mod env;
 pub mod profile;
+pub mod root;
 mod runtime;
