@@ -36,6 +36,8 @@ pub struct Recipe {
     pub architectures: Vec<String>,
     #[serde(default)]
     pub tuning: Vec<KeyValue<Tuning>>,
+    #[serde(default)]
+    pub emul32: bool,
 }
 
 #[derive(Debug, Clone)]
