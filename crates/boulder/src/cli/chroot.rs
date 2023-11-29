@@ -41,7 +41,7 @@ pub fn handle(command: Command, global: Global) -> Result<(), Error> {
         return Err(Error::MissingRootFs);
     }
 
-    container::chroot(&cache).map_err(Error::Container)?;
+    container::chroot(&recipe, &cache).map_err(Error::Container)?;
 
     Ok(())
 }

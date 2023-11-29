@@ -14,9 +14,12 @@ tui = { path = "../tui" }
 
 clap.workspace = true
 dirs.workspace = true
+futures.workspace = true
+hex.workspace = true
 itertools.workspace = true
 nix.workspace = true
 serde.workspace = true
+sha2.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 url.workspace = true

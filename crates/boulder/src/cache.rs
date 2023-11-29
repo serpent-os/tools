@@ -33,7 +33,7 @@ impl Cache {
     ) -> io::Result<Self> {
         let cache = Self {
             id: Id::new(recipe),
-            host_root: host_root.into(),
+            host_root: host_root.into().canonicalize()?,
             guest_root: guest_root.into(),
         };
 
@@ -41,6 +41,7 @@ impl Cache {
         env::ensure_dir_exists(&cache.artefacts().host)?;
         env::ensure_dir_exists(&cache.build().host)?;
         env::ensure_dir_exists(&cache.ccache().host)?;
+        env::ensure_dir_exists(&cache.upstreams().host)?;
 
         Ok(cache)
     }
@@ -71,6 +72,26 @@ impl Cache {
             host: self.host_root.join("ccache"),
             guest: self.guest_root.join("ccache"),
         }
+    }
+
+    pub fn upstreams(&self) -> Mapping {
+        Mapping {
+            host: self.host_root.join("upstreams"),
+            guest: self.guest_root.join("sourcedir"),
+        }
+    }
+
+    /// For the provided [`Mapping`], return the guest
+    /// path as it lives on the host fs
+    ///
+    /// Example:
+    /// - host = "/var/cache/boulder/root/test"
+    /// - guest = "/mason/build"
+    /// - guest_host_path = "/var/cache/boulder/root/test/mason/build"
+    pub fn guest_host_path(&self, mapping: &Mapping) -> PathBuf {
+        let relative = mapping.guest.strip_prefix("/").unwrap_or(&mapping.guest);
+
+        self.rootfs().host.join(relative)
     }
 }
 

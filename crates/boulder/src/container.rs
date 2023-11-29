@@ -5,11 +5,12 @@
 use std::process;
 
 use container::Container;
+use stone_recipe::Recipe;
 
 use crate::Cache;
 
-pub fn chroot(cache: &Cache) -> Result<(), container::Error> {
-    run(cache, || {
+pub fn chroot(recipe: &Recipe, cache: &Cache) -> Result<(), container::Error> {
+    run(recipe, cache, || {
         let mut child = process::Command::new("/bin/bash")
             .arg("--login")
             .env_clear()
@@ -25,6 +26,7 @@ pub fn chroot(cache: &Cache) -> Result<(), container::Error> {
 }
 
 fn run(
+    recipe: &Recipe,
     cache: &Cache,
     f: impl FnMut() -> Result<(), container::Error>,
 ) -> Result<(), container::Error> {
@@ -36,6 +38,7 @@ fn run(
 
     Container::new(rootfs)
         .hostname("boulder")
+        .networking(recipe.options.networking)
         .work_dir(&build_cache.guest)
         .bind(&artefacts_cache.host, &artefacts_cache.guest)
         .bind(&build_cache.host, &build_cache.guest)

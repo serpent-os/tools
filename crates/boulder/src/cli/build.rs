@@ -6,6 +6,7 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 
+use boulder::upstream;
 use boulder::{container, env, profile, root, Cache, Env, Runtime};
 use clap::Parser;
 use thiserror::Error;
@@ -60,11 +61,13 @@ pub fn handle(command: Command, global: Global) -> Result<(), Error> {
     // TODO: ccache config
     root::populate(&runtime, &env, &cache, repos, &recipe, false)?;
 
+    runtime.block_on(upstream::sync(&recipe, &cache))?;
+
     // Drop async runtime
     drop(runtime);
 
     // TODO: Exec build scripts
-    container::chroot(&cache).map_err(Error::Container)?;
+    container::chroot(&recipe, &cache).map_err(Error::Container)?;
 
     Ok(())
 }
@@ -83,6 +86,8 @@ pub enum Error {
     Profile(#[from] profile::Error),
     #[error("root")]
     Root(#[from] root::Error),
+    #[error("upstream")]
+    Upstream(#[from] upstream::Error),
     #[error("stone recipe")]
     StoneRecipe(#[from] stone_recipe::Error),
     #[error("io")]
