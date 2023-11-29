@@ -51,20 +51,20 @@ pub fn handle(command: Command, global: Global) -> Result<(), Error> {
     let recipe_bytes = fs::read(&recipe)?;
     let recipe = stone_recipe::from_slice(&recipe_bytes)?;
 
-    let runtime = Runtime::new()?;
+    let rt = Runtime::new()?;
     let env = Env::new(config_dir, cache_dir, moss_root)?;
     let cache = Cache::new(&recipe, &env.cache_dir, "/mason")?;
 
-    let profiles = profile::Manager::new(&runtime, &env);
+    let profiles = rt.block_on(profile::Manager::new(&env));
     let repos = profiles.repositories(&profile)?.clone();
 
     // TODO: ccache config
-    root::populate(&runtime, &env, &cache, repos, &recipe, false)?;
+    rt.block_on(root::populate(&env, &cache, repos, &recipe, false))?;
 
-    runtime.block_on(upstream::sync(&recipe, &cache))?;
+    rt.block_on(upstream::sync(&recipe, &cache))?;
 
     // Drop async runtime
-    drop(runtime);
+    drop(rt);
 
     // TODO: Exec build scripts
     container::chroot(&recipe, &cache).map_err(Error::Container)?;

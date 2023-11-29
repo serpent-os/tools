@@ -8,10 +8,9 @@ use moss::repository;
 use stone_recipe::Recipe;
 use thiserror::Error;
 
-use crate::{dependency, env, Cache, Env, Runtime};
+use crate::{dependency, env, Cache, Env};
 
-pub fn populate(
-    runtime: &Runtime,
+pub async fn populate(
     env: &Env,
     cache: &Cache,
     repositories: repository::Map,
@@ -24,17 +23,13 @@ pub fn populate(
     let rootfs = cache.rootfs().host;
     env::recreate_dir(&rootfs)?;
 
-    runtime.block_on(async {
-        let mut moss_client = moss::Client::new("boulder", &env.moss_dir)
-            .await?
-            .explicit_repositories(repositories)
-            .await?
-            .ephemeral(&rootfs)?;
+    let mut moss_client = moss::Client::new("boulder", &env.moss_dir)
+        .await?
+        .explicit_repositories(repositories)
+        .await?
+        .ephemeral(&rootfs)?;
 
-        moss_client.install(&packages, true).await?;
-
-        Ok(()) as Result<(), Error>
-    })?;
+    moss_client.install(&packages, true).await?;
 
     Ok(())
 }

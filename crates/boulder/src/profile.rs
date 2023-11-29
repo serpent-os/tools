@@ -10,7 +10,7 @@ pub use moss::{repository::Priority, Repository};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{Env, Runtime};
+use crate::Env;
 
 /// A unique [`Profile`] identifier
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -92,22 +92,14 @@ impl Config for Map {
 
 pub struct Manager<'a> {
     pub profiles: Map,
-
-    runtime: &'a Runtime,
     env: &'a Env,
 }
 
 impl<'a> Manager<'a> {
-    pub fn new(runtime: &'a Runtime, env: &'a Env) -> Self {
-        let profiles = runtime
-            .block_on(env.config.load::<Map>())
-            .unwrap_or_default();
+    pub async fn new(env: &'a Env) -> Manager<'a> {
+        let profiles = env.config.load::<Map>().await.unwrap_or_default();
 
-        Self {
-            runtime,
-            env,
-            profiles,
-        }
+        Self { env, profiles }
     }
 
     pub fn repositories(&self, profile: &Id) -> Result<&repository::Map, Error> {
@@ -117,11 +109,10 @@ impl<'a> Manager<'a> {
             .ok_or(Error::MissingProfile)
     }
 
-    pub fn save_profile(&mut self, id: Id, profile: Profile) -> Result<(), Error> {
+    pub async fn save_profile(&mut self, id: Id, profile: Profile) -> Result<(), Error> {
         // Save config
         let map = Map::with([(id.clone(), profile.clone())]);
-        self.runtime
-            .block_on(self.env.config.save(id.clone(), &map))?;
+        self.env.config.save(id.clone(), &map).await?;
 
         // Add to profile map
         self.profiles.add(id, profile);

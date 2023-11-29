@@ -83,14 +83,14 @@ pub fn handle(command: Command, global: Global) -> Result<(), Error> {
         moss_root,
     } = global;
 
-    let runtime = Runtime::new()?;
+    let rt = Runtime::new()?;
     let env = Env::new(config_dir, cache_dir, moss_root)?;
-    let manager = profile::Manager::new(&runtime, &env);
+    let manager = rt.block_on(profile::Manager::new(&env));
 
     match command.subcommand {
         Subcommand::List => list(manager),
-        Subcommand::Add { name, repos } => add(&runtime, &env, manager, name, repos),
-        Subcommand::Update { profile } => update(&runtime, &env, manager, &profile),
+        Subcommand::Add { name, repos } => rt.block_on(add(&env, manager, name, repos)),
+        Subcommand::Update { profile } => rt.block_on(update(&env, manager, &profile)),
     }
 }
 
@@ -115,46 +115,42 @@ pub fn list(manager: profile::Manager) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn add(
-    runtime: &Runtime,
-    env: &Env,
-    mut manager: profile::Manager,
+pub async fn add<'a>(
+    env: &'a Env,
+    mut manager: profile::Manager<'a>,
     name: String,
     repos: Vec<(repository::Id, Repository)>,
 ) -> Result<(), Error> {
     let id = profile::Id::new(name);
 
-    manager.save_profile(
-        id.clone(),
-        Profile {
-            collections: repository::Map::with(repos),
-        },
-    )?;
+    manager
+        .save_profile(
+            id.clone(),
+            Profile {
+                collections: repository::Map::with(repos),
+            },
+        )
+        .await?;
 
-    update(runtime, env, manager, &id)?;
+    update(env, manager, &id).await?;
 
     println!("Profile \"{id}\" has been added");
 
     Ok(())
 }
 
-pub fn update(
-    runtime: &Runtime,
-    env: &Env,
-    manager: profile::Manager,
+pub async fn update<'a>(
+    env: &'a Env,
+    manager: profile::Manager<'a>,
     profile: &profile::Id,
 ) -> Result<(), Error> {
     let repos = manager.repositories(profile)?.clone();
 
-    runtime.block_on(async {
-        let mut moss_client = moss::Client::new("boulder", &env.moss_dir)
-            .await?
-            .explicit_repositories(repos)
-            .await?;
-        moss_client.refresh_repositories().await?;
-
-        Ok(()) as Result<(), Error>
-    })?;
+    let mut moss_client = moss::Client::new("boulder", &env.moss_dir)
+        .await?
+        .explicit_repositories(repos)
+        .await?;
+    moss_client.refresh_repositories().await?;
 
     Ok(())
 }
