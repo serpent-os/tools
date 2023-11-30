@@ -1,0 +1,216 @@
+# TODO: Split out clang/etc and build statically against llvm package!
+name        : llvm
+version     : 16.0.4
+release     : 8
+summary     : Low Level Virtual Machine
+license     :
+    - Apache-2.0 WITH LLVM-exception
+    - NCSA
+homepage    : https://www.llvm.org
+description : |
+    Low Level Virtual Machine
+upstreams   :
+    - https://github.com/llvm/llvm-project/releases/download/llvmorg-16.0.4/llvm-project-16.0.4.src.tar.xz: cf3c2a1152ed7a99866bd7f12c24528ada6d9f6336afb7a08416938762004c9f
+builddeps   :
+    - binary(perl)
+    - binary(python3)
+    - pkgconfig(libffi)
+    - pkgconfig(libxcrypt)
+    - pkgconfig(libxml-2.0)
+    - pkgconfig(ncursesw)
+    - pkgconfig(zlib)
+    - binutils-devel
+    - gcc-32bit-devel
+    - glibc-32bit-devel
+    - libcxx-32bit-devel
+    - clang-32bit
+environment : |
+    export llvmopts="
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_SKIP_RPATH=ON \
+        -DCLANG_DEFAULT_CXX_STDLIB=libc++ \
+        -DCLANG_DEFAULT_LINKER=lld \
+        -DCLANG_DEFAULT_OBJCOPY=llvm-objcopy \
+        -DCLANG_DEFAULT_PIE_ON_LINUX=OFF \
+        -DCLANG_DEFAULT_RTLIB=compiler-rt \
+        -DCLANG_DEFAULT_UNWINDLIB=libunwind \
+        -DCOMPILER_RT_USE_BUILTINS_LIBRARY=ON \
+        -DCOMPILER_RT_USE_LIBCXX=ON \
+        -DENABLE_LINKER_BUILD_ID=ON \
+        -DLLVM_BINUTILS_INCDIR=/usr/include \
+        -DLLVM_BUILD_TOOLS=ON \
+        -DLLVM_DEFAULT_TARGET_TRIPLE=%(build_platform) \
+        -DLLVM_ENABLE_FFI=ON \
+        -DLLVM_ENABLE_LIBCXX=ON \
+        -DLLVM_ENABLE_LIBXML2=ON \
+        -DLLVM_ENABLE_LTO=Thin \
+        -DLLVM_ENABLE_MODULES=OFF \
+        -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=OFF \
+        -DLLVM_ENABLE_PROJECTS='clang;compiler-rt;lld;llvm;polly' \
+        -DLLVM_INCLUDE_BENCHMARKS=OFF \
+        -DLLVM_INCLUDE_TESTS=ON \
+        -DLLVM_INCLUDE_UTILS=ON \
+        -DLLVM_INSTALL_UTILS=ON \
+        -DLLVM_LIBDIR_SUFFIX=%(libsuffix) \
+        -DLLVM_TARGET_ARCH=X86_64 \
+        -DLLVM_TARGETS_TO_BUILD='X86;AMDGPU' \
+        -DLLVM_USE_SANITIZER=OFF \
+        -DLLVM_ENABLE_RTTI=ON
+        "
+
+    # Without RPATH, we need help finding the right libraries to use
+    export LD_LIBRARY_PATH="%(workdir)/%(builddir)/lib"
+setup       : |
+    unset LD_PRELOAD
+    %patch %(pkgdir)/serpent/0001-Support-serpent-as-a-distro.patch
+    %patch %(pkgdir)/perf/0001-Reduce-GCC-startup-searches.patch
+    %patch %(pkgdir)/serpent/0001-Use-correct-Serpent-OS-multilib-paths-for-ld.patch
+    %patch %(pkgdir)/serpent/0001-Make-gnu-hash-the-default-for-lld-and-clang.patch
+    %patch %(pkgdir)/serpent/0001-Update-binutils-version-to-match-Serpent-OS.patch
+    %patch %(pkgdir)/serpent/0001-Make-external-visibility-default.patch
+
+    %cmake ${llvmopts} -S llvm \
+        -DLLVM_BUILD_LLVM_DYLIB=ON \
+        -DLLVM_LINK_LLVM_DYLIB=ON
+build       : |
+    unset LD_PRELOAD
+    %cmake_build
+install     : |
+    %cmake_install
+    unset LD_PRELOAD
+
+    %cmake ${llvmopts} -S llvm \
+        -DLLVM_BUILD_LLVM_DYLIB=OFF \
+        -DLLVM_LINK_LLVM_DYLIB=OFF \
+        -DCLANG_LINK_CLANG_DYLIB=OFF
+
+    # Relink clang and lld statically
+    %cmake_build clang lld
+
+    # Major clang version
+    major_version=$(echo %(version) | cut -d. -f1)
+    export PATH="%(workdir)/%(builddir)/bin:${PATH}"
+    export LD_LIBRARY_PATH="%(workdir)/%(builddir)/lib:${LD_LIBRARY_PATH}"
+    %bolt_instr %(workdir)/%(builddir)/bin/clang-${major_version}
+
+    %cmake -G Ninja ${llvmopts} -B bolt-clang -S runtimes \
+        -DCMAKE_C_COMPILER="%(workdir)/%(builddir)/bin/clang" \
+        -DCMAKE_CXX_COMPILER="%(workdir)/%(builddir)/bin/clang++" \
+        -DLLVM_ENABLE_RUNTIMES='libcxx;libcxxabi' \
+        -DLLVM_USE_LINKER="%(workdir)/%(builddir)/bin/ld.lld" \
+        -DLLVM_ENABLE_LTO=Full
+
+    %cmake_build -C bolt-clang
+
+    %bolt_merge %(workdir)/%(builddir)/bin/clang-${major_version}
+    %bolt_opt %(workdir)/%(builddir)/bin/clang-${major_version}
+
+    %install_bin %(workdir)/%(builddir)/bin/clang-${major_version} %(workdir)/%(builddir)/bin/lld
+# workload    : |
+#    unset LD_PRELOAD
+#    # check-compiler-rt needs sanitizer changes
+#    %cmake_build check-clang check-llvm check-lld check-polly -k 10000 ||:
+# LTO needs to be set in LLVM cmake flags so it adds -fno-lto where needed
+tuning      :
+    - bolt
+    - fortify: false
+    - harden: false
+    - icf: all
+    - lto: false
+    - nosemantic
+    - optimize: speed
+    - polly
+    - symbolic
+packages    :
+    - "%(name)-libs":
+        summary: "Library files for %(name)"
+        description: |
+            Library files for %(name), typically pulled in as a dependency of another package.
+        paths:
+            - /usr/lib/libLLVM-*.so
+
+    - "%(name)-devel":
+        paths:
+            - /usr/bin/FileCheck
+            - /usr/bin/UnicodeNameMappingGenerator
+            - /usr/bin/count
+            - /usr/bin/lli-child-target
+            - /usr/bin/llvm-PerfectShuffle
+            - /usr/bin/llvm-jitlink-executor
+            - /usr/bin/not
+            - /usr/bin/obj2yaml
+            - /usr/bin/yaml-bench
+            - /usr/bin/yaml2obj
+
+    - "clang":
+        summary: "Clang compiler front-end (LLVM)"
+        description: |
+            Clang compiler front-end built as part of the LLVM compiler infrastructure project.
+        rundeps:
+            - libcxx-devel
+            - lld
+            - llvm
+        paths:
+            - /usr/bin/analyze-build
+            - /usr/bin/c-index-test
+            - /usr/bin/*clang*
+            - /usr/bin/diagtool
+            - /usr/bin/hmaptool
+            - /usr/bin/intercept-build
+            - /usr/bin/scan-*
+            - /usr/lib/clang/*/bin
+            - /usr/lib/clang/*/include
+            - /usr/lib/clang/*/lib/linux/*x86_64*
+            - /usr/lib/clang/*/share
+            - /usr/lib/libear
+            - /usr/libexec
+            - /usr/share/clang
+            - /usr/share/man
+            - /usr/share/scan-*
+
+    - "clang-libs":
+        summary: "Library files for clang"
+        description: |
+            Library files for clang, typically pulled in as a dependency of another package.
+        paths:
+            - /usr/lib/libclang*.so.*
+
+    - "clang-devel":
+        summary: "Development files for clang"
+        description: |
+            Install this package if you intend to build software against
+            the clang package.
+        paths:
+            - /usr/lib/cmake/clang
+            - /usr/lib/libclang*.so
+            - /usr/lib/libclang*.a
+            - /usr/include/clang*
+        rundeps:
+            - clang
+
+    - "clang-32bit":
+        summary: "Provides 32-bit runtime libraries for clang"
+        description: |
+            Install this package if you need the 32-bit versions of the
+            clang package libraries.
+        paths:
+            - /usr/lib/clang/*/lib/linux/*i386*
+
+    - "lld":
+        summary: "Clang compiler front-end (LLVM)"
+        description: |
+            Clang compiler front-end built as part of the LLVM compiler infrastructure project.
+        paths:
+            - /usr/bin/*lld*
+            - /usr/bin/wasm-ld
+
+    - "lld-devel":
+        summary: "Development files for lld"
+        description: |
+            Install this package if you intend to build software against
+            the lld package.
+        paths:
+            - /usr/lib/cmake/lld
+            - /usr/lib/liblld*.a
+        rundeps:
+            - lld

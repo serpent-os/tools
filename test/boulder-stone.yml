@@ -1,0 +1,44 @@
+name        : boulder
+version     : 1.0.1
+release     : 35
+summary     : Package creation tool for Serpent OS
+license     : Zlib
+homepage    : https://github.com/serpent-os/boulder
+description : |
+    Extremely flexible and powerful, yet simple to use, package build
+    tool for the Serpent OS project.
+upstreams   :
+    - git|https://github.com/serpent-os/boulder : v1.0.1
+    - https://github.com/serpent-os/libmoss/releases/download/v1.2.0/libmoss-1.2.0.tar.xz:
+        hash: cbf684b5a37a3a433e0526beb04a7b3419b71e81b3709c3b0d7ed6a1987d3dcb
+        unpackdir: libmoss
+        stripdirs: 1
+builddeps   :
+    - binary(cmake)
+    - ldc
+    - ldc-devel
+    - lmdb-devel
+    - pkgconfig(libcurl)
+    - pkgconfig(libxxhash)
+    - pkgconfig(libzstd)
+rundeps     :
+    - binary(moss-container)
+environment : |
+    cd %(buildroot)/boulder
+setup       : |
+    # Fix libmoss
+    cd ../libmoss
+    %patch %(pkgdir)/0001-deps-analysis-elves-In-absence-of-soname.-make-one-u.patch
+    cd ../boulder
+
+    # TODO: Unset buildtype here when moss-format supports DFLAGS
+    export DFLAGS="$DFLAGS -flto=thin -O3 -g"
+    %meson --buildtype debugoptimized
+build       : |
+    %meson_build
+install     : |
+    %meson_install
+    ln -sf boulder %(installroot)/usr/bin/mason
+
+    %install_dir %(installroot)/usr/share/moss
+    mv data/macros %(installroot)/usr/share/moss/
