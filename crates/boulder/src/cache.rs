@@ -23,18 +23,26 @@ pub struct Cache {
     id: Id,
     host_root: PathBuf,
     guest_root: PathBuf,
+    recipe_dir: PathBuf,
 }
 
 impl Cache {
     pub fn new(
         recipe: &Recipe,
+        recipe_path: PathBuf,
         host_root: impl Into<PathBuf>,
         guest_root: impl Into<PathBuf>,
     ) -> io::Result<Self> {
+        let recipe_dir = recipe_path
+            .parent()
+            .unwrap_or(&PathBuf::default())
+            .canonicalize()?;
+
         let cache = Self {
             id: Id::new(recipe),
             host_root: host_root.into().canonicalize()?,
             guest_root: guest_root.into(),
+            recipe_dir,
         };
 
         env::ensure_dir_exists(&cache.rootfs().host)?;
@@ -78,6 +86,13 @@ impl Cache {
         Mapping {
             host: self.host_root.join("upstreams"),
             guest: self.guest_root.join("sourcedir"),
+        }
+    }
+
+    pub fn recipe(&self) -> Mapping {
+        Mapping {
+            host: self.recipe_dir.clone(),
+            guest: self.guest_root.join("recipe"),
         }
     }
 

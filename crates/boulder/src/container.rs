@@ -35,13 +35,15 @@ fn run(
     let artefacts_cache = cache.artefacts();
     let build_cache = cache.build();
     let compiler_cache = cache.ccache();
+    let recipe_cache = cache.recipe();
 
     Container::new(rootfs)
         .hostname("boulder")
         .networking(recipe.options.networking)
         .work_dir(&build_cache.guest)
-        .bind(&artefacts_cache.host, &artefacts_cache.guest)
-        .bind(&build_cache.host, &build_cache.guest)
-        .bind(&compiler_cache.host, &compiler_cache.guest)
+        .bind_rw(&artefacts_cache.host, &artefacts_cache.guest)
+        .bind_rw(&build_cache.host, &build_cache.guest)
+        .bind_rw(&compiler_cache.host, &compiler_cache.guest)
+        .bind_ro(&recipe_cache.host, &recipe_cache.guest)
         .run(f)
 }

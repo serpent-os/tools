@@ -18,22 +18,24 @@ pub struct Command {
 }
 
 pub fn handle(command: Command, global: Global) -> Result<(), Error> {
-    let Command { recipe } = command;
+    let Command {
+        recipe: recipe_path,
+    } = command;
     let Global {
         config_dir,
         cache_dir,
         moss_root,
     } = global;
 
-    if !recipe.exists() {
-        return Err(Error::MissingRecipe(recipe));
+    if !recipe_path.exists() {
+        return Err(Error::MissingRecipe(recipe_path));
     }
 
-    let recipe_bytes = fs::read(&recipe)?;
+    let recipe_bytes = fs::read(&recipe_path)?;
     let recipe = stone_recipe::from_slice(&recipe_bytes)?;
 
     let env = Env::new(config_dir, cache_dir, moss_root)?;
-    let cache = Cache::new(&recipe, env.cache_dir, "/mason")?;
+    let cache = Cache::new(&recipe, recipe_path, env.cache_dir, "/mason")?;
     let rootfs = cache.rootfs().host;
 
     // Has rootfs been setup?

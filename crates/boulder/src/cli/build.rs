@@ -33,7 +33,7 @@ pub fn handle(command: Command, global: Global) -> Result<(), Error> {
     let Command {
         profile,
         output,
-        recipe,
+        recipe: recipe_path,
     } = command;
     let Global {
         moss_root,
@@ -44,16 +44,16 @@ pub fn handle(command: Command, global: Global) -> Result<(), Error> {
     if !output.exists() {
         return Err(Error::MissingOutput(output));
     }
-    if !recipe.exists() {
-        return Err(Error::MissingRecipe(recipe));
+    if !recipe_path.exists() {
+        return Err(Error::MissingRecipe(recipe_path));
     }
 
-    let recipe_bytes = fs::read(&recipe)?;
+    let recipe_bytes = fs::read(&recipe_path)?;
     let recipe = stone_recipe::from_slice(&recipe_bytes)?;
 
     let rt = Runtime::new()?;
     let env = Env::new(config_dir, cache_dir, moss_root)?;
-    let cache = Cache::new(&recipe, &env.cache_dir, "/mason")?;
+    let cache = Cache::new(&recipe, recipe_path, &env.cache_dir, "/mason")?;
 
     let profiles = rt.block_on(profile::Manager::new(&env));
     let repos = profiles.repositories(&profile)?.clone();

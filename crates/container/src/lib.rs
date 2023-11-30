@@ -16,8 +16,7 @@ pub type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 pub struct Container {
     root: PathBuf,
     work_dir: Option<PathBuf>,
-    // TODO: Strongly typed & ro variant
-    binds: Vec<(PathBuf, PathBuf)>,
+    binds: Vec<Bind>,
     networking: bool,
     hostname: Option<String>,
 }
@@ -40,8 +39,21 @@ impl Container {
         }
     }
 
-    pub fn bind(mut self, host: impl Into<PathBuf>, guest: impl Into<PathBuf>) -> Self {
-        self.binds.push((host.into(), guest.into()));
+    pub fn bind_rw(mut self, host: impl Into<PathBuf>, guest: impl Into<PathBuf>) -> Self {
+        self.binds.push(Bind {
+            source: host.into(),
+            target: guest.into(),
+            read_only: false,
+        });
+        self
+    }
+
+    pub fn bind_ro(mut self, host: impl Into<PathBuf>, guest: impl Into<PathBuf>) -> Self {
+        self.binds.push(Bind {
+            source: host.into(),
+            target: guest.into(),
+            read_only: true,
+        });
         self
     }
 
@@ -147,7 +159,7 @@ fn setup(container: &Container) -> Result<(), Error> {
     Ok(())
 }
 
-fn pivot(root: &Path, binds: &[(PathBuf, PathBuf)]) -> Result<(), Error> {
+fn pivot(root: &Path, binds: &[Bind]) -> Result<(), Error> {
     const OLD_PATH: &str = "old_root";
 
     let old_root = root.join(OLD_PATH);
@@ -155,10 +167,21 @@ fn pivot(root: &Path, binds: &[(PathBuf, PathBuf)]) -> Result<(), Error> {
     add_mount(None, "/", None, MsFlags::MS_REC | MsFlags::MS_PRIVATE)?;
     add_mount(Some(root), root, None, MsFlags::MS_BIND)?;
 
-    for (host, guest) in binds {
-        let source = host.canonicalize()?;
-        let target = root.join(guest.strip_prefix("/").unwrap_or(guest));
-        add_mount(Some(source), target, None, MsFlags::MS_BIND)?;
+    for bind in binds {
+        let source = bind.source.canonicalize()?;
+        let target = root.join(bind.target.strip_prefix("/").unwrap_or(&bind.target));
+
+        add_mount(Some(&source), &target, None, MsFlags::MS_BIND)?;
+
+        // Remount to enforce readonly flag
+        if bind.read_only {
+            add_mount(
+                Some(source),
+                target,
+                None,
+                MsFlags::MS_BIND | MsFlags::MS_REMOUNT | MsFlags::MS_RDONLY,
+            )?;
+        }
     }
 
     enusure_directory(&old_root)?;
@@ -224,4 +247,10 @@ fn add_mount<T: AsRef<Path>>(
         Option::<&str>::None,
     )?;
     Ok(())
+}
+
+struct Bind {
+    source: PathBuf,
+    target: PathBuf,
+    read_only: bool,
 }
