@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: Copyright © 2020-2023 Serpent OS Developers
 //
 // SPDX-License-Identifier: MPL-2.0
-use std::path::PathBuf;
+use std::{io, path::PathBuf};
 
-use boulder::{env, Env};
+use boulder::{env, Env, Runtime};
 use clap::{Args, Parser};
 use thiserror::Error;
 
@@ -40,12 +40,18 @@ pub enum Subcommand {
 pub fn process() -> Result<(), Error> {
     let Command { global, subcommand } = Command::parse();
 
-    let env = Env::new(global.config_dir, global.cache_dir, global.moss_root)?;
+    let rt = Runtime::new().map_err(Error::Runtime)?;
+
+    let env = rt.block_on(Env::new(
+        global.config_dir,
+        global.cache_dir,
+        global.moss_root,
+    ))?;
 
     match subcommand {
-        Subcommand::Build(command) => build::handle(command, env)?,
-        Subcommand::Chroot(command) => chroot::handle(command, env)?,
-        Subcommand::Profile(command) => profile::handle(command, env)?,
+        Subcommand::Build(command) => build::handle(command, rt, env)?,
+        Subcommand::Chroot(command) => chroot::handle(command, rt, env)?,
+        Subcommand::Profile(command) => profile::handle(command, rt, env)?,
     }
 
     Ok(())
@@ -61,4 +67,6 @@ pub enum Error {
     Profile(#[from] profile::Error),
     #[error("env")]
     Env(#[from] env::Error),
+    #[error("runtime")]
+    Runtime(#[source] io::Error),
 }

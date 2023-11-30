@@ -9,17 +9,17 @@ use std::{
     time::Duration,
 };
 
-use futures::{future::BoxFuture, stream, FutureExt, StreamExt, TryStreamExt};
+use futures::{stream, StreamExt, TryStreamExt};
 use nix::unistd::{linkat, LinkatFlags};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
-use tokio::fs::{copy, read_dir, read_link, remove_dir_all, symlink};
+use tokio::fs::{copy, remove_dir_all};
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use tui::{MultiProgress, ProgressBar, ProgressStyle, Stylize};
 use url::Url;
 
-use crate::{env, job, Job};
+use crate::{job, util, Job};
 
 /// Cache all upstreams from the provided [`Job`] and make them available
 /// in the guest rootfs.
@@ -50,7 +50,7 @@ pub async fn sync(job: &Job) -> Result<(), Error> {
     tp.tick();
 
     let upstream_dir = job.paths.guest_host_path(&job.paths.upstreams());
-    env::ensure_dir_exists(&upstream_dir)?;
+    util::ensure_dir_exists(&upstream_dir).await?;
 
     stream::iter(&upstreams)
         .map(|upstream| async {
@@ -138,7 +138,7 @@ impl Installed {
             }
             Installed::Git { name, path, .. } => {
                 let target = dest_dir.join(name);
-                copy_dir(path, &target).await?;
+                util::copy_dir(path, &target).await?;
             }
         }
 
@@ -239,7 +239,7 @@ impl Plain {
         }
     }
 
-    fn path(&self, paths: &job::Paths) -> PathBuf {
+    async fn path(&self, paths: &job::Paths) -> PathBuf {
         // Type safe guaranteed to be >= 5 bytes
         let hash = &self.hash.0;
 
@@ -250,7 +250,7 @@ impl Plain {
             .join(&hash[..5])
             .join(&hash[hash.len() - 5..]);
 
-        let _ = env::ensure_dir_exists(&parent);
+        let _ = util::ensure_dir_exists(&parent).await;
 
         parent.join(hash)
     }
@@ -266,7 +266,7 @@ impl Plain {
         );
 
         let name = self.name();
-        let path = self.path(paths);
+        let path = self.path(paths).await;
 
         if path.exists() {
             return Ok(Installed::Plain {
@@ -323,22 +323,22 @@ impl Git {
         self.uri.path().split('/').last().unwrap_or_default()
     }
 
-    fn final_path(&self, paths: &job::Paths) -> PathBuf {
+    async fn final_path(&self, paths: &job::Paths) -> PathBuf {
         let path = self.uri.path();
         let relative_path = path.strip_prefix('/').unwrap_or(path);
         let parent = paths.upstreams().host.join("git");
 
-        let _ = env::ensure_dir_exists(&parent);
+        let _ = util::ensure_dir_exists(&parent).await;
 
         parent.join(relative_path)
     }
 
-    fn staging_path(&self, paths: &job::Paths) -> PathBuf {
+    async fn staging_path(&self, paths: &job::Paths) -> PathBuf {
         let path = self.uri.path();
         let relative_path = path.strip_prefix('/').unwrap_or(path);
         let parent = paths.upstreams().host.join("staging").join("git");
 
-        let _ = env::ensure_dir_exists(&parent);
+        let _ = util::ensure_dir_exists(&parent).await;
 
         parent.join(relative_path)
     }
@@ -351,13 +351,13 @@ impl Git {
         );
 
         let clone_path = if self.staging {
-            self.staging_path(paths)
+            self.staging_path(paths).await
         } else {
-            self.final_path(paths)
+            self.final_path(paths).await
         };
         let clone_path_string = clone_path.display().to_string();
 
-        let final_path = self.final_path(paths);
+        let final_path = self.final_path(paths).await;
         let final_path_string = final_path.display().to_string();
 
         if self.ref_exists(&final_path).await? {
@@ -469,32 +469,4 @@ pub enum Error {
     Request(#[from] moss::request::Error),
     #[error("io")]
     Io(#[from] io::Error),
-}
-
-fn copy_dir<'a>(source_dir: &'a Path, out_dir: &'a Path) -> BoxFuture<'a, Result<(), Error>> {
-    async move {
-        env::recreate_dir(out_dir)?;
-
-        let mut contents = read_dir(&source_dir).await?;
-
-        while let Some(entry) = contents.next_entry().await? {
-            let path = entry.path();
-
-            if let Some(file_name) = path.file_name() {
-                let dest = out_dir.join(file_name);
-                let meta = entry.metadata().await?;
-
-                if meta.is_dir() {
-                    copy_dir(&path, &dest).await?;
-                } else if meta.is_file() {
-                    copy(&path, &dest).await?;
-                } else if meta.is_symlink() {
-                    symlink(read_link(&path).await?, &dest).await?;
-                }
-            }
-        }
-
-        Ok(())
-    }
-    .boxed()
 }

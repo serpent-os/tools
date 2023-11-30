@@ -21,4 +21,8 @@ impl Runtime {
     {
         self.0.block_on(task)
     }
+
+    pub fn destroy(self) {
+        drop(self)
+    }
 }

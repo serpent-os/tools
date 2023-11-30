@@ -2,13 +2,11 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{
-    fs::{create_dir_all, remove_dir_all},
-    io,
-    path::{Path, PathBuf},
-};
+use std::{io, path::PathBuf};
 
 use thiserror::Error;
+
+use crate::util;
 
 pub struct Env {
     pub cache_dir: PathBuf,
@@ -17,7 +15,7 @@ pub struct Env {
 }
 
 impl Env {
-    pub fn new(
+    pub async fn new(
         config_dir: Option<PathBuf>,
         cache_dir: Option<PathBuf>,
         moss_root: Option<PathBuf>,
@@ -35,8 +33,8 @@ impl Env {
         let cache_dir = resolve_cache_dir(is_root, cache_dir)?;
         let moss_dir = resolve_moss_root(is_root, moss_root)?;
 
-        ensure_dir_exists(&cache_dir)?;
-        ensure_dir_exists(&moss_dir)?;
+        util::ensure_dir_exists(&cache_dir).await?;
+        util::ensure_dir_exists(&moss_dir).await?;
 
         Ok(Self {
             config,
@@ -70,21 +68,6 @@ fn resolve_moss_root(is_root: bool, custom: Option<PathBuf>) -> Result<PathBuf, 
     } else {
         Ok(dirs::cache_dir().ok_or(Error::UserCache)?.join("moss"))
     }
-}
-
-pub fn ensure_dir_exists(path: &Path) -> Result<(), io::Error> {
-    if !path.exists() {
-        create_dir_all(path)?;
-    }
-    Ok(())
-}
-
-pub fn recreate_dir(path: &Path) -> Result<(), io::Error> {
-    if path.exists() {
-        remove_dir_all(path)?;
-    }
-    create_dir_all(path)?;
-    Ok(())
 }
 
 #[derive(Debug, Error)]

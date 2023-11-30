@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use boulder::{container, job, Env, Job};
+use boulder::{container, job, Env, Job, Runtime};
 use clap::Parser;
 use thiserror::Error;
 
@@ -15,14 +15,14 @@ pub struct Command {
     recipe: PathBuf,
 }
 
-pub fn handle(command: Command, env: Env) -> Result<(), Error> {
+pub fn handle(command: Command, rt: Runtime, env: Env) -> Result<(), Error> {
     let Command { recipe } = command;
 
     if !recipe.exists() {
         return Err(Error::MissingRecipe(recipe));
     }
 
-    let job = Job::new(&recipe, &env)?;
+    let job = rt.block_on(Job::new(&recipe, &env))?;
 
     let rootfs = job.paths.rootfs().host;
 

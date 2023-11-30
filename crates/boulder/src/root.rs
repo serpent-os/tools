@@ -7,7 +7,7 @@ use std::io;
 use moss::repository;
 use thiserror::Error;
 
-use crate::{dependency, env, Env, Job};
+use crate::{dependency, util, Env, Job};
 
 pub async fn populate(
     env: &Env,
@@ -19,7 +19,7 @@ pub async fn populate(
 
     // Recreate root
     let rootfs = job.paths.rootfs().host;
-    env::recreate_dir(&rootfs)?;
+    util::recreate_dir(&rootfs).await?;
 
     let mut moss_client = moss::Client::new("boulder", &env.moss_dir)
         .await?

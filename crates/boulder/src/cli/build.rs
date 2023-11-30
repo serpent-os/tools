@@ -27,7 +27,7 @@ pub struct Command {
     recipe: PathBuf,
 }
 
-pub fn handle(command: Command, env: Env) -> Result<(), Error> {
+pub fn handle(command: Command, rt: Runtime, env: Env) -> Result<(), Error> {
     let Command {
         profile,
         output,
@@ -41,8 +41,7 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
         return Err(Error::MissingRecipe(recipe));
     }
 
-    let rt = Runtime::new()?;
-    let job = Job::new(&recipe, &env)?;
+    let job = rt.block_on(Job::new(&recipe, &env))?;
 
     let profiles = rt.block_on(profile::Manager::new(&env));
     let repos = profiles.repositories(&profile)?.clone();
@@ -52,8 +51,9 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
 
     rt.block_on(upstream::sync(&job))?;
 
-    // Drop async runtime
-    drop(rt);
+    // Destroy async runtime since we will
+    // transition into the container
+    rt.destroy();
 
     // TODO: Exec build scripts
     container::chroot(&job).map_err(Error::Container)?;

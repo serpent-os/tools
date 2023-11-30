@@ -10,7 +10,7 @@ use std::{
 use stone_recipe::Recipe;
 use thiserror::Error;
 
-use crate::{env, Env};
+use crate::{util, Env};
 
 #[derive(Debug, Clone)]
 pub struct Id(String);
@@ -31,13 +31,13 @@ pub struct Job {
 }
 
 impl Job {
-    pub fn new(recipe_path: &Path, env: &Env) -> Result<Self, Error> {
+    pub async fn new(recipe_path: &Path, env: &Env) -> Result<Self, Error> {
         let recipe_bytes = fs::read(recipe_path)?;
         let recipe = stone_recipe::from_slice(&recipe_bytes)?;
 
         let id = Id::new(&recipe);
 
-        let paths = Paths::new(id.clone(), recipe_path, &env.cache_dir, "/mason")?;
+        let paths = Paths::new(id.clone(), recipe_path, &env.cache_dir, "/mason").await?;
 
         Ok(Self { id, recipe, paths })
     }
@@ -51,7 +51,7 @@ pub struct Paths {
 }
 
 impl Paths {
-    fn new(
+    async fn new(
         id: Id,
         recipe_path: &Path,
         host_root: impl Into<PathBuf>,
@@ -69,11 +69,11 @@ impl Paths {
             recipe_dir,
         };
 
-        env::ensure_dir_exists(&job.rootfs().host)?;
-        env::ensure_dir_exists(&job.artefacts().host)?;
-        env::ensure_dir_exists(&job.build().host)?;
-        env::ensure_dir_exists(&job.ccache().host)?;
-        env::ensure_dir_exists(&job.upstreams().host)?;
+        util::ensure_dir_exists(&job.rootfs().host).await?;
+        util::ensure_dir_exists(&job.artefacts().host).await?;
+        util::ensure_dir_exists(&job.build().host).await?;
+        util::ensure_dir_exists(&job.ccache().host).await?;
+        util::ensure_dir_exists(&job.upstreams().host).await?;
 
         Ok(job)
     }
