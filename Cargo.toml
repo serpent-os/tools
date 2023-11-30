@@ -1,15 +1,9 @@
 [workspace]
 members = [
-    "container",
-    "boulder",
-    "dag",
-    "moss",
-    "stone",
-    "tui",
-    "vfs",
+    "crates/*",
 ]
 default-members = [
-    "moss"
+    "crates/moss"
 ]
 resolver = "2"
 
