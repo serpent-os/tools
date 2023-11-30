@@ -10,14 +10,16 @@ use crate::util;
 
 pub struct Env {
     pub cache_dir: PathBuf,
+    pub data_dir: PathBuf,
     pub moss_dir: PathBuf,
     pub config: config::Manager,
 }
 
 impl Env {
     pub async fn new(
-        config_dir: Option<PathBuf>,
         cache_dir: Option<PathBuf>,
+        config_dir: Option<PathBuf>,
+        data_dir: Option<PathBuf>,
         moss_root: Option<PathBuf>,
     ) -> Result<Self, Error> {
         let is_root = is_root();
@@ -31,14 +33,17 @@ impl Env {
         };
 
         let cache_dir = resolve_cache_dir(is_root, cache_dir)?;
+        let data_dir = resolve_data_dir(data_dir);
         let moss_dir = resolve_moss_root(is_root, moss_root)?;
 
         util::ensure_dir_exists(&cache_dir).await?;
+        util::ensure_dir_exists(&data_dir).await?;
         util::ensure_dir_exists(&moss_dir).await?;
 
         Ok(Self {
             config,
             cache_dir,
+            data_dir,
             moss_dir,
         })
     }
@@ -58,6 +63,10 @@ fn resolve_cache_dir(is_root: bool, custom: Option<PathBuf>) -> Result<PathBuf, 
     } else {
         Ok(dirs::cache_dir().ok_or(Error::UserCache)?.join("boulder"))
     }
+}
+
+fn resolve_data_dir(custom: Option<PathBuf>) -> PathBuf {
+    custom.unwrap_or_else(|| "/usr/share/boulder".into())
 }
 
 fn resolve_moss_root(is_root: bool, custom: Option<PathBuf>) -> Result<PathBuf, Error> {

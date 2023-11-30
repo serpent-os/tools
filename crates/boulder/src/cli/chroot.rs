@@ -25,6 +25,7 @@ pub fn handle(command: Command, rt: Runtime, env: Env) -> Result<(), Error> {
     let job = rt.block_on(Job::new(&recipe, &env))?;
 
     let rootfs = job.paths.rootfs().host;
+    dbg!(&job.macros);
 
     // Has rootfs been setup?
     if !rootfs.join("usr").exists() {

@@ -4,22 +4,22 @@
 
 use std::collections::HashSet;
 
-use stone_recipe::{Recipe, Upstream};
+use stone_recipe::{tuning::Toolchain, Recipe, Upstream};
 
 pub fn calculate(recipe: &Recipe, ccache: bool) -> Vec<&str> {
     let mut packages = BASE_PACKAGES.to_vec();
 
     match recipe.options.toolchain {
-        stone_recipe::Toolchain::Llvm => packages.extend(LLVM_PACKAGES),
-        stone_recipe::Toolchain::Gnu => packages.extend(GNU_PACKAGES),
+        Toolchain::Llvm => packages.extend(LLVM_PACKAGES),
+        Toolchain::Gnu => packages.extend(GNU_PACKAGES),
     }
 
     if recipe.emul32 {
         packages.extend(BASE32_PACKAGES);
 
         match recipe.options.toolchain {
-            stone_recipe::Toolchain::Llvm => packages.extend(LLVM32_PACKAGES),
-            stone_recipe::Toolchain::Gnu => packages.extend(GNU32_PACKAGES),
+            Toolchain::Llvm => packages.extend(LLVM32_PACKAGES),
+            Toolchain::Gnu => packages.extend(GNU32_PACKAGES),
         }
     }
 

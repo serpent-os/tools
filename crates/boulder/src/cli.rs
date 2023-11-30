@@ -23,11 +23,13 @@ pub struct Command {
 #[derive(Debug, Args)]
 pub struct Global {
     #[arg(long, global = true)]
-    pub moss_root: Option<PathBuf>,
+    pub cache_dir: Option<PathBuf>,
     #[arg(long, global = true)]
     pub config_dir: Option<PathBuf>,
     #[arg(long, global = true)]
-    pub cache_dir: Option<PathBuf>,
+    pub data_dir: Option<PathBuf>,
+    #[arg(long, global = true)]
+    pub moss_root: Option<PathBuf>,
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -43,8 +45,9 @@ pub fn process() -> Result<(), Error> {
     let rt = Runtime::new().map_err(Error::Runtime)?;
 
     let env = rt.block_on(Env::new(
-        global.config_dir,
         global.cache_dir,
+        global.config_dir,
+        global.data_dir,
         global.moss_root,
     ))?;
 

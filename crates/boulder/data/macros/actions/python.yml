@@ -1,0 +1,31 @@
+actions:
+
+    # Perform python setup and build with the default options
+    - python:
+        command: |
+            test -e ./setup.py || ( echo "%%python: The ./setup.py script could not be found" ; exit 1 )
+            python3 setup.py build
+        dependencies:
+            - python
+
+    # Install python package to the destination directory
+    - python_install:
+        command: |
+            python3 setup.py install --root="%(installroot)"
+        dependencies:
+            - python
+
+    # Build a wheel for python PEP517 projects
+    - pyproject_build:
+        command: |
+            python3 -m build --wheel --no-isolation
+        dependencies:
+            - python-build
+            - python-wheel
+
+    # Install wheel to destination directory
+    - pyproject_install:
+        command: |
+            python3 -m installer --destdir="%(installroot)" dist/*.whl
+        dependencies:
+            - python-installer

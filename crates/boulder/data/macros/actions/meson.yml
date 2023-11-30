@@ -1,0 +1,43 @@
+actions:
+
+    # Run meson with the default options in a subdirectory
+    - meson:
+        command: |
+            test -e ./meson.build || ( echo "%%meson: The ./meson.build script could not be found" ; exit 1 )
+            CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" LDFLAGS="${LDFLAGS}" meson setup %(options_meson)
+        dependencies:
+            - meson
+
+    # Run meson with unity build enabled
+    - meson_unity:
+        command: |
+            test -e ./meson.build || ( echo "%%meson: The ./meson.build script could not be found" ; exit 1 )
+            CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" LDFLAGS="${LDFLAGS}" meson setup --unity on %(options_meson)
+        dependencies:
+            - meson
+
+    # Build the meson project
+    - meson_build:
+        command: |
+            meson compile -v -j "%(jobs)" -C "%(builddir)"
+        dependencies:
+            - meson
+
+    # Install results of the build to the destination directory
+    - meson_install:
+        command: |
+            DESTDIR="%(installroot)" meson install --no-rebuild -v -j "%(jobs)" -C "%(builddir)"
+        dependencies:
+            - meson
+
+definitions:
+
+    # Default meson options as passed to meson
+    - options_meson: |
+        --prefix="%(prefix)" \
+        --buildtype="plain" \
+        --libdir="lib%(libsuffix)" \
+        --libexecdir="lib%(libsuffix)/%(name)" \
+        --sysconfdir="%(sysconfdir)" \
+        --localstatedir="%(localstatedir)" \
+        "%(builddir)"

@@ -1,0 +1,19 @@
+# Provides -m64 builds for x86_64 build-hosts
+
+definitions:
+
+    - libsuffix      : ""
+    - build_platform : x86_64-%(vendorID)
+    - host_platform  : x86_64-%(vendorID)
+    - cc             : "%(compiler_c)"
+    - cxx            : "%(compiler_cxx)"
+    - cpp            : "%(compiler_cpp)"
+    - march          : x86-64-v2
+    - mtune          : ivybridge
+
+flags:
+
+    # Set architecture flags
+    - architecture:
+        c         : "-march=x86-64-v2 -mtune=ivybridge"
+        cxx       : "-march=x86-64-v2 -mtune=ivybridge"

@@ -10,7 +10,7 @@ use std::{
 use stone_recipe::Recipe;
 use thiserror::Error;
 
-use crate::{util, Env};
+use crate::{macros, util, Env, Macros};
 
 #[derive(Debug, Clone)]
 pub struct Id(String);
@@ -24,10 +24,12 @@ impl Id {
     }
 }
 
+#[derive(Debug)]
 pub struct Job {
     pub id: Id,
     pub recipe: Recipe,
     pub paths: Paths,
+    pub macros: Macros,
 }
 
 impl Job {
@@ -38,11 +40,18 @@ impl Job {
         let id = Id::new(&recipe);
 
         let paths = Paths::new(id.clone(), recipe_path, &env.cache_dir, "/mason").await?;
+        let macros = Macros::load(env).await?;
 
-        Ok(Self { id, recipe, paths })
+        Ok(Self {
+            id,
+            recipe,
+            paths,
+            macros,
+        })
     }
 }
 
+#[derive(Debug)]
 pub struct Paths {
     id: Id,
     host_root: PathBuf,
@@ -143,6 +152,8 @@ pub struct PathMapping {
 pub enum Error {
     #[error("stone recipe")]
     StoneRecipe(#[from] stone_recipe::Error),
+    #[error("macros")]
+    Macros(#[from] macros::Error),
     #[error("io")]
     Io(#[from] io::Error),
 }
