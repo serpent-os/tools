@@ -4,14 +4,12 @@
 
 use std::{collections::HashMap, io};
 
-use boulder::{env, profile, Env, Profile, Runtime};
+use boulder::{profile, Env, Profile, Runtime};
 use clap::Parser;
 use itertools::Itertools;
 use moss::{repository, Repository};
 use thiserror::Error;
 use url::Url;
-
-use super::Global;
 
 #[derive(Debug, Parser)]
 #[command(about = "Manage boulder profiles")]
@@ -76,15 +74,8 @@ fn parse_repository(s: &str) -> Result<(repository::Id, Repository), String> {
     ))
 }
 
-pub fn handle(command: Command, global: Global) -> Result<(), Error> {
-    let Global {
-        config_dir,
-        cache_dir,
-        moss_root,
-    } = global;
-
+pub fn handle(command: Command, env: Env) -> Result<(), Error> {
     let rt = Runtime::new()?;
-    let env = Env::new(config_dir, cache_dir, moss_root)?;
     let manager = rt.block_on(profile::Manager::new(&env));
 
     match command.subcommand {
@@ -156,8 +147,6 @@ pub async fn update<'a>(
 }
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("env")]
-    Env(#[from] env::Error),
     #[error("config")]
     Config(#[from] config::SaveError),
     #[error("profile")]

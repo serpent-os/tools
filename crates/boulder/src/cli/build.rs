@@ -2,16 +2,14 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::fs;
 use std::io;
 use std::path::PathBuf;
 
+use boulder::job;
 use boulder::upstream;
-use boulder::{container, env, profile, root, Cache, Env, Runtime};
+use boulder::{container, profile, root, Env, Job, Runtime};
 use clap::Parser;
 use thiserror::Error;
-
-use super::Global;
 
 #[derive(Debug, Parser)]
 #[command(about = "Build ... TODO")]
@@ -29,45 +27,36 @@ pub struct Command {
     recipe: PathBuf,
 }
 
-pub fn handle(command: Command, global: Global) -> Result<(), Error> {
+pub fn handle(command: Command, env: Env) -> Result<(), Error> {
     let Command {
         profile,
         output,
-        recipe: recipe_path,
+        recipe,
     } = command;
-    let Global {
-        moss_root,
-        config_dir,
-        cache_dir,
-    } = global;
 
     if !output.exists() {
         return Err(Error::MissingOutput(output));
     }
-    if !recipe_path.exists() {
-        return Err(Error::MissingRecipe(recipe_path));
+    if !recipe.exists() {
+        return Err(Error::MissingRecipe(recipe));
     }
 
-    let recipe_bytes = fs::read(&recipe_path)?;
-    let recipe = stone_recipe::from_slice(&recipe_bytes)?;
-
     let rt = Runtime::new()?;
-    let env = Env::new(config_dir, cache_dir, moss_root)?;
-    let cache = Cache::new(&recipe, recipe_path, &env.cache_dir, "/mason")?;
+    let job = Job::new(&recipe, &env)?;
 
     let profiles = rt.block_on(profile::Manager::new(&env));
     let repos = profiles.repositories(&profile)?.clone();
 
     // TODO: ccache config
-    rt.block_on(root::populate(&env, &cache, repos, &recipe, false))?;
+    rt.block_on(root::populate(&env, &job, repos, false))?;
 
-    rt.block_on(upstream::sync(&recipe, &cache))?;
+    rt.block_on(upstream::sync(&job))?;
 
     // Drop async runtime
     drop(rt);
 
     // TODO: Exec build scripts
-    container::chroot(&recipe, &cache).map_err(Error::Container)?;
+    container::chroot(&job).map_err(Error::Container)?;
 
     Ok(())
 }
@@ -80,16 +69,14 @@ pub enum Error {
     MissingRecipe(PathBuf),
     #[error("container")]
     Container(Box<dyn std::error::Error + Send + Sync + 'static>),
-    #[error("env")]
-    Env(#[from] env::Error),
     #[error("profile")]
     Profile(#[from] profile::Error),
     #[error("root")]
     Root(#[from] root::Error),
     #[error("upstream")]
     Upstream(#[from] upstream::Error),
-    #[error("stone recipe")]
-    StoneRecipe(#[from] stone_recipe::Error),
+    #[error("job")]
+    Job(#[from] job::Error),
     #[error("io")]
     Io(#[from] io::Error),
 }

@@ -5,22 +5,20 @@
 use std::io;
 
 use moss::repository;
-use stone_recipe::Recipe;
 use thiserror::Error;
 
-use crate::{dependency, env, Cache, Env};
+use crate::{dependency, env, Env, Job};
 
 pub async fn populate(
     env: &Env,
-    cache: &Cache,
+    job: &Job,
     repositories: repository::Map,
-    recipe: &Recipe,
     ccache: bool,
 ) -> Result<(), Error> {
-    let packages = dependency::calculate(recipe, ccache);
+    let packages = dependency::calculate(&job.recipe, ccache);
 
     // Recreate root
-    let rootfs = cache.rootfs().host;
+    let rootfs = job.paths.rootfs().host;
     env::recreate_dir(&rootfs)?;
 
     let mut moss_client = moss::Client::new("boulder", &env.moss_dir)

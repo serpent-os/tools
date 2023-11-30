@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MPL-2.0
 use std::path::PathBuf;
 
+use boulder::{env, Env};
 use clap::{Args, Parser};
 use thiserror::Error;
 
@@ -39,10 +40,12 @@ pub enum Subcommand {
 pub fn process() -> Result<(), Error> {
     let Command { global, subcommand } = Command::parse();
 
+    let env = Env::new(global.config_dir, global.cache_dir, global.moss_root)?;
+
     match subcommand {
-        Subcommand::Build(command) => build::handle(command, global)?,
-        Subcommand::Chroot(command) => chroot::handle(command, global)?,
-        Subcommand::Profile(command) => profile::handle(command, global)?,
+        Subcommand::Build(command) => build::handle(command, env)?,
+        Subcommand::Chroot(command) => chroot::handle(command, env)?,
+        Subcommand::Profile(command) => profile::handle(command, env)?,
     }
 
     Ok(())
@@ -56,4 +59,6 @@ pub enum Error {
     Chroot(#[from] chroot::Error),
     #[error("profile")]
     Profile(#[from] profile::Error),
+    #[error("env")]
+    Env(#[from] env::Error),
 }

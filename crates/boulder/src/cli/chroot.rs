@@ -2,13 +2,11 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{fs, io, path::PathBuf};
+use std::path::PathBuf;
 
-use boulder::{container, env, Cache, Env};
+use boulder::{container, job, Env, Job};
 use clap::Parser;
 use thiserror::Error;
-
-use super::Global;
 
 #[derive(Debug, Parser)]
 #[command(about = "Chroot into the build environment")]
@@ -17,33 +15,23 @@ pub struct Command {
     recipe: PathBuf,
 }
 
-pub fn handle(command: Command, global: Global) -> Result<(), Error> {
-    let Command {
-        recipe: recipe_path,
-    } = command;
-    let Global {
-        config_dir,
-        cache_dir,
-        moss_root,
-    } = global;
+pub fn handle(command: Command, env: Env) -> Result<(), Error> {
+    let Command { recipe } = command;
 
-    if !recipe_path.exists() {
-        return Err(Error::MissingRecipe(recipe_path));
+    if !recipe.exists() {
+        return Err(Error::MissingRecipe(recipe));
     }
 
-    let recipe_bytes = fs::read(&recipe_path)?;
-    let recipe = stone_recipe::from_slice(&recipe_bytes)?;
+    let job = Job::new(&recipe, &env)?;
 
-    let env = Env::new(config_dir, cache_dir, moss_root)?;
-    let cache = Cache::new(&recipe, recipe_path, env.cache_dir, "/mason")?;
-    let rootfs = cache.rootfs().host;
+    let rootfs = job.paths.rootfs().host;
 
     // Has rootfs been setup?
     if !rootfs.join("usr").exists() {
         return Err(Error::MissingRootFs);
     }
 
-    container::chroot(&recipe, &cache).map_err(Error::Container)?;
+    container::chroot(&job).map_err(Error::Container)?;
 
     Ok(())
 }
@@ -56,10 +44,6 @@ pub enum Error {
     MissingRootFs,
     #[error("container")]
     Container(Box<dyn std::error::Error + Send + Sync + 'static>),
-    #[error("env")]
-    Env(#[from] env::Error),
-    #[error("stone recipe")]
-    StoneRecipe(#[from] stone_recipe::Error),
-    #[error("io")]
-    Io(#[from] io::Error),
+    #[error("job")]
+    Job(#[from] job::Error),
 }

@@ -5,16 +5,17 @@
 use std::process;
 
 use container::Container;
-use stone_recipe::Recipe;
 
-use crate::Cache;
+use crate::Job;
 
-pub fn chroot(recipe: &Recipe, cache: &Cache) -> Result<(), container::Error> {
-    run(recipe, cache, || {
+pub fn chroot(job: &Job) -> Result<(), container::Error> {
+    let home = job.paths.build().guest;
+
+    run(job, || {
         let mut child = process::Command::new("/bin/bash")
             .arg("--login")
             .env_clear()
-            .env("HOME", &cache.build().guest)
+            .env("HOME", &home)
             .env("PATH", "/usr/bin:/usr/sbin")
             .env("TERM", "xterm-256color")
             .spawn()?;
@@ -25,25 +26,23 @@ pub fn chroot(recipe: &Recipe, cache: &Cache) -> Result<(), container::Error> {
     })
 }
 
-fn run(
-    recipe: &Recipe,
-    cache: &Cache,
-    f: impl FnMut() -> Result<(), container::Error>,
-) -> Result<(), container::Error> {
-    let rootfs = cache.rootfs().host;
+fn run(job: &Job, f: impl FnMut() -> Result<(), container::Error>) -> Result<(), container::Error> {
+    let rootfs = job.paths.rootfs().host;
 
-    let artefacts_cache = cache.artefacts();
-    let build_cache = cache.build();
-    let compiler_cache = cache.ccache();
-    let recipe_cache = cache.recipe();
+    let networking = job.recipe.options.networking;
+
+    let artefacts = job.paths.artefacts();
+    let build = job.paths.build();
+    let compiler = job.paths.ccache();
+    let recipe = job.paths.recipe();
 
     Container::new(rootfs)
         .hostname("boulder")
-        .networking(recipe.options.networking)
-        .work_dir(&build_cache.guest)
-        .bind_rw(&artefacts_cache.host, &artefacts_cache.guest)
-        .bind_rw(&build_cache.host, &build_cache.guest)
-        .bind_rw(&compiler_cache.host, &compiler_cache.guest)
-        .bind_ro(&recipe_cache.host, &recipe_cache.guest)
+        .networking(networking)
+        .work_dir(&build.guest)
+        .bind_rw(&artefacts.host, &artefacts.guest)
+        .bind_rw(&build.host, &build.guest)
+        .bind_rw(&compiler.host, &compiler.guest)
+        .bind_ro(&recipe.host, &recipe.guest)
         .run(f)
 }
