@@ -6,6 +6,7 @@ use std::{
     io,
     path::{Path, PathBuf},
     str::FromStr,
+    time::Duration,
 };
 
 use futures::{future::BoxFuture, stream, FutureExt, StreamExt, TryStreamExt};
@@ -16,6 +17,7 @@ use thiserror::Error;
 use tokio::fs::{copy, read_dir, read_link, remove_dir_all, symlink};
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
+use tui::{MultiProgress, ProgressBar, ProgressStyle, Stylize};
 use url::Url;
 
 use crate::{env, Cache};
@@ -30,41 +32,118 @@ pub async fn sync(recipe: &Recipe, cache: &Cache) -> Result<(), Error> {
         .map(Upstream::from_recipe)
         .collect::<Result<Vec<_>, _>>()?;
 
-    let cached = stream::iter(upstreams)
-        .map(|upstream| async move { upstream.fetch(cache).await })
+    println!();
+    println!(
+        "Sharing {} upstream(s) with the build container",
+        upstreams.len()
+    );
+    println!();
+
+    let mp = MultiProgress::new();
+    let tp = mp.add(
+        ProgressBar::new(upstreams.len() as u64).with_style(
+            ProgressStyle::with_template("\n|{bar:20.cyan/blue}| {pos}/{len}")
+                .unwrap()
+                .progress_chars("■≡=- "),
+        ),
+    );
+    tp.tick();
+
+    let upstream_dir = cache.guest_host_path(&cache.upstreams());
+    env::ensure_dir_exists(&upstream_dir)?;
+
+    stream::iter(&upstreams)
+        .map(|upstream| async {
+            let pb = mp.insert_before(
+                &tp,
+                ProgressBar::new(u64::MAX).with_message(format!(
+                    "{} {}",
+                    "Downloading".blue(),
+                    upstream.name().bold(),
+                )),
+            );
+            pb.enable_steady_tick(Duration::from_millis(150));
+
+            let install = upstream.fetch(cache, &pb).await?;
+
+            pb.set_message(format!("{} {}", "Copying".yellow(), upstream.name().bold(),));
+            pb.set_style(
+                ProgressStyle::with_template(" {spinner} {wide_msg} ")
+                    .unwrap()
+                    .tick_chars("--=≡■≡=--"),
+            );
+
+            install.share(&upstream_dir).await?;
+
+            let cached_tag = install
+                .was_cached()
+                .then_some(format!("{}", " (cached)".dim()))
+                .unwrap_or_default();
+
+            pb.finish();
+            mp.remove(&pb);
+            mp.println(format!(
+                "{} {}{}",
+                "Shared".green(),
+                upstream.name().bold(),
+                cached_tag,
+            ))?;
+            tp.inc(1);
+
+            Ok(()) as Result<_, Error>
+        })
         .buffer_unordered(moss::environment::MAX_NETWORK_CONCURRENCY)
-        .try_collect::<Vec<_>>()
+        .try_collect::<()>()
         .await?;
 
-    let upstream_target = cache.guest_host_path(&cache.upstreams());
-    env::ensure_dir_exists(&upstream_target)?;
+    mp.clear()?;
+    println!();
 
-    for upstream in cached {
-        match upstream {
-            Cached::Plain { name, path } => {
-                let target = upstream_target.join(&name);
+    Ok(())
+}
+
+enum Installed {
+    Plain {
+        name: String,
+        path: PathBuf,
+        was_cached: bool,
+    },
+    Git {
+        name: String,
+        path: PathBuf,
+        was_cached: bool,
+    },
+}
+
+impl Installed {
+    fn was_cached(&self) -> bool {
+        match self {
+            Installed::Plain { was_cached, .. } => *was_cached,
+            Installed::Git { was_cached, .. } => *was_cached,
+        }
+    }
+
+    async fn share(&self, dest_dir: &Path) -> Result<(), Error> {
+        match self {
+            Installed::Plain { name, path, .. } => {
+                let target = dest_dir.join(name);
 
                 // Attempt hard link
-                let link_result = linkat(None, &path, None, &target, LinkatFlags::NoSymlinkFollow);
+                let link_result = linkat(None, path, None, &target, LinkatFlags::NoSymlinkFollow);
 
                 // Copy instead
                 if link_result.is_err() {
                     copy(&path, &target).await?;
                 }
             }
-            Cached::Git { name, path } => {
-                let target = upstream_target.join(&name);
-                copy_dir(&path, &target).await?;
+            Installed::Git { name, path, .. } => {
+                let target = dest_dir.join(name);
+                copy_dir(path, &target).await?;
             }
         }
+
+        Ok(())
     }
-
-    Ok(())
-}
-
-enum Cached {
-    Plain { name: String, path: PathBuf },
-    Git { name: String, path: PathBuf },
 }
 
 #[derive(Debug, Clone)]
@@ -74,13 +153,6 @@ pub enum Upstream {
 }
 
 impl Upstream {
-    pub fn path(&self, cache: &Cache) -> PathBuf {
-        match self {
-            Upstream::Plain(plain) => plain.path(cache),
-            Upstream::Git(git) => git.final_path(cache),
-        }
-    }
-
     pub fn from_recipe(upstream: stone_recipe::Upstream) -> Result<Self, Error> {
         match upstream {
             stone_recipe::Upstream::Plain {
@@ -112,10 +184,17 @@ impl Upstream {
         }
     }
 
-    async fn fetch(&self, cache: &Cache) -> Result<Cached, Error> {
+    fn name(&self) -> &str {
         match self {
-            Upstream::Plain(plain) => plain.fetch(cache).await,
-            Upstream::Git(git) => git.fetch(cache).await,
+            Upstream::Plain(plain) => plain.name(),
+            Upstream::Git(git) => git.name(),
+        }
+    }
+
+    async fn fetch(&self, cache: &Cache, pb: &ProgressBar) -> Result<Installed, Error> {
+        match self {
+            Upstream::Plain(plain) => plain.fetch(cache, pb).await,
+            Upstream::Git(git) => git.fetch(cache, pb).await,
         }
     }
 }
@@ -176,17 +255,24 @@ impl Plain {
         parent.join(hash)
     }
 
-    async fn fetch(&self, cache: &Cache) -> Result<Cached, Error> {
+    async fn fetch(&self, cache: &Cache, pb: &ProgressBar) -> Result<Installed, Error> {
         use moss::request;
         use tokio::fs;
+
+        pb.set_style(
+            ProgressStyle::with_template(" {spinner} {wide_msg} {binary_bytes_per_sec:>.dim} ")
+                .unwrap()
+                .tick_chars("--=≡■≡=--"),
+        );
 
         let name = self.name();
         let path = self.path(cache);
 
         if path.exists() {
-            return Ok(Cached::Plain {
+            return Ok(Installed::Plain {
                 name: name.to_string(),
                 path,
+                was_cached: true,
             });
         }
 
@@ -197,6 +283,7 @@ impl Plain {
 
         while let Some(chunk) = stream.next().await {
             let bytes = &chunk?;
+            pb.inc(bytes.len() as u64);
             hasher.update(bytes);
             out.write_all(bytes).await?;
         }
@@ -215,9 +302,10 @@ impl Plain {
             });
         }
 
-        Ok(Cached::Plain {
+        Ok(Installed::Plain {
             name: name.to_string(),
             path,
+            was_cached: false,
         })
     }
 }
@@ -255,7 +343,13 @@ impl Git {
         parent.join(relative_path)
     }
 
-    async fn fetch(&self, cache: &Cache) -> Result<Cached, Error> {
+    async fn fetch(&self, cache: &Cache, pb: &ProgressBar) -> Result<Installed, Error> {
+        pb.set_style(
+            ProgressStyle::with_template(" {spinner} {wide_msg} ")
+                .unwrap()
+                .tick_chars("--=≡■≡=--"),
+        );
+
         let clone_path = if self.staging {
             self.staging_path(cache)
         } else {
@@ -268,9 +362,10 @@ impl Git {
 
         if self.ref_exists(&final_path).await? {
             self.reset_to_ref(&final_path).await?;
-            return Ok(Cached::Git {
+            return Ok(Installed::Git {
                 name: self.name().to_string(),
                 path: final_path,
+                was_cached: true,
             });
         }
 
@@ -297,9 +392,10 @@ impl Git {
 
         self.reset_to_ref(&final_path).await?;
 
-        Ok(Cached::Git {
+        Ok(Installed::Git {
             name: self.name().to_string(),
             path: final_path,
+            was_cached: false,
         })
     }
 
