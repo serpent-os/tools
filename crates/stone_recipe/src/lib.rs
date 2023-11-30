@@ -38,7 +38,7 @@ pub struct Recipe {
     pub architectures: Vec<String>,
     #[serde(default)]
     pub tuning: Vec<KeyValue<Tuning>>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "stringy_bool")]
     pub emul32: bool,
 }
 
@@ -76,13 +76,13 @@ pub struct Build {
 pub struct Options {
     #[serde(default)]
     pub toolchain: Toolchain,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "stringy_bool")]
     pub cspgo: bool,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "stringy_bool")]
     pub samplepgo: bool,
-    #[serde(default = "default_true")]
+    #[serde(default = "default_true", deserialize_with = "stringy_bool")]
     pub strip: bool,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "stringy_bool")]
     pub networking: bool,
 }
 
@@ -137,7 +137,7 @@ impl<'de> Deserialize<'de> for Upstream {
                 rename: Option<String>,
                 #[serde(default, rename = "stripdirs")]
                 strip_dirs: u8,
-                #[serde(default = "default_true")]
+                #[serde(default = "default_true", deserialize_with = "stringy_bool")]
                 unpack: bool,
                 #[serde(default = "default_unpack_dir", rename = "unpackdir")]
                 unpack_dir: PathBuf,
@@ -147,7 +147,7 @@ impl<'de> Deserialize<'de> for Upstream {
                 ref_id: String,
                 #[serde(rename = "clonedir")]
                 clone_dir: Option<PathBuf>,
-                #[serde(default = "default_true")]
+                #[serde(default = "default_true", deserialize_with = "stringy_bool")]
                 staging: bool,
             },
         }
@@ -331,6 +331,33 @@ where
             )
             .collect()
     }))
+}
+
+fn stringy_bool<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Inner {
+        Bool(bool),
+        String(String),
+    }
+
+    match Inner::deserialize(deserializer)? {
+        Inner::Bool(bool) => Ok(bool),
+        // Really yaml...
+        Inner::String(s) => match s.as_str() {
+            "y" | "Y" | "yes" | "Yes" | "YES" | "true" | "True" | "TRUE" | "on" | "On" | "ON" => {
+                Ok(true)
+            }
+            "n" | "N" | "no" | "No" | "NO" | "false" | "False" | "FALSE" | "off" | "Off"
+            | "OFF" => Ok(false),
+            _ => Err(serde::de::Error::custom(
+                "invalid boolean: expected true or false",
+            )),
+        },
+    }
 }
 
 #[cfg(test)]
