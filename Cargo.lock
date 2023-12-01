@@ -206,6 +206,7 @@ dependencies = [
  "serde",
  "sha2",
  "stone_recipe",
+ "strum",
  "thiserror",
  "tokio",
  "tui",

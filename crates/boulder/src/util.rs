@@ -80,3 +80,20 @@ pub fn enumerate_files<'a>(
     }
     .boxed()
 }
+
+pub async fn list_dirs(dir: &Path) -> Result<Vec<PathBuf>, io::Error> {
+    let mut read_dir = read_dir(dir).await?;
+
+    let mut paths = vec![];
+
+    while let Some(entry) = read_dir.next_entry().await? {
+        let path = entry.path();
+        let meta = entry.metadata().await?;
+
+        if meta.is_dir() {
+            paths.push(path);
+        }
+    }
+
+    Ok(paths)
+}

@@ -11,6 +11,7 @@ use url::Url;
 pub use serde_yaml::Error;
 
 pub use self::macros::Macros;
+pub use self::script::Script;
 pub use self::tuning::Tuning;
 
 pub mod macros;

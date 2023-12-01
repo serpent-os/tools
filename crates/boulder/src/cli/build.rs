@@ -56,7 +56,9 @@ pub fn handle(command: Command, rt: Runtime, env: Env) -> Result<(), Error> {
     rt.destroy();
 
     // TODO: Exec build scripts
-    container::chroot(&job).map_err(Error::Container)?;
+    for (step, script) in job.scripts.iter() {
+        container::exec(*step, &job, script).map_err(Error::Container)?;
+    }
 
     Ok(())
 }

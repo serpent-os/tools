@@ -15,7 +15,7 @@ pub async fn populate(
     repositories: repository::Map,
     ccache: bool,
 ) -> Result<(), Error> {
-    let packages = dependency::calculate(&job.recipe, ccache);
+    let packages = dependency::calculate(job, ccache);
 
     // Recreate root
     let rootfs = job.paths.rootfs().host;
@@ -28,6 +28,9 @@ pub async fn populate(
         .ephemeral(&rootfs)?;
 
     moss_client.install(&packages, true).await?;
+
+    // Setup non-mounted guest paths from host
+    util::recreate_dir(&job.paths.guest_host_path(&job.paths.install())).await?;
 
     Ok(())
 }

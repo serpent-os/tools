@@ -3,12 +3,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
+    collections::BTreeMap,
     fs, io,
     path::{Path, PathBuf},
 };
 
-use stone_recipe::Recipe;
+use stone_recipe::{script, tuning::Toolchain, Recipe, Script, Upstream};
 use thiserror::Error;
+use tui::Stylize;
 
 use crate::{macros, util, Env, Macros};
 
@@ -30,6 +32,7 @@ pub struct Job {
     pub recipe: Recipe,
     pub paths: Paths,
     pub macros: Macros,
+    pub scripts: BTreeMap<Step, Script>,
 }
 
 impl Job {
@@ -42,12 +45,25 @@ impl Job {
         let paths = Paths::new(id.clone(), recipe_path, &env.cache_dir, "/mason").await?;
         let macros = Macros::load(env).await?;
 
+        let scripts = Step::ALL
+            .iter()
+            .filter_map(|step| {
+                let result = step.script(&recipe, &paths, &macros).transpose()?;
+                Some(result.map(|script| (*step, script)))
+            })
+            .collect::<Result<_, _>>()?;
+
         Ok(Self {
             id,
             recipe,
             paths,
             macros,
+            scripts,
         })
+    }
+
+    pub fn work_dir(&self) -> PathBuf {
+        work_dir(&self.paths, &self.recipe.upstreams)
     }
 }
 
@@ -129,6 +145,15 @@ impl Paths {
         }
     }
 
+    pub fn install(&self) -> PathMapping {
+        PathMapping {
+            // TODO: Shitty impossible state, this folder
+            // doesn't exist on host
+            host: "".into(),
+            guest: self.guest_root.join("install"),
+        }
+    }
+
     /// For the provided [`Mapping`], return the guest
     /// path as it lives on the host fs
     ///
@@ -148,12 +173,233 @@ pub struct PathMapping {
     pub guest: PathBuf,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, strum::Display)]
+#[strum(serialize_all = "lowercase")]
+pub enum Step {
+    Prepare,
+    Setup,
+    Build,
+    Check,
+    Install,
+    Workload,
+}
+
+impl Step {
+    const ALL: &'static [Self] = &[
+        Self::Prepare,
+        Self::Setup,
+        Self::Build,
+        Self::Check,
+        Self::Install,
+        Self::Workload,
+    ];
+
+    pub fn styled(&self, s: impl ToString) -> String {
+        let s = s.to_string();
+        // Taste the rainbow
+        // TODO: Ikey plz make pretty
+        match self {
+            Step::Prepare => s.grey(),
+            Step::Setup => s.cyan(),
+            Step::Build => s.blue(),
+            Step::Check => s.yellow(),
+            Step::Install => s.green(),
+            Step::Workload => s.magenta(),
+        }
+        .dim()
+        .to_string()
+    }
+
+    fn script(
+        &self,
+        recipe: &Recipe,
+        paths: &Paths,
+        macros: &Macros,
+    ) -> Result<Option<Script>, Error> {
+        let Some(mut content) = (match self {
+            Step::Prepare => Some(prepare_script(recipe)),
+            Step::Setup => recipe.build.setup.clone(),
+            Step::Build => recipe.build.build.clone(),
+            Step::Check => recipe.build.check.clone(),
+            Step::Install => recipe.build.install.clone(),
+            Step::Workload => recipe.build.workload.clone(),
+        }) else {
+            return Ok(None);
+        };
+
+        if content.is_empty() {
+            return Ok(None);
+        }
+
+        if let Some(env) = recipe.build.environment.as_deref() {
+            if env != "(null)" && !env.is_empty() {
+                content = format!("{env} {content}");
+            }
+        }
+
+        content = format!("%scriptBase\n{content}");
+
+        let mut parser = script::Parser::new();
+
+        // TODO: Handle actual arch
+        for arch in ["base", "x86_64"] {
+            let macros = macros
+                .arch
+                .get(arch)
+                .cloned()
+                .ok_or_else(|| Error::MissingArchMacros(arch.to_string()))?;
+
+            parser.add_macros(macros);
+
+            // TODO: Add arch
+            parser.add_definition("buildroot", paths.build().guest.display());
+            parser.add_definition("workdir", work_dir(paths, &recipe.upstreams).display());
+        }
+
+        for macros in macros.actions.clone() {
+            parser.add_macros(macros);
+        }
+
+        parser.add_definition("name", &recipe.source.name);
+        parser.add_definition("version", &recipe.source.version);
+        parser.add_definition("release", recipe.source.release);
+        // TODO: Jobs
+        parser.add_definition("jobs", 1);
+        parser.add_definition("pkgdir", paths.recipe().guest.join("pkg").display());
+        parser.add_definition("sourcedir", paths.upstreams().guest.display());
+        parser.add_definition("installroot", paths.install().guest.display());
+
+        // TODO: Remaining definitions & tune flags
+        parser.add_definition("cflags", "");
+        parser.add_definition("cxxflags", "");
+        parser.add_definition("ldflags", "");
+
+        parser.add_definition("compiler_cache", "/mason/ccache");
+
+        let path = "/usr/bin:/bin";
+
+        /* Set the relevant compilers */
+        if matches!(recipe.options.toolchain, Toolchain::Llvm) {
+            parser.add_definition("compiler_c", "clang");
+            parser.add_definition("compiler_cxx", "clang++");
+            parser.add_definition("compiler_objc", "clang");
+            parser.add_definition("compiler_objcxx", "clang++");
+            parser.add_definition("compiler_cpp", "clang -E -");
+            parser.add_definition("compiler_objcpp", "clang -E -");
+            parser.add_definition("compiler_objcxxcpp", "clang++ -E");
+            parser.add_definition("compiler_ar", "llvm-ar");
+            parser.add_definition("compiler_ld", "ld.lld");
+            parser.add_definition("compiler_objcopy", "llvm-objcopy");
+            parser.add_definition("compiler_nm", "llvm-nm");
+            parser.add_definition("compiler_ranlib", "llvm-ranlib");
+            parser.add_definition("compiler_strip", "llvm-strip");
+            parser.add_definition("compiler_path", path);
+        } else {
+            parser.add_definition("compiler_c", "gcc");
+            parser.add_definition("compiler_cxx", "g++");
+            parser.add_definition("compiler_objc", "gcc");
+            parser.add_definition("compiler_objcxx", "g++");
+            parser.add_definition("compiler_cpp", "gcc -E");
+            parser.add_definition("compiler_objcpp", "gcc -E");
+            parser.add_definition("compiler_objcxxcpp", "g++ -E");
+            parser.add_definition("compiler_ar", "gcc-ar");
+            parser.add_definition("compiler_ld", "ld.bfd");
+            parser.add_definition("compiler_objcopy", "objcopy");
+            parser.add_definition("compiler_nm", "gcc-nm");
+            parser.add_definition("compiler_ranlib", "gcc-ranlib");
+            parser.add_definition("compiler_strip", "strip");
+            parser.add_definition("compiler_path", path);
+        }
+
+        Ok(Some(parser.parse(&content)?))
+    }
+}
+
+fn prepare_script(recipe: &Recipe) -> String {
+    use std::fmt::Write;
+
+    let mut content = String::default();
+
+    for upstream in &recipe.upstreams {
+        match upstream {
+            stone_recipe::Upstream::Plain {
+                uri,
+                rename,
+                strip_dirs,
+                unpack,
+                unpack_dir,
+                ..
+            } => {
+                if !*unpack {
+                    continue;
+                }
+                let rename = rename
+                    .as_deref()
+                    .unwrap_or_else(|| uri.path().rsplit('/').next().unwrap_or(""));
+
+                let _ = writeln!(&mut content, "mkdir -p {}", unpack_dir.display());
+                if rename.ends_with(".zip") {
+                    let _ = writeln!(
+                        &mut content,
+                        r#"unzip -d "{}" "%(sourcedir)/{rename}" || (echo "Failed to extract arcive"; exit 1);"#,
+                        unpack_dir.display(),
+                    );
+                } else {
+                    let _ = writeln!(
+                        &mut content,
+                        r#"tar xf "%(sourcedir)/{rename}" -C "{}" --strip-components={} --no-same-owner || (echo "Failed to extract arcive"; exit 1);"#,
+                        unpack_dir.display(),
+                        strip_dirs,
+                    );
+                }
+            }
+            stone_recipe::Upstream::Git { .. } => todo!(),
+        }
+    }
+
+    content
+}
+
+fn work_dir(paths: &Paths, upstreams: &[Upstream]) -> PathBuf {
+    let build_dir = paths.build().guest;
+    let mut work_dir = build_dir.clone();
+
+    // Work dir is the first upstream
+    if let Some(upstream) = upstreams.first() {
+        match upstream {
+            Upstream::Plain { uri, rename, .. } => {
+                let rename = rename
+                    .as_deref()
+                    .unwrap_or_else(|| uri.path().rsplit('/').next().unwrap_or(""));
+
+                let mut base_name = rename;
+
+                if let Some((base, _)) = base_name.split_once(".zip") {
+                    base_name = base;
+                }
+                if let Some((base, _)) = base_name.split_once(".tar") {
+                    base_name = base;
+                }
+
+                work_dir = build_dir.join(base_name);
+            }
+            Upstream::Git { .. } => todo!(),
+        }
+    }
+
+    work_dir
+}
+
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("missing arch macros: {0}")]
+    MissingArchMacros(String),
     #[error("stone recipe")]
     StoneRecipe(#[from] stone_recipe::Error),
     #[error("macros")]
     Macros(#[from] macros::Error),
+    #[error("script")]
+    Script(#[from] script::Error),
     #[error("io")]
     Io(#[from] io::Error),
 }

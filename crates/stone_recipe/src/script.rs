@@ -51,6 +51,7 @@ impl Parser {
     }
 }
 
+#[derive(Debug)]
 pub struct Script {
     pub content: String,
     pub dependencies: Vec<String>,
@@ -93,7 +94,7 @@ fn parse(
     })?;
 
     Ok(Script {
-        content,
+        content: content.trim().to_string(),
         dependencies: dependencies.into_iter().collect(),
     })
 }
