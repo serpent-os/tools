@@ -14,6 +14,7 @@ pub use self::macros::Macros;
 pub use self::tuning::Tuning;
 
 pub mod macros;
+pub mod script;
 pub mod tuning;
 
 pub fn from_slice(bytes: &[u8]) -> Result<Recipe, Error> {

@@ -22,6 +22,7 @@ itertools = "0.11.0"
 futures = "0.3.28"
 hex = "0.4.3"
 log = "0.4"
+nom = "7.1.3"
 nix = { version = "0.27.1", features = ["user", "fs", "sched", "process", "mount", "hostname"] }
 once_cell = "1.18.0"
 petgraph = "0.6.4"
