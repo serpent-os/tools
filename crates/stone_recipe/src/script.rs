@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MPL-2.0
 #![allow(clippy::map_collect_result_unit)]
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use nom::{
     branch::alt,
@@ -15,31 +15,78 @@ use nom::{
 };
 use thiserror::Error;
 
-pub fn parse(input: &str, macros: &HashMap<String, String>) -> Result<String, Error> {
-    let mut output = String::new();
+use crate::macros::Action;
+
+#[derive(Default)]
+pub struct Parser {
+    actions: HashMap<String, Action>,
+    definitions: HashMap<String, String>,
+}
+
+impl Parser {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn add_action(&mut self, identifier: impl ToString, action: Action) {
+        self.actions.insert(identifier.to_string(), action);
+    }
+
+    pub fn add_definition(&mut self, identifier: impl ToString, definition: impl ToString) {
+        self.definitions
+            .insert(identifier.to_string(), definition.to_string());
+    }
+
+    pub fn parse(&self, input: &str) -> Result<Script, Error> {
+        parse(input, &self.actions, &self.definitions)
+    }
+}
+
+pub struct Script {
+    pub content: String,
+    pub dependencies: Vec<String>,
+}
+
+fn parse(
+    input: &str,
+    actions: &HashMap<String, Action>,
+    definitions: &HashMap<String, String>,
+) -> Result<Script, Error> {
+    let mut content = String::new();
+    let mut dependencies = HashSet::new();
 
     tokens(input, |token| {
         match token {
-            Token::Action(action) => {
-                let replacement = macros
-                    .get(action)
-                    .ok_or(Error::UnknownAction(action.to_string()))?;
+            Token::Action(identifier) => {
+                let action = actions
+                    .get(identifier)
+                    .ok_or(Error::UnknownAction(identifier.to_string()))?;
+                dependencies.extend(action.dependencies.clone());
 
-                output.push_str(&parse(replacement, macros)?);
-            }
-            Token::Definition(definition) => {
-                let replacement = macros
-                    .get(definition)
-                    .ok_or(Error::UnknownDefinition(definition.to_string()))?;
+                let script = parse(&action.command, actions, definitions)?;
 
-                output.push_str(&parse(replacement, macros)?);
+                content.push_str(&script.content);
+                dependencies.extend(script.dependencies);
             }
-            Token::Plain(plain) => output.push_str(plain),
+            Token::Definition(identifier) => {
+                let definition = definitions
+                    .get(identifier)
+                    .ok_or(Error::UnknownDefinition(identifier.to_string()))?;
+
+                let script = parse(definition, actions, definitions)?;
+
+                content.push_str(&script.content);
+                dependencies.extend(script.dependencies);
+            }
+            Token::Plain(plain) => content.push_str(plain),
         }
         Ok(())
     })?;
 
-    Ok(output)
+    Ok(Script {
+        content,
+        dependencies: dependencies.into_iter().collect(),
+    })
 }
 
 #[derive(Debug)]
@@ -102,22 +149,34 @@ pub enum Error {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::macros::Action;
 
     #[test]
     fn parse_script() {
         let input =
             "%patch %%escaped %{ %(pkgdir)/0001-deps-analysis-elves-In-absence-of-soname.-make-one-u.patch";
 
-        let macros = HashMap::from_iter([
-            ("patch".into(), "patch -v %(nested_flag)".into()),
-            ("nested_flag".into(), "--args=%(nested_arg),b,c".into()),
-            ("nested_arg".into(), "a".into()),
-            ("pkgdir".into(), "%(root)/pkg".into()),
-            ("root".into(), "/mason".into()),
-        ]);
+        let mut parser = Parser::new();
+        parser.add_action(
+            "patch",
+            Action {
+                command: "patch -v %(nested_flag)".into(),
+                dependencies: vec!["patch".into()],
+            },
+        );
 
-        let parsed = parse(input, &macros).unwrap();
+        for (id, definition) in [
+            ("nested_flag", "--args=%(nested_arg),b,c"),
+            ("nested_arg", "a"),
+            ("pkgdir", "%(root)/pkg"),
+            ("root", "/mason"),
+        ] {
+            parser.add_definition(id, definition);
+        }
 
-        assert_eq!(parsed, "patch -v --args=a,b,c %escaped %{ /mason/pkg/0001-deps-analysis-elves-In-absence-of-soname.-make-one-u.patch".to_string());
+        let script = parser.parse(input).unwrap();
+
+        assert_eq!(script.content, "patch -v --args=a,b,c %escaped %{ /mason/pkg/0001-deps-analysis-elves-In-absence-of-soname.-make-one-u.patch".to_string());
+        assert_eq!(script.dependencies, vec!["patch".to_string()])
     }
 }

@@ -60,7 +60,7 @@ impl<'de> Deserialize<'de> for KeyValue<Tuning> {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct TuningFlags {
+pub struct TuningFlag {
     #[serde(flatten)]
     root: CompilerFlags,
     #[serde(default)]
@@ -69,7 +69,7 @@ pub struct TuningFlags {
     llvm: CompilerFlags,
 }
 
-impl TuningFlags {
+impl TuningFlag {
     pub fn get(&self, flag: CompilerFlag, toolchain: Toolchain) -> Option<&str> {
         match toolchain {
             Toolchain::Llvm => self.llvm.get(flag),

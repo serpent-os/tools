@@ -6,7 +6,7 @@ use serde::Deserialize;
 
 use crate::{
     sequence_of_key_value,
-    tuning::{TuningFlags, TuningGroup},
+    tuning::{TuningFlag, TuningGroup},
     Error, KeyValue, Package,
 };
 
@@ -22,7 +22,7 @@ pub struct Macros {
     #[serde(default, deserialize_with = "sequence_of_key_value")]
     pub definitions: Vec<KeyValue<String>>,
     #[serde(default, deserialize_with = "sequence_of_key_value")]
-    pub flags: Vec<KeyValue<TuningFlags>>,
+    pub flags: Vec<KeyValue<TuningFlag>>,
     #[serde(default, deserialize_with = "sequence_of_key_value")]
     pub tuning: Vec<KeyValue<TuningGroup>>,
     #[serde(default, deserialize_with = "sequence_of_key_value")]
