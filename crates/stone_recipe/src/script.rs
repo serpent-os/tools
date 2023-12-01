@@ -15,7 +15,7 @@ use nom::{
 };
 use thiserror::Error;
 
-use crate::macros::Action;
+use crate::{macros::Action, Macros};
 
 #[derive(Default)]
 pub struct Parser {
@@ -35,6 +35,15 @@ impl Parser {
     pub fn add_definition(&mut self, identifier: impl ToString, definition: impl ToString) {
         self.definitions
             .insert(identifier.to_string(), definition.to_string());
+    }
+
+    pub fn add_macros(&mut self, macros: Macros) {
+        macros.actions.into_iter().for_each(|kv| {
+            self.add_action(kv.key, kv.value);
+        });
+        macros.definitions.into_iter().for_each(|kv| {
+            self.add_definition(kv.key, kv.value);
+        });
     }
 
     pub fn parse(&self, input: &str) -> Result<Script, Error> {
