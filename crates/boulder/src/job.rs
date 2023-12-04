@@ -246,6 +246,7 @@ impl Step {
         } else {
             work_dir(paths, &recipe.upstreams)
         };
+        let num_jobs = util::num_cpus();
 
         // TODO: Handle actual arch
         for arch in ["base", "x86_64"] {
@@ -270,7 +271,7 @@ impl Step {
         parser.add_definition("version", &recipe.source.version);
         parser.add_definition("release", recipe.source.release);
         // TODO: Jobs
-        parser.add_definition("jobs", 1);
+        parser.add_definition("jobs", num_jobs);
         parser.add_definition("pkgdir", paths.recipe().guest.join("pkg").display());
         parser.add_definition("sourcedir", paths.upstreams().guest.display());
         parser.add_definition("installroot", paths.install().guest.display());

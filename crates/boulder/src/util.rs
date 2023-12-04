@@ -4,7 +4,9 @@
 
 use std::{
     io,
+    num::NonZeroUsize,
     path::{Path, PathBuf},
+    thread,
 };
 
 use futures::{future::BoxFuture, FutureExt};
@@ -109,4 +111,8 @@ pub fn uri_relative_path(uri: &Url) -> &str {
     let path = uri.path();
 
     path.strip_prefix('/').unwrap_or_default()
+}
+
+pub fn num_cpus() -> NonZeroUsize {
+    thread::available_parallelism().unwrap_or_else(|_| NonZeroUsize::new(1).unwrap())
 }
