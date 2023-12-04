@@ -59,6 +59,7 @@ pub struct KeyValue<T> {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Source {
     pub name: String,
+    #[serde(deserialize_with = "force_string")]
     pub version: String,
     pub release: u64,
     pub homepage: String,
@@ -110,9 +111,9 @@ pub enum Upstream {
         uri: Url,
         hash: String,
         rename: Option<String>,
-        strip_dirs: u8,
+        strip_dirs: Option<u8>,
         unpack: bool,
-        unpack_dir: PathBuf,
+        unpack_dir: Option<PathBuf>,
     },
     Git {
         uri: Url,
@@ -127,22 +128,18 @@ impl<'de> Deserialize<'de> for Upstream {
     where
         D: serde::Deserializer<'de>,
     {
-        fn default_unpack_dir() -> PathBuf {
-            ".".into()
-        }
-
         #[derive(Debug, Deserialize)]
         #[serde(untagged)]
         enum Inner {
             Plain {
                 hash: String,
                 rename: Option<String>,
-                #[serde(default, rename = "stripdirs")]
-                strip_dirs: u8,
+                #[serde(rename = "stripdirs")]
+                strip_dirs: Option<u8>,
                 #[serde(default = "default_true", deserialize_with = "stringy_bool")]
                 unpack: bool,
-                #[serde(default = "default_unpack_dir", rename = "unpackdir")]
-                unpack_dir: PathBuf,
+                #[serde(rename = "unpackdir")]
+                unpack_dir: Option<PathBuf>,
             },
             Git {
                 #[serde(rename = "ref")]
@@ -190,9 +187,9 @@ impl<'de> Deserialize<'de> for Upstream {
                 uri,
                 hash,
                 rename: None,
-                strip_dirs: 0,
+                strip_dirs: None,
                 unpack: default_true(),
-                unpack_dir: default_unpack_dir(),
+                unpack_dir: None,
             }),
             Some((Uri::Git(uri), Outer::String(ref_id))) => Ok(Upstream::Git {
                 uri,
@@ -353,6 +350,23 @@ where
                 "invalid boolean: expected true or false",
             )),
         },
+    }
+}
+
+fn force_string<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Inner {
+        String(String),
+        Number(serde_yaml::Number),
+    }
+
+    match Inner::deserialize(deserializer)? {
+        Inner::String(s) => Ok(s),
+        Inner::Number(n) => Ok(n.to_string()),
     }
 }
 

@@ -232,7 +232,7 @@ impl Step {
         }
 
         if let Some(env) = recipe.build.environment.as_deref() {
-            if env != "(null)" && !env.is_empty() {
+            if env != "(null)" && !env.is_empty() && !matches!(self, Step::Prepare) {
                 content = format!("{env} {content}");
             }
         }
@@ -340,24 +340,24 @@ fn prepare_script(recipe: &Recipe) -> String {
                 if !*unpack {
                     continue;
                 }
-                let rename = rename
-                    .as_deref()
-                    .unwrap_or_else(|| util::uri_file_name(uri));
-                let unpack_dir = unpack_dir.join(rename);
+                let file_name = util::uri_file_name(uri);
+                let rename = rename.as_deref().unwrap_or(file_name);
+                let unpack_dir = unpack_dir
+                    .as_ref()
+                    .map(|dir| dir.display().to_string())
+                    .unwrap_or_else(|| rename.to_string());
+                let strip_dirs = strip_dirs.unwrap_or(1);
 
-                let _ = writeln!(&mut content, "mkdir -p {}", unpack_dir.display());
+                let _ = writeln!(&mut content, "mkdir -p {unpack_dir}");
                 if rename.ends_with(".zip") {
                     let _ = writeln!(
                         &mut content,
-                        r#"unzip -d "{}" "%(sourcedir)/{rename}" || (echo "Failed to extract arcive"; exit 1);"#,
-                        unpack_dir.display(),
+                        r#"unzip -d "{unpack_dir}" "%(sourcedir)/{rename}" || (echo "Failed to extract arcive"; exit 1);"#,
                     );
                 } else {
                     let _ = writeln!(
                         &mut content,
-                        r#"tar xf "%(sourcedir)/{rename}" -C "{}" --strip-components={} --no-same-owner || (echo "Failed to extract arcive"; exit 1);"#,
-                        unpack_dir.display(),
-                        *strip_dirs + 1,
+                        r#"tar xf "%(sourcedir)/{rename}" -C "{unpack_dir}" --strip-components={strip_dirs} --no-same-owner || (echo "Failed to extract arcive"; exit 1);"#,
                     );
                 }
             }
@@ -378,12 +378,20 @@ fn work_dir(paths: &Paths, upstreams: &[Upstream]) -> PathBuf {
         Upstream::Git { .. } => true,
     }) {
         match upstream {
-            Upstream::Plain { uri, rename, .. } => {
-                let rename = rename
-                    .as_deref()
-                    .unwrap_or_else(|| util::uri_file_name(uri));
+            Upstream::Plain {
+                uri,
+                rename,
+                unpack_dir,
+                ..
+            } => {
+                let file_name = util::uri_file_name(uri);
+                let rename = rename.as_deref().unwrap_or(file_name);
+                let unpack_dir = unpack_dir
+                    .as_ref()
+                    .map(|dir| dir.display().to_string())
+                    .unwrap_or_else(|| rename.to_string());
 
-                work_dir = build_dir.join(rename);
+                work_dir = build_dir.join(unpack_dir);
             }
             Upstream::Git { .. } => todo!(),
         }

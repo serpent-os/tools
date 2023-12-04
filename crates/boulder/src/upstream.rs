@@ -156,29 +156,20 @@ impl Upstream {
     pub fn from_recipe(upstream: stone_recipe::Upstream) -> Result<Self, Error> {
         match upstream {
             stone_recipe::Upstream::Plain {
-                uri,
-                hash,
-                rename,
-                strip_dirs,
-                unpack,
-                unpack_dir,
+                uri, hash, rename, ..
             } => Ok(Self::Plain(Plain {
                 uri,
                 hash: hash.parse()?,
                 rename,
-                strip_dirs,
-                unpack,
-                unpack_dir,
             })),
             stone_recipe::Upstream::Git {
                 uri,
                 ref_id,
-                clone_dir,
                 staging,
+                ..
             } => Ok(Self::Git(Git {
                 uri,
                 ref_id,
-                clone_dir,
                 staging,
             })),
         }
@@ -225,9 +216,6 @@ pub struct Plain {
     uri: Url,
     hash: Hash,
     rename: Option<String>,
-    strip_dirs: u8,
-    unpack: bool,
-    unpack_dir: PathBuf,
 }
 
 impl Plain {
@@ -314,7 +302,6 @@ impl Plain {
 pub struct Git {
     uri: Url,
     ref_id: String,
-    clone_dir: Option<PathBuf>,
     staging: bool,
 }
 
