@@ -235,7 +235,7 @@ impl Plain {
         if let Some(name) = &self.rename {
             name
         } else {
-            self.uri.path().split('/').last().unwrap_or_default()
+            util::uri_file_name(&self.uri)
         }
     }
 
@@ -320,27 +320,23 @@ pub struct Git {
 
 impl Git {
     fn name(&self) -> &str {
-        self.uri.path().split('/').last().unwrap_or_default()
+        util::uri_file_name(&self.uri)
     }
 
     async fn final_path(&self, paths: &job::Paths) -> PathBuf {
-        let path = self.uri.path();
-        let relative_path = path.strip_prefix('/').unwrap_or(path);
         let parent = paths.upstreams().host.join("git");
 
         let _ = util::ensure_dir_exists(&parent).await;
 
-        parent.join(relative_path)
+        parent.join(util::uri_relative_path(&self.uri))
     }
 
     async fn staging_path(&self, paths: &job::Paths) -> PathBuf {
-        let path = self.uri.path();
-        let relative_path = path.strip_prefix('/').unwrap_or(path);
         let parent = paths.upstreams().host.join("staging").join("git");
 
         let _ = util::ensure_dir_exists(&parent).await;
 
-        parent.join(relative_path)
+        parent.join(util::uri_relative_path(&self.uri))
     }
 
     async fn fetch(&self, paths: &job::Paths, pb: &ProgressBar) -> Result<Installed, Error> {

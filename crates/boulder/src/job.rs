@@ -341,7 +341,8 @@ fn prepare_script(recipe: &Recipe) -> String {
                 }
                 let rename = rename
                     .as_deref()
-                    .unwrap_or_else(|| uri.path().rsplit('/').next().unwrap_or(""));
+                    .unwrap_or_else(|| util::uri_file_name(uri));
+                let unpack_dir = unpack_dir.join(rename);
 
                 let _ = writeln!(&mut content, "mkdir -p {}", unpack_dir.display());
                 if rename.ends_with(".zip") {
@@ -355,7 +356,7 @@ fn prepare_script(recipe: &Recipe) -> String {
                         &mut content,
                         r#"tar xf "%(sourcedir)/{rename}" -C "{}" --strip-components={} --no-same-owner || (echo "Failed to extract arcive"; exit 1);"#,
                         unpack_dir.display(),
-                        strip_dirs,
+                        *strip_dirs + 1,
                     );
                 }
             }
@@ -370,24 +371,18 @@ fn work_dir(paths: &Paths, upstreams: &[Upstream]) -> PathBuf {
     let build_dir = paths.build().guest;
     let mut work_dir = build_dir.clone();
 
-    // Work dir is the first upstream
-    if let Some(upstream) = upstreams.first() {
+    // Work dir is the first upstream that should be unpacked
+    if let Some(upstream) = upstreams.iter().find(|upstream| match upstream {
+        Upstream::Plain { unpack, .. } => *unpack,
+        Upstream::Git { .. } => true,
+    }) {
         match upstream {
             Upstream::Plain { uri, rename, .. } => {
                 let rename = rename
                     .as_deref()
-                    .unwrap_or_else(|| uri.path().rsplit('/').next().unwrap_or(""));
+                    .unwrap_or_else(|| util::uri_file_name(uri));
 
-                let mut base_name = rename;
-
-                if let Some((base, _)) = base_name.split_once(".zip") {
-                    base_name = base;
-                }
-                if let Some((base, _)) = base_name.split_once(".tar") {
-                    base_name = base;
-                }
-
-                work_dir = build_dir.join(base_name);
+                work_dir = build_dir.join(rename);
             }
             Upstream::Git { .. } => todo!(),
         }

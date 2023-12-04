@@ -9,6 +9,7 @@ use std::{
 
 use futures::{future::BoxFuture, FutureExt};
 use tokio::fs::{copy, create_dir_all, read_dir, read_link, remove_dir_all, symlink};
+use url::Url;
 
 pub async fn ensure_dir_exists(path: &Path) -> Result<(), io::Error> {
     if !path.exists() {
@@ -96,4 +97,16 @@ pub async fn list_dirs(dir: &Path) -> Result<Vec<PathBuf>, io::Error> {
     }
 
     Ok(paths)
+}
+
+pub fn uri_file_name(uri: &Url) -> &str {
+    let path = uri.path();
+
+    path.rsplit('/').next().unwrap_or_default()
+}
+
+pub fn uri_relative_path(uri: &Url) -> &str {
+    let path = uri.path();
+
+    path.strip_prefix('/').unwrap_or_default()
 }
