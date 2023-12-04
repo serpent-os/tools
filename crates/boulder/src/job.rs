@@ -241,6 +241,12 @@ impl Step {
 
         let mut parser = script::Parser::new();
 
+        let work_dir = if matches!(self, Step::Prepare) {
+            paths.build().guest.clone()
+        } else {
+            work_dir(paths, &recipe.upstreams)
+        };
+
         // TODO: Handle actual arch
         for arch in ["base", "x86_64"] {
             let macros = macros
@@ -253,7 +259,7 @@ impl Step {
 
             // TODO: Add arch
             parser.add_definition("buildroot", paths.build().guest.display());
-            parser.add_definition("workdir", work_dir(paths, &recipe.upstreams).display());
+            parser.add_definition("workdir", work_dir.display());
         }
 
         for macros in macros.actions.clone() {
