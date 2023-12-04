@@ -361,7 +361,19 @@ fn prepare_script(recipe: &Recipe) -> String {
                     );
                 }
             }
-            stone_recipe::Upstream::Git { .. } => todo!(),
+            stone_recipe::Upstream::Git { uri, clone_dir, .. } => {
+                let source = util::uri_file_name(uri);
+                let target = clone_dir
+                    .as_ref()
+                    .map(|dir| dir.display().to_string())
+                    .unwrap_or_else(|| source.to_string());
+
+                let _ = writeln!(&mut content, "mkdir -p {target}");
+                let _ = writeln!(
+                    &mut content,
+                    r#"cp -Ra --no-preserve=ownership "%(sourcedir)/{source}/." "{target}""#,
+                );
+            }
         }
     }
 
@@ -393,7 +405,15 @@ fn work_dir(paths: &Paths, upstreams: &[Upstream]) -> PathBuf {
 
                 work_dir = build_dir.join(unpack_dir);
             }
-            Upstream::Git { .. } => todo!(),
+            Upstream::Git { uri, clone_dir, .. } => {
+                let source = util::uri_file_name(uri);
+                let target = clone_dir
+                    .as_ref()
+                    .map(|dir| dir.display().to_string())
+                    .unwrap_or_else(|| source.to_string());
+
+                work_dir = build_dir.join(target);
+            }
         }
     }
 
