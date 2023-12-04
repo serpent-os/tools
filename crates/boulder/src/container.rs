@@ -99,7 +99,7 @@ fn log(step: Step) -> Result<Child, io::Error> {
     let tag = format!("{step} {} ", ":".dim());
 
     process::Command::new("awk")
-        .arg(format!(r#"{{ print "{tag} " $0 }}"#))
+        .arg(format!(r#"{{ print "{tag}" $0 }}"#))
         .env("PATH", "/usr/bin:/usr/sbin")
         .env("TERM", "xterm-256color")
         .stdin(Stdio::piped())
