@@ -7,18 +7,17 @@ use std::io;
 use moss::repository;
 use thiserror::Error;
 
-use crate::{dependency, util, Env, Job};
+use crate::{dependency, util, Builder, Env};
 
 pub async fn populate(
     env: &Env,
-    job: &Job,
+    builder: &Builder,
     repositories: repository::Map,
-    ccache: bool,
 ) -> Result<(), Error> {
-    let packages = dependency::calculate(job, ccache);
+    let packages = dependency::calculate(builder);
 
     // Recreate root
-    let rootfs = job.paths.rootfs().host;
+    let rootfs = builder.paths.rootfs().host;
     util::recreate_dir(&rootfs).await?;
 
     let mut moss_client = moss::Client::new("boulder", &env.moss_dir)
@@ -30,7 +29,7 @@ pub async fn populate(
     moss_client.install(&packages, true).await?;
 
     // Setup non-mounted guest paths from host
-    util::recreate_dir(&job.paths.guest_host_path(&job.paths.install())).await?;
+    util::recreate_dir(&builder.paths.guest_host_path(&builder.paths.install())).await?;
 
     Ok(())
 }

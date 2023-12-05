@@ -12,6 +12,7 @@ use std::{
 use futures::{stream, StreamExt, TryStreamExt};
 use nix::unistd::{linkat, LinkatFlags};
 use sha2::{Digest, Sha256};
+use stone_recipe::Recipe;
 use thiserror::Error;
 use tokio::fs::{copy, remove_dir_all};
 use tokio::io::AsyncWriteExt;
@@ -19,13 +20,12 @@ use tokio::process::Command;
 use tui::{MultiProgress, ProgressBar, ProgressStyle, Stylize};
 use url::Url;
 
-use crate::{job, util, Job};
+use crate::{util, Paths};
 
-/// Cache all upstreams from the provided [`Job`] and make them available
+/// Cache all upstreams from the provided [`Recipe`] and make them available
 /// in the guest rootfs.
-pub async fn sync(job: &Job) -> Result<(), Error> {
-    let upstreams = job
-        .recipe
+pub async fn sync(recipe: &Recipe, paths: &Paths) -> Result<(), Error> {
+    let upstreams = recipe
         .upstreams
         .iter()
         .cloned()
@@ -49,7 +49,7 @@ pub async fn sync(job: &Job) -> Result<(), Error> {
     );
     tp.tick();
 
-    let upstream_dir = job.paths.guest_host_path(&job.paths.upstreams());
+    let upstream_dir = paths.guest_host_path(&paths.upstreams());
     util::ensure_dir_exists(&upstream_dir).await?;
 
     stream::iter(&upstreams)
@@ -64,7 +64,7 @@ pub async fn sync(job: &Job) -> Result<(), Error> {
             );
             pb.enable_steady_tick(Duration::from_millis(150));
 
-            let install = upstream.fetch(&job.paths, &pb).await?;
+            let install = upstream.fetch(paths, &pb).await?;
 
             pb.set_message(format!("{} {}", "Copying".yellow(), upstream.name().bold(),));
             pb.set_style(
@@ -182,7 +182,7 @@ impl Upstream {
         }
     }
 
-    async fn fetch(&self, paths: &job::Paths, pb: &ProgressBar) -> Result<Installed, Error> {
+    async fn fetch(&self, paths: &Paths, pb: &ProgressBar) -> Result<Installed, Error> {
         match self {
             Upstream::Plain(plain) => plain.fetch(paths, pb).await,
             Upstream::Git(git) => git.fetch(paths, pb).await,
@@ -227,7 +227,7 @@ impl Plain {
         }
     }
 
-    async fn path(&self, paths: &job::Paths) -> PathBuf {
+    async fn path(&self, paths: &Paths) -> PathBuf {
         // Type safe guaranteed to be >= 5 bytes
         let hash = &self.hash.0;
 
@@ -243,7 +243,7 @@ impl Plain {
         parent.join(hash)
     }
 
-    async fn fetch(&self, paths: &job::Paths, pb: &ProgressBar) -> Result<Installed, Error> {
+    async fn fetch(&self, paths: &Paths, pb: &ProgressBar) -> Result<Installed, Error> {
         use moss::request;
         use tokio::fs;
 
@@ -310,7 +310,7 @@ impl Git {
         util::uri_file_name(&self.uri)
     }
 
-    async fn final_path(&self, paths: &job::Paths) -> PathBuf {
+    async fn final_path(&self, paths: &Paths) -> PathBuf {
         let parent = paths.upstreams().host.join("git");
 
         let _ = util::ensure_dir_exists(&parent).await;
@@ -318,7 +318,7 @@ impl Git {
         parent.join(util::uri_relative_path(&self.uri))
     }
 
-    async fn staging_path(&self, paths: &job::Paths) -> PathBuf {
+    async fn staging_path(&self, paths: &Paths) -> PathBuf {
         let parent = paths.upstreams().host.join("staging").join("git");
 
         let _ = util::ensure_dir_exists(&parent).await;
@@ -326,7 +326,7 @@ impl Git {
         parent.join(util::uri_relative_path(&self.uri))
     }
 
-    async fn fetch(&self, paths: &job::Paths, pb: &ProgressBar) -> Result<Installed, Error> {
+    async fn fetch(&self, paths: &Paths, pb: &ProgressBar) -> Result<Installed, Error> {
         pb.set_style(
             ProgressStyle::with_template(" {spinner} {wide_msg} ")
                 .unwrap()

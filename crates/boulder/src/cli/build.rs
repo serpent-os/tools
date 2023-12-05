@@ -5,9 +5,10 @@
 use std::io;
 use std::path::PathBuf;
 
-use boulder::job;
+use boulder::builder;
 use boulder::upstream;
-use boulder::{container, profile, root, Env, Job, Runtime};
+use boulder::Builder;
+use boulder::{container, profile, root, Env, Runtime};
 use clap::Parser;
 use thiserror::Error;
 
@@ -16,6 +17,13 @@ use thiserror::Error;
 pub struct Command {
     #[arg(short, long)]
     profile: profile::Id,
+    #[arg(
+        short,
+        long = "compiler-cache",
+        help = "Enable compiler caching",
+        default_value = "false"
+    )]
+    ccache: bool,
     #[arg(
         short,
         long,
@@ -32,6 +40,7 @@ pub fn handle(command: Command, rt: Runtime, env: Env) -> Result<(), Error> {
         profile,
         output,
         recipe,
+        ccache,
     } = command;
 
     if !output.exists() {
@@ -41,23 +50,23 @@ pub fn handle(command: Command, rt: Runtime, env: Env) -> Result<(), Error> {
         return Err(Error::MissingRecipe(recipe));
     }
 
-    let job = rt.block_on(Job::new(&recipe, &env))?;
+    let builder = rt.block_on(Builder::new(&recipe, &env, ccache))?;
 
     let profiles = rt.block_on(profile::Manager::new(&env));
     let repos = profiles.repositories(&profile)?.clone();
 
-    // TODO: ccache config
-    rt.block_on(root::populate(&env, &job, repos, false))?;
+    rt.block_on(root::populate(&env, &builder, repos))?;
 
-    rt.block_on(upstream::sync(&job))?;
+    rt.block_on(upstream::sync(&builder.recipe, &builder.paths))?;
 
     // Destroy async runtime since we will
     // transition into the container
     rt.destroy();
 
-    // TODO: Exec build scripts
-    for (step, script) in job.scripts.iter() {
-        container::exec(*step, &job, script).map_err(Error::Container)?;
+    for job in &builder.jobs {
+        for (step, script) in job.scripts.iter() {
+            container::exec(*step, &builder.paths, job, script).map_err(Error::Container)?;
+        }
     }
 
     Ok(())
@@ -69,16 +78,16 @@ pub enum Error {
     MissingOutput(PathBuf),
     #[error("recipe file does not exist: {0:?}")]
     MissingRecipe(PathBuf),
-    #[error("container")]
-    Container(Box<dyn std::error::Error + Send + Sync + 'static>),
     #[error("profile")]
     Profile(#[from] profile::Error),
     #[error("root")]
     Root(#[from] root::Error),
     #[error("upstream")]
     Upstream(#[from] upstream::Error),
-    #[error("job")]
-    Job(#[from] job::Error),
+    #[error("builder")]
+    Builder(#[from] builder::Error),
     #[error("io")]
     Io(#[from] io::Error),
+    #[error("container")]
+    Container(#[source] container::Error),
 }

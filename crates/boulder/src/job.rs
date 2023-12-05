@@ -4,7 +4,7 @@
 
 use std::{
     collections::BTreeMap,
-    fs, io,
+    io,
     path::{Path, PathBuf},
 };
 
@@ -12,165 +12,61 @@ use stone_recipe::{script, tuning::Toolchain, Recipe, Script, Upstream};
 use thiserror::Error;
 use tui::Stylize;
 
-use crate::{macros, util, Env, Macros};
+pub use self::pgo::Pgo;
+use crate::{architecture::BuildTarget, util, Macros, Paths};
 
-#[derive(Debug, Clone)]
-pub struct Id(String);
-
-impl Id {
-    fn new(recipe: &Recipe) -> Self {
-        Self(format!(
-            "{}-{}-{}",
-            recipe.source.name, recipe.source.version, recipe.source.release
-        ))
-    }
-}
+mod pgo;
 
 #[derive(Debug)]
 pub struct Job {
-    pub id: Id,
-    pub recipe: Recipe,
-    pub paths: Paths,
-    pub macros: Macros,
+    pub target: BuildTarget,
     pub scripts: BTreeMap<Step, Script>,
+    pub work_dir: PathBuf,
+    pub build_dir: PathBuf,
+    pub networking: bool,
 }
 
 impl Job {
-    pub async fn new(recipe_path: &Path, env: &Env) -> Result<Self, Error> {
-        let recipe_bytes = fs::read(recipe_path)?;
-        let recipe = stone_recipe::from_slice(&recipe_bytes)?;
+    pub async fn new(
+        target: BuildTarget,
+        recipe: &Recipe,
+        paths: &Paths,
+        macros: &Macros,
+        ccache: bool,
+    ) -> Result<Self, Error> {
+        let build_dir = paths.build().guest.join(target.to_string());
+        let work_dir = work_dir(&build_dir, &recipe.upstreams);
+        let networking = recipe.options.networking;
 
-        let id = Id::new(&recipe);
-
-        let paths = Paths::new(id.clone(), recipe_path, &env.cache_dir, "/mason").await?;
-        let macros = Macros::load(env).await?;
+        let pgo = Pgo::new(target, recipe, &build_dir);
 
         let scripts = Step::ALL
             .iter()
             .filter_map(|step| {
-                let result = step.script(&recipe, &paths, &macros).transpose()?;
+                let result = step
+                    .script(target, recipe, paths, macros, ccache)
+                    .transpose()?;
                 Some(result.map(|script| (*step, script)))
             })
             .collect::<Result<_, _>>()?;
 
+        // Clean build dir & pgo from host (we're not in container yet)
+        let host_build_dir = paths.build().host.join(target.to_string());
+        util::recreate_dir(&host_build_dir).await?;
+
+        if pgo.is_some() {
+            let host_pgo_dir = PathBuf::from(format!("{}-pgo", host_build_dir.display()));
+            util::recreate_dir(&host_pgo_dir).await?;
+        }
+
         Ok(Self {
-            id,
-            recipe,
-            paths,
-            macros,
+            target,
             scripts,
+            work_dir,
+            build_dir,
+            networking,
         })
     }
-
-    pub fn work_dir(&self) -> PathBuf {
-        work_dir(&self.paths, &self.recipe.upstreams)
-    }
-}
-
-#[derive(Debug)]
-pub struct Paths {
-    id: Id,
-    host_root: PathBuf,
-    guest_root: PathBuf,
-    recipe_dir: PathBuf,
-}
-
-impl Paths {
-    async fn new(
-        id: Id,
-        recipe_path: &Path,
-        host_root: impl Into<PathBuf>,
-        guest_root: impl Into<PathBuf>,
-    ) -> io::Result<Self> {
-        let recipe_dir = recipe_path
-            .parent()
-            .unwrap_or(&PathBuf::default())
-            .canonicalize()?;
-
-        let job = Self {
-            id,
-            host_root: host_root.into().canonicalize()?,
-            guest_root: guest_root.into(),
-            recipe_dir,
-        };
-
-        util::ensure_dir_exists(&job.rootfs().host).await?;
-        util::ensure_dir_exists(&job.artefacts().host).await?;
-        util::ensure_dir_exists(&job.build().host).await?;
-        util::ensure_dir_exists(&job.ccache().host).await?;
-        util::ensure_dir_exists(&job.upstreams().host).await?;
-
-        Ok(job)
-    }
-
-    pub fn rootfs(&self) -> PathMapping {
-        PathMapping {
-            host: self.host_root.join("root").join(&self.id.0),
-            guest: "/".into(),
-        }
-    }
-
-    pub fn artefacts(&self) -> PathMapping {
-        PathMapping {
-            host: self.host_root.join("artefacts").join(&self.id.0),
-            guest: self.guest_root.join("artefacts"),
-        }
-    }
-
-    pub fn build(&self) -> PathMapping {
-        PathMapping {
-            host: self.host_root.join("build").join(&self.id.0),
-            guest: self.guest_root.join("build"),
-        }
-    }
-
-    pub fn ccache(&self) -> PathMapping {
-        PathMapping {
-            host: self.host_root.join("ccache"),
-            guest: self.guest_root.join("ccache"),
-        }
-    }
-
-    pub fn upstreams(&self) -> PathMapping {
-        PathMapping {
-            host: self.host_root.join("upstreams"),
-            guest: self.guest_root.join("sourcedir"),
-        }
-    }
-
-    pub fn recipe(&self) -> PathMapping {
-        PathMapping {
-            host: self.recipe_dir.clone(),
-            guest: self.guest_root.join("recipe"),
-        }
-    }
-
-    pub fn install(&self) -> PathMapping {
-        PathMapping {
-            // TODO: Shitty impossible state, this folder
-            // doesn't exist on host
-            host: "".into(),
-            guest: self.guest_root.join("install"),
-        }
-    }
-
-    /// For the provided [`Mapping`], return the guest
-    /// path as it lives on the host fs
-    ///
-    /// Example:
-    /// - host = "/var/cache/boulder/root/test"
-    /// - guest = "/mason/build"
-    /// - guest_host_path = "/var/cache/boulder/root/test/mason/build"
-    pub fn guest_host_path(&self, mapping: &PathMapping) -> PathBuf {
-        let relative = mapping.guest.strip_prefix("/").unwrap_or(&mapping.guest);
-
-        self.rootfs().host.join(relative)
-    }
-}
-
-pub struct PathMapping {
-    pub host: PathBuf,
-    pub guest: PathBuf,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, strum::Display)]
@@ -212,9 +108,11 @@ impl Step {
 
     fn script(
         &self,
+        target: BuildTarget,
         recipe: &Recipe,
         paths: &Paths,
         macros: &Macros,
+        ccache: bool,
     ) -> Result<Option<Script>, Error> {
         let Some(mut content) = (match self {
             Step::Prepare => Some(prepare_script(recipe)),
@@ -241,15 +139,16 @@ impl Step {
 
         let mut parser = script::Parser::new();
 
+        let build_target = target.to_string();
+        let build_dir = paths.build().guest.join(&build_target);
         let work_dir = if matches!(self, Step::Prepare) {
-            paths.build().guest.clone()
+            build_dir.clone()
         } else {
-            work_dir(paths, &recipe.upstreams)
+            work_dir(&build_dir, &recipe.upstreams)
         };
         let num_jobs = util::num_cpus();
 
-        // TODO: Handle actual arch
-        for arch in ["base", "x86_64"] {
+        for arch in ["base", &build_target] {
             let macros = macros
                 .arch
                 .get(arch)
@@ -257,10 +156,6 @@ impl Step {
                 .ok_or_else(|| Error::MissingArchMacros(arch.to_string()))?;
 
             parser.add_macros(macros);
-
-            // TODO: Add arch
-            parser.add_definition("buildroot", paths.build().guest.display());
-            parser.add_definition("workdir", work_dir.display());
         }
 
         for macros in macros.actions.clone() {
@@ -270,11 +165,12 @@ impl Step {
         parser.add_definition("name", &recipe.source.name);
         parser.add_definition("version", &recipe.source.version);
         parser.add_definition("release", recipe.source.release);
-        // TODO: Jobs
         parser.add_definition("jobs", num_jobs);
         parser.add_definition("pkgdir", paths.recipe().guest.join("pkg").display());
         parser.add_definition("sourcedir", paths.upstreams().guest.display());
         parser.add_definition("installroot", paths.install().guest.display());
+        parser.add_definition("buildroot", build_dir.display());
+        parser.add_definition("workdir", work_dir.display());
 
         // TODO: Remaining definitions & tune flags
         parser.add_definition("cflags", "");
@@ -283,7 +179,11 @@ impl Step {
 
         parser.add_definition("compiler_cache", "/mason/ccache");
 
-        let path = "/usr/bin:/bin";
+        let path = if ccache {
+            "/usr/lib/ccache/bin:/usr/bin:/bin"
+        } else {
+            "/usr/bin:/bin"
+        };
 
         /* Set the relevant compilers */
         if matches!(recipe.options.toolchain, Toolchain::Llvm) {
@@ -317,6 +217,8 @@ impl Step {
             parser.add_definition("compiler_strip", "strip");
             parser.add_definition("compiler_path", path);
         }
+
+        parser.add_definition("pgo_dir", format!("{}-pgo", build_dir.display()));
 
         Ok(Some(parser.parse(&content)?))
     }
@@ -380,9 +282,8 @@ fn prepare_script(recipe: &Recipe) -> String {
     content
 }
 
-fn work_dir(paths: &Paths, upstreams: &[Upstream]) -> PathBuf {
-    let build_dir = paths.build().guest;
-    let mut work_dir = build_dir.clone();
+fn work_dir(build_dir: &Path, upstreams: &[Upstream]) -> PathBuf {
+    let mut work_dir = build_dir.to_path_buf();
 
     // Work dir is the first upstream that should be unpacked
     if let Some(upstream) = upstreams.iter().find(|upstream| match upstream {
@@ -424,10 +325,6 @@ fn work_dir(paths: &Paths, upstreams: &[Upstream]) -> PathBuf {
 pub enum Error {
     #[error("missing arch macros: {0}")]
     MissingArchMacros(String),
-    #[error("stone recipe")]
-    StoneRecipe(#[from] stone_recipe::Error),
-    #[error("macros")]
-    Macros(#[from] macros::Error),
     #[error("script")]
     Script(#[from] script::Error),
     #[error("io")]

@@ -8,20 +8,20 @@ use std::{
 };
 
 use container::Container;
+pub use container::Error;
 use stone_recipe::Script;
 use tui::Stylize;
 
-use crate::{job::Step, Job};
+use crate::{job::Step, Job, Paths};
 
-pub fn chroot(job: &Job) -> Result<(), container::Error> {
-    // TODO: Archify
-    let home = job.paths.build().guest;
+pub fn chroot(paths: &Paths, networking: bool) -> Result<(), Error> {
+    let home = &paths.build().guest;
 
-    run(job, || {
+    run(paths, networking, || {
         let mut child = process::Command::new("/bin/bash")
             .arg("--login")
             .env_clear()
-            .env("HOME", &home)
+            .env("HOME", home)
             .env("PATH", "/usr/bin:/usr/sbin")
             .env("TERM", "xterm-256color")
             .spawn()?;
@@ -32,24 +32,26 @@ pub fn chroot(job: &Job) -> Result<(), container::Error> {
     })
 }
 
-// TODO: Arch / profiles
-pub fn exec(step: Step, job: &Job, script: &Script) -> Result<(), container::Error> {
-    // TODO: Archify
-    let home = job.paths.build().guest;
-    let work_dir = job.work_dir();
+pub fn exec(step: Step, paths: &Paths, job: &Job, script: &Script) -> Result<(), Error> {
+    let build_dir = &job.build_dir;
+    let work_dir = &job.work_dir;
 
-    run(job, || {
+    run(paths, job.networking, || {
         // We're in the container now =)
         // TODO: Proper temp file
         let script_path = "/tmp/script";
         std::fs::write(script_path, &script.content).unwrap();
 
-        let current_dir = if work_dir.exists() { &work_dir } else { &home };
+        let current_dir = if work_dir.exists() {
+            &work_dir
+        } else {
+            &build_dir
+        };
 
         let mut command = logged(step, "/bin/sh")?
             .arg(script_path)
             .env_clear()
-            .env("HOME", &home)
+            .env("HOME", build_dir)
             .env("PATH", "/usr/bin:/usr/sbin")
             .env("TERM", "xterm-256color")
             .current_dir(current_dir)
@@ -61,15 +63,12 @@ pub fn exec(step: Step, job: &Job, script: &Script) -> Result<(), container::Err
     })
 }
 
-fn run(job: &Job, f: impl FnMut() -> Result<(), container::Error>) -> Result<(), container::Error> {
-    let rootfs = job.paths.rootfs().host;
-
-    let networking = job.recipe.options.networking;
-
-    let artefacts = job.paths.artefacts();
-    let build = job.paths.build();
-    let compiler = job.paths.ccache();
-    let recipe = job.paths.recipe();
+fn run(paths: &Paths, networking: bool, f: impl FnMut() -> Result<(), Error>) -> Result<(), Error> {
+    let rootfs = paths.rootfs().host;
+    let artefacts = paths.artefacts();
+    let build = paths.build();
+    let compiler = paths.ccache();
+    let recipe = paths.recipe();
 
     Container::new(rootfs)
         .hostname("boulder")

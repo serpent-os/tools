@@ -6,33 +6,33 @@ use std::collections::HashSet;
 
 use stone_recipe::{tuning::Toolchain, Upstream};
 
-use crate::Job;
+use crate::Builder;
 
-pub fn calculate(job: &Job, ccache: bool) -> Vec<&str> {
+pub fn calculate(builder: &Builder) -> Vec<&str> {
     let mut packages = BASE_PACKAGES.to_vec();
 
-    match job.recipe.options.toolchain {
+    match builder.recipe.options.toolchain {
         Toolchain::Llvm => packages.extend(LLVM_PACKAGES),
         Toolchain::Gnu => packages.extend(GNU_PACKAGES),
     }
 
-    if job.recipe.emul32 {
+    if builder.recipe.emul32 {
         packages.extend(BASE32_PACKAGES);
 
-        match job.recipe.options.toolchain {
+        match builder.recipe.options.toolchain {
             Toolchain::Llvm => packages.extend(LLVM32_PACKAGES),
             Toolchain::Gnu => packages.extend(GNU32_PACKAGES),
         }
     }
 
-    if ccache {
+    if builder.ccache {
         packages.push(CCACHE_PACKAGE);
     }
 
-    packages.extend(job.recipe.build.build_deps.iter().map(String::as_str));
-    packages.extend(job.recipe.build.check_deps.iter().map(String::as_str));
+    packages.extend(builder.recipe.build.build_deps.iter().map(String::as_str));
+    packages.extend(builder.recipe.build.check_deps.iter().map(String::as_str));
 
-    for upstream in &job.recipe.upstreams {
+    for upstream in &builder.recipe.upstreams {
         if let Upstream::Plain { uri, .. } = upstream {
             let path = uri.path();
 
@@ -65,11 +65,12 @@ pub fn calculate(job: &Job, ccache: bool) -> Vec<&str> {
         }
     }
 
-    // Dependencies from scripts
-    let script_packages = job
-        .scripts
-        .values()
-        .flat_map(|script| script.dependencies.iter().map(String::as_str));
+    // Dependencies from all scripts
+    let script_packages = builder.jobs.iter().flat_map(|job| {
+        job.scripts
+            .values()
+            .flat_map(|script| script.dependencies.iter().map(String::as_str))
+    });
 
     packages
         .into_iter()
