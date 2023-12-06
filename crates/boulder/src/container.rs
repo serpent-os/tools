@@ -36,51 +36,49 @@ pub fn exec(builder: Builder) -> Result<(), Error> {
     let networking = builder.recipe.options.networking;
 
     run(paths, networking, || {
-        for (job_idx, job) in builder.jobs.iter().enumerate() {
-            if job_idx > 0 {
+        // We're now in the container =)
+
+        for (i, target) in builder.targets.iter().enumerate() {
+            if i > 0 {
                 println!();
             }
-            println!("{}", job.target.to_string().dim());
+            println!("{}", target.build_target.to_string().dim());
 
-            let mut pgo_stage = None;
+            for (i, job) in target.jobs.iter().enumerate() {
+                let is_pgo = job.pgo_stage.is_some();
 
-            for (step_idx, (step, script)) in job.scripts.iter().enumerate() {
-                // Log start of pgo stage
-                if let Some(stage) = step.pgo_stage {
-                    if pgo_stage != Some(stage) {
-                        pgo_stage = Some(stage);
-
-                        if step_idx > 0 {
-                            println!("{}", "│".dim());
-                        }
-                        println!("{}", format!("│ pgo-{stage}").dim());
+                if let Some(stage) = job.pgo_stage {
+                    if i > 0 {
+                        println!("{}", "│".dim());
                     }
+                    println!("{}", format!("│ pgo-{stage}").dim());
                 }
 
-                let build_dir = &job.build_dir;
-                let work_dir = &job.work_dir;
+                for (step, script) in job.steps.iter() {
+                    let build_dir = &job.build_dir;
+                    let work_dir = &job.work_dir;
 
-                // We're in the container now =)
-                // TODO: Proper temp file
-                let script_path = "/tmp/script";
-                std::fs::write(script_path, &script.content).unwrap();
+                    // TODO: Proper temp file
+                    let script_path = "/tmp/script";
+                    std::fs::write(script_path, &script.content).unwrap();
 
-                let current_dir = if work_dir.exists() {
-                    &work_dir
-                } else {
-                    &build_dir
-                };
+                    let current_dir = if work_dir.exists() {
+                        &work_dir
+                    } else {
+                        &build_dir
+                    };
 
-                let mut command = logged(*step, "/bin/sh")?
-                    .arg(script_path)
-                    .env_clear()
-                    .env("HOME", build_dir)
-                    .env("PATH", "/usr/bin:/usr/sbin")
-                    .env("TERM", "xterm-256color")
-                    .current_dir(current_dir)
-                    .spawn()?;
+                    let mut command = logged(*step, is_pgo, "/bin/sh")?
+                        .arg(script_path)
+                        .env_clear()
+                        .env("HOME", build_dir)
+                        .env("PATH", "/usr/bin:/usr/sbin")
+                        .env("TERM", "xterm-256color")
+                        .current_dir(current_dir)
+                        .spawn()?;
 
-                command.wait()?;
+                    command.wait()?;
+                }
             }
         }
 
@@ -106,9 +104,9 @@ fn run(paths: &Paths, networking: bool, f: impl FnMut() -> Result<(), Error>) ->
         .run(f)
 }
 
-fn logged(step: Step, command: &str) -> Result<process::Command, io::Error> {
-    let out_log = log(step)?;
-    let err_log = log(step)?;
+fn logged(step: Step, is_pgo: bool, command: &str) -> Result<process::Command, io::Error> {
+    let out_log = log(step, is_pgo)?;
+    let err_log = log(step, is_pgo)?;
 
     let mut command = process::Command::new(command);
     command
@@ -119,14 +117,9 @@ fn logged(step: Step, command: &str) -> Result<process::Command, io::Error> {
 }
 
 // TODO: Ikey plz make look nice
-fn log(step: Step) -> Result<Child, io::Error> {
-    let pgo = step
-        .pgo_stage
-        .is_some()
-        .then_some("│ ")
-        .unwrap_or_default()
-        .dim();
-    let kind = step.kind.styled(format!("{:>7}", step.kind));
+fn log(step: Step, is_pgo: bool) -> Result<Child, io::Error> {
+    let pgo = is_pgo.then_some("│ ").unwrap_or_default().dim();
+    let kind = step.styled(format!("{step:>7}"));
     let tag = format!("{} {pgo}{kind} {} ", "│".dim(), ":".dim());
 
     process::Command::new("awk")

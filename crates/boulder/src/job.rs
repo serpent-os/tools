@@ -12,15 +12,15 @@ use stone_recipe::{script, Recipe, Script, Upstream};
 use thiserror::Error;
 
 pub use self::step::Step;
-use crate::{architecture::BuildTarget, util, Macros, Paths};
+use crate::{architecture::BuildTarget, pgo, util, Macros, Paths};
 
-mod pgo;
 mod step;
 
 #[derive(Debug)]
 pub struct Job {
     pub target: BuildTarget,
-    pub scripts: BTreeMap<Step, Script>,
+    pub pgo_stage: Option<pgo::Stage>,
+    pub steps: BTreeMap<Step, Script>,
     pub work_dir: PathBuf,
     pub build_dir: PathBuf,
 }
@@ -28,6 +28,7 @@ pub struct Job {
 impl Job {
     pub async fn new(
         target: BuildTarget,
+        pgo_stage: Option<pgo::Stage>,
         recipe: &Recipe,
         paths: &Paths,
         macros: &Macros,
@@ -36,13 +37,11 @@ impl Job {
         let build_dir = paths.build().guest.join(target.to_string());
         let work_dir = work_dir(&build_dir, &recipe.upstreams);
 
-        let pgo_stages = pgo::stages(target, recipe);
-
-        let scripts = step::list(&pgo_stages)
+        let steps = step::list(pgo_stage)
             .into_iter()
             .filter_map(|step| {
                 let result = step
-                    .script(target, recipe, paths, macros, ccache)
+                    .script(target, pgo_stage, recipe, paths, macros, ccache)
                     .transpose()?;
                 Some(result.map(|script| (step, script)))
             })
@@ -52,14 +51,15 @@ impl Job {
         let host_build_dir = paths.build().host.join(target.to_string());
         util::recreate_dir(&host_build_dir).await?;
 
-        if !pgo_stages.is_empty() {
+        if pgo_stage.is_some() {
             let host_pgo_dir = PathBuf::from(format!("{}-pgo", host_build_dir.display()));
             util::recreate_dir(&host_pgo_dir).await?;
         }
 
         Ok(Self {
             target,
-            scripts,
+            pgo_stage,
+            steps,
             work_dir,
             build_dir,
         })
@@ -103,30 +103,6 @@ fn work_dir(build_dir: &Path, upstreams: &[Upstream]) -> PathBuf {
     }
 
     work_dir
-}
-
-fn build_target_definition(target: BuildTarget, recipe: &Recipe) -> &stone_recipe::Build {
-    let mut build = &recipe.build;
-
-    let target_string = target.to_string();
-
-    if let Some(profile) = recipe
-        .profiles
-        .iter()
-        .find(|profile| profile.key == target_string)
-    {
-        build = &profile.value;
-    } else if target.emul32() {
-        if let Some(profile) = recipe
-            .profiles
-            .iter()
-            .find(|profile| &profile.key == "emul32")
-        {
-            build = &profile.value;
-        }
-    }
-
-    build
 }
 
 #[derive(Debug, Error)]

@@ -9,17 +9,19 @@ use stone_recipe::Recipe;
 use thiserror::Error;
 use tokio::fs;
 
-use crate::{
-    architecture::{self, BuildTarget},
-    job, macros, paths, Env, Job, Macros, Paths,
-};
+use crate::{architecture::BuildTarget, job, macros, paths, pgo, recipe, Env, Job, Macros, Paths};
 
 pub struct Builder {
-    pub jobs: Vec<Job>,
+    pub targets: Vec<Target>,
     pub recipe: Recipe,
     pub paths: Paths,
     pub macros: Macros,
     pub ccache: bool,
+}
+
+pub struct Target {
+    pub build_target: BuildTarget,
+    pub jobs: Vec<Job>,
 }
 
 impl Builder {
@@ -37,58 +39,49 @@ impl Builder {
         )
         .await?;
 
-        let build_targets = build_targets(&recipe);
+        let build_targets = recipe::build_targets(&recipe);
 
         if build_targets.is_empty() {
             return Err(Error::NoBuildTargets);
         }
 
-        let jobs = stream::iter(build_targets)
-            .then(|target| Job::new(target, &recipe, &paths, &macros, ccache))
+        let targets = stream::iter(&build_targets)
+            .then(|build_target| async {
+                let stages = pgo::stages(&recipe, *build_target)
+                    .map(|stages| stages.into_iter().map(Some).collect::<Vec<_>>())
+                    .unwrap_or_else(|| vec![None]);
+
+                let jobs = stream::iter(stages)
+                    .then(|stage| Job::new(*build_target, stage, &recipe, &paths, &macros, ccache))
+                    .try_collect::<Vec<_>>()
+                    .await?;
+
+                Ok(Target {
+                    build_target: *build_target,
+                    jobs,
+                })
+            })
             .try_collect::<Vec<_>>()
-            .await?;
+            .await
+            .map_err(Error::Job)?;
 
         Ok(Self {
-            jobs,
+            targets,
             recipe,
             paths,
             macros,
             ccache,
         })
     }
-}
 
-fn build_targets(recipe: &Recipe) -> Vec<BuildTarget> {
-    let host = architecture::host();
-    let host_string = host.to_string();
-
-    if recipe.architectures.is_empty() {
-        let mut targets = vec![BuildTarget::Native(host)];
-
-        if recipe.emul32 {
-            targets.push(BuildTarget::Emul32(host));
-        }
-
-        targets
-    } else {
-        let mut targets = vec![];
-
-        if recipe.architectures.contains(&host_string)
-            || recipe.architectures.contains(&"native".into())
-        {
-            targets.push(BuildTarget::Native(host));
-        }
-
-        let emul32 = BuildTarget::Emul32(host);
-        let emul32_string = emul32.to_string();
-
-        if recipe.architectures.contains(&emul32_string)
-            || recipe.architectures.contains(&"emul32".into())
-        {
-            targets.push(emul32);
-        }
-
-        targets
+    pub fn extra_deps(&self) -> impl Iterator<Item = &str> {
+        self.targets.iter().flat_map(|target| {
+            target.jobs.iter().flat_map(|job| {
+                job.steps
+                    .values()
+                    .flat_map(|script| script.dependencies.iter().map(String::as_str))
+            })
+        })
     }
 }
 

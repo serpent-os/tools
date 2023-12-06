@@ -6,51 +6,20 @@ use stone_recipe::{script, tuning::Toolchain, Recipe, Script};
 
 use tui::Stylize;
 
-use super::{build_target_definition, pgo, work_dir, Error};
-use crate::{architecture::BuildTarget, util, Macros, Paths};
+use super::{work_dir, Error};
+use crate::{architecture::BuildTarget, pgo, recipe, util, Macros, Paths};
 
-pub fn list(pgo_stages: &[pgo::Stage]) -> Vec<Step> {
-    if pgo_stages.is_empty() {
-        Kind::NORMAL
-            .iter()
-            .copied()
-            .map(|kind| Step {
-                kind,
-                pgo_stage: None,
-            })
-            .collect()
+pub fn list(pgo_stage: Option<pgo::Stage>) -> Vec<Step> {
+    if matches!(pgo_stage, Some(pgo::Stage::One | pgo::Stage::Two)) {
+        Step::WORKLOAD.to_vec()
     } else {
-        pgo_stages
-            .iter()
-            .copied()
-            .flat_map(|stage| {
-                if stage < pgo::Stage::Use {
-                    Kind::WORKLOAD
-                        .iter()
-                        .copied()
-                        .map(move |kind| Step {
-                            kind,
-                            pgo_stage: Some(stage),
-                        })
-                        .collect::<Vec<_>>()
-                } else {
-                    Kind::NORMAL
-                        .iter()
-                        .copied()
-                        .map(move |kind| Step {
-                            kind,
-                            pgo_stage: Some(stage),
-                        })
-                        .collect()
-                }
-            })
-            .collect()
+        Step::NORMAL.to_vec()
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, strum::Display)]
 #[strum(serialize_all = "lowercase")]
-pub enum Kind {
+pub enum Step {
     Prepare,
     Setup,
     Build,
@@ -59,65 +28,56 @@ pub enum Kind {
     Workload,
 }
 
-impl Kind {
+impl Step {
     const NORMAL: &'static [Self] = &[
-        Kind::Prepare,
-        Kind::Setup,
-        Kind::Build,
-        Kind::Install,
-        Kind::Check,
+        Step::Prepare,
+        Step::Setup,
+        Step::Build,
+        Step::Install,
+        Step::Check,
     ];
-    const WORKLOAD: &'static [Self] = &[Kind::Prepare, Kind::Setup, Kind::Build, Kind::Workload];
+    const WORKLOAD: &'static [Self] = &[Step::Prepare, Step::Setup, Step::Build, Step::Workload];
 
     pub fn styled(&self, s: impl ToString) -> String {
         let s = s.to_string();
         // Taste the rainbow
         // TODO: Ikey plz make pretty
         match self {
-            Kind::Prepare => s.grey(),
-            Kind::Setup => s.cyan(),
-            Kind::Build => s.blue(),
-            Kind::Check => s.yellow(),
-            Kind::Install => s.green(),
-            Kind::Workload => s.magenta(),
+            Step::Prepare => s.grey(),
+            Step::Setup => s.cyan(),
+            Step::Build => s.blue(),
+            Step::Check => s.yellow(),
+            Step::Install => s.green(),
+            Step::Workload => s.magenta(),
         }
         .dim()
         .to_string()
     }
-}
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Step {
-    pub pgo_stage: Option<pgo::Stage>,
-    pub kind: Kind,
-}
-
-impl Step {
     pub fn script(
         &self,
         target: BuildTarget,
+        pgo_stage: Option<pgo::Stage>,
         recipe: &Recipe,
         paths: &Paths,
         macros: &Macros,
         ccache: bool,
     ) -> Result<Option<Script>, Error> {
-        let build = build_target_definition(target, recipe);
+        let build = recipe::build_target_definition(recipe, target);
 
-        let Some(mut content) = (match self.kind {
-            Kind::Prepare => Some(prepare_script(&recipe.upstreams)),
-            Kind::Setup => build.setup.clone(),
-            Kind::Build => build.build.clone(),
-            Kind::Check => build.check.clone(),
-            Kind::Install => build.install.clone(),
-            Kind::Workload => match build.workload.clone() {
+        let Some(mut content) = (match self {
+            Step::Prepare => Some(prepare_script(&recipe.upstreams)),
+            Step::Setup => build.setup.clone(),
+            Step::Build => build.build.clone(),
+            Step::Check => build.check.clone(),
+            Step::Install => build.install.clone(),
+            Step::Workload => match build.workload.clone() {
                 Some(mut content) => {
                     if matches!(recipe.options.toolchain, Toolchain::Llvm) {
-                        if let Some(pgo_stage) = self.pgo_stage {
-                            if pgo_stage == pgo::Stage::One {
-                                content.push_str("%llvm_merge_s1");
-                            } else if pgo_stage == pgo::Stage::Two {
-                                content.push_str("%llvm_merge_s2");
-                            }
+                        if matches!(pgo_stage, Some(pgo::Stage::One)) {
+                            content.push_str("%llvm_merge_s1");
+                        } else if matches!(pgo_stage, Some(pgo::Stage::Two)) {
+                            content.push_str("%llvm_merge_s2");
                         }
                     }
 
@@ -134,7 +94,7 @@ impl Step {
         }
 
         if let Some(env) = build.environment.as_deref() {
-            if env != "(null)" && !env.is_empty() && !matches!(self.kind, Kind::Prepare) {
+            if env != "(null)" && !env.is_empty() && !matches!(self, Step::Prepare) {
                 content = format!("{env} {content}");
             }
         }
@@ -145,7 +105,7 @@ impl Step {
 
         let build_target = target.to_string();
         let build_dir = paths.build().guest.join(&build_target);
-        let work_dir = if matches!(self.kind, Kind::Prepare) {
+        let work_dir = if matches!(self, Step::Prepare) {
             build_dir.clone()
         } else {
             work_dir(&build_dir, &recipe.upstreams)

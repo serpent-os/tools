@@ -65,16 +65,12 @@ pub fn calculate(builder: &Builder) -> Vec<&str> {
         }
     }
 
-    // Dependencies from all scripts
-    let script_packages = builder.jobs.iter().flat_map(|job| {
-        job.scripts
-            .values()
-            .flat_map(|script| script.dependencies.iter().map(String::as_str))
-    });
+    // Dependencies from all scripts in the builder
+    let extra_deps = builder.extra_deps();
 
     packages
         .into_iter()
-        .chain(script_packages)
+        .chain(extra_deps)
         // Remove dupes
         .collect::<HashSet<_>>()
         .into_iter()
