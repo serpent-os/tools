@@ -63,7 +63,7 @@ pub fn handle(command: Command, rt: Runtime, env: Env) -> Result<(), Error> {
     // transition into the container
     rt.destroy();
 
-    container::exec(builder).map_err(Error::Container)?;
+    container::build(builder).map_err(Error::Container)?;
 
     Ok(())
 }

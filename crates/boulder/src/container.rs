@@ -31,7 +31,7 @@ pub fn chroot(paths: &Paths, networking: bool) -> Result<(), Error> {
     })
 }
 
-pub fn exec(builder: Builder) -> Result<(), Error> {
+pub fn build(builder: Builder) -> Result<(), Error> {
     let paths = &builder.paths;
     let networking = builder.recipe.options.networking;
 
