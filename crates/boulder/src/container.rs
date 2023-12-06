@@ -9,10 +9,9 @@ use std::{
 
 use container::Container;
 pub use container::Error;
-use stone_recipe::Script;
 use tui::Stylize;
 
-use crate::{job::Step, Job, Paths};
+use crate::{job::Step, Builder, Paths};
 
 pub fn chroot(paths: &Paths, networking: bool) -> Result<(), Error> {
     let home = &paths.build().guest;
@@ -32,33 +31,58 @@ pub fn chroot(paths: &Paths, networking: bool) -> Result<(), Error> {
     })
 }
 
-pub fn exec(step: Step, paths: &Paths, job: &Job, script: &Script) -> Result<(), Error> {
-    let build_dir = &job.build_dir;
-    let work_dir = &job.work_dir;
-    let emul32 = job.target.emul32();
+pub fn exec(builder: Builder) -> Result<(), Error> {
+    let paths = &builder.paths;
+    let networking = builder.recipe.options.networking;
 
-    run(paths, job.networking, || {
-        // We're in the container now =)
-        // TODO: Proper temp file
-        let script_path = "/tmp/script";
-        std::fs::write(script_path, &script.content).unwrap();
+    run(paths, networking, || {
+        for (job_idx, job) in builder.jobs.iter().enumerate() {
+            if job_idx > 0 {
+                println!();
+            }
+            println!("{}", job.target.to_string().dim());
 
-        let current_dir = if work_dir.exists() {
-            &work_dir
-        } else {
-            &build_dir
-        };
+            let mut pgo_stage = None;
 
-        let mut command = logged(step, emul32, "/bin/sh")?
-            .arg(script_path)
-            .env_clear()
-            .env("HOME", build_dir)
-            .env("PATH", "/usr/bin:/usr/sbin")
-            .env("TERM", "xterm-256color")
-            .current_dir(current_dir)
-            .spawn()?;
+            for (step_idx, (step, script)) in job.scripts.iter().enumerate() {
+                // Log start of pgo stage
+                if let Some(stage) = step.pgo_stage {
+                    if pgo_stage != Some(stage) {
+                        pgo_stage = Some(stage);
 
-        command.wait()?;
+                        if step_idx > 0 {
+                            println!("{}", "│".dim());
+                        }
+                        println!("{}", format!("│ pgo-{stage}").dim());
+                    }
+                }
+
+                let build_dir = &job.build_dir;
+                let work_dir = &job.work_dir;
+
+                // We're in the container now =)
+                // TODO: Proper temp file
+                let script_path = "/tmp/script";
+                std::fs::write(script_path, &script.content).unwrap();
+
+                let current_dir = if work_dir.exists() {
+                    &work_dir
+                } else {
+                    &build_dir
+                };
+
+                let mut command = logged(*step, "/bin/sh")?
+                    .arg(script_path)
+                    .env_clear()
+                    .env("HOME", build_dir)
+                    .env("PATH", "/usr/bin:/usr/sbin")
+                    .env("TERM", "xterm-256color")
+                    .current_dir(current_dir)
+                    .spawn()?;
+
+                command.wait()?;
+            }
+        }
 
         Ok(())
     })
@@ -82,9 +106,9 @@ fn run(paths: &Paths, networking: bool, f: impl FnMut() -> Result<(), Error>) ->
         .run(f)
 }
 
-fn logged(step: Step, emul32: bool, command: &str) -> Result<process::Command, io::Error> {
-    let out_log = log(step, emul32)?;
-    let err_log = log(step, emul32)?;
+fn logged(step: Step, command: &str) -> Result<process::Command, io::Error> {
+    let out_log = log(step)?;
+    let err_log = log(step)?;
 
     let mut command = process::Command::new(command);
     command
@@ -95,27 +119,15 @@ fn logged(step: Step, emul32: bool, command: &str) -> Result<process::Command, i
 }
 
 // TODO: Ikey plz make look nice
-fn log(step: Step, emul32: bool) -> Result<Child, io::Error> {
-    let min_fill = if step.pgo_stage.is_some() { 13 } else { 7 };
-
-    let fill_len = min_fill
-        - step.kind.to_string().len()
-        - step
-            .pgo_stage
-            .as_ref()
-            .map(ToString::to_string)
-            .unwrap_or_default()
-            .len();
-    let fill = format!("{:>fill_len$}", "");
-
-    let emul32 = emul32.then_some("(emul32) ").unwrap_or_default().red();
+fn log(step: Step) -> Result<Child, io::Error> {
     let pgo = step
         .pgo_stage
-        .map(|stage| format!("({stage}) "))
+        .is_some()
+        .then_some("│ ")
         .unwrap_or_default()
         .dim();
-    let kind = step.kind.styled(step.kind);
-    let tag = format!("{fill}{emul32}{pgo}{kind} {} ", ":".dim());
+    let kind = step.kind.styled(format!("{:>7}", step.kind));
+    let tag = format!("{} {pgo}{kind} {} ", "│".dim(), ":".dim());
 
     process::Command::new("awk")
         .arg(format!(r#"{{ print "{tag}" $0 }}"#))

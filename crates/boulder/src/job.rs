@@ -23,7 +23,6 @@ pub struct Job {
     pub scripts: BTreeMap<Step, Script>,
     pub work_dir: PathBuf,
     pub build_dir: PathBuf,
-    pub networking: bool,
 }
 
 impl Job {
@@ -36,7 +35,6 @@ impl Job {
     ) -> Result<Self, Error> {
         let build_dir = paths.build().guest.join(target.to_string());
         let work_dir = work_dir(&build_dir, &recipe.upstreams);
-        let networking = recipe.options.networking;
 
         let pgo_stages = pgo::stages(target, recipe);
 
@@ -64,7 +62,6 @@ impl Job {
             scripts,
             work_dir,
             build_dir,
-            networking,
         })
     }
 }

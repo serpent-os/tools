@@ -63,11 +63,7 @@ pub fn handle(command: Command, rt: Runtime, env: Env) -> Result<(), Error> {
     // transition into the container
     rt.destroy();
 
-    for job in &builder.jobs {
-        for (step, script) in job.scripts.iter() {
-            container::exec(*step, &builder.paths, job, script).map_err(Error::Container)?;
-        }
-    }
+    container::exec(builder).map_err(Error::Container)?;
 
     Ok(())
 }

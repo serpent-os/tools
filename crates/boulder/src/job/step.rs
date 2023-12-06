@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::fmt;
-
 use stone_recipe::{script, tuning::Toolchain, Recipe, Script};
 
 use tui::Stylize;
