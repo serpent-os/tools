@@ -2,11 +2,12 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::Deserialize;
+use thiserror::Error;
 
-use crate::{sequence_of_key_value, single_as_sequence, KeyValue};
+use crate::{sequence_of_key_value, single_as_sequence, KeyValue, Macros};
 
 #[derive(Debug, Clone)]
 pub enum Tuning {
@@ -75,7 +76,7 @@ impl TuningFlag {
             Toolchain::Llvm => self.llvm.get(flag),
             Toolchain::Gnu => self.gnu.get(flag),
         }
-        .and(self.root.get(flag))
+        .or_else(|| self.root.get(flag))
     }
 }
 
@@ -133,4 +134,124 @@ pub struct TuningGroup {
         deserialize_with = "sequence_of_key_value"
     )]
     pub choices: Vec<KeyValue<TuningOption>>,
+}
+
+#[derive(Debug, Default)]
+pub struct Builder {
+    flags: HashMap<String, TuningFlag>,
+    groups: HashMap<String, TuningGroup>,
+    enabled: HashSet<String>,
+    disabled: HashSet<String>,
+    option_sets: HashMap<String, String>,
+}
+
+impl Builder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn add_flag(&mut self, name: impl ToString, flag: TuningFlag) {
+        self.flags.insert(name.to_string(), flag);
+    }
+
+    pub fn add_group(&mut self, name: impl ToString, group: TuningGroup) {
+        self.groups.insert(name.to_string(), group);
+    }
+
+    pub fn add_macros(&mut self, macros: Macros) {
+        macros.flags.into_iter().for_each(|kv| {
+            self.add_flag(kv.key, kv.value);
+        });
+        macros.tuning.into_iter().for_each(|kv| {
+            self.add_group(kv.key, kv.value);
+        });
+    }
+
+    pub fn enable(&mut self, name: impl ToString, config: Option<String>) -> Result<(), Error> {
+        let name = name.to_string();
+
+        let group = self
+            .groups
+            .get(&name)
+            .ok_or_else(|| Error::UnknownGroup(name.clone()))?;
+
+        self.enabled.insert(name.clone());
+        self.disabled.remove(&name);
+
+        if let Some(value) = config.or_else(|| group.default.clone()) {
+            if group.choices.iter().any(|kv| kv.key == value) {
+                self.option_sets.insert(name, value);
+            } else {
+                return Err(Error::UnknownGroupValue(value, name));
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn disable(&mut self, name: impl ToString) -> Result<(), Error> {
+        let name = name.to_string();
+
+        if !self.groups.contains_key(&name) {
+            return Err(Error::UnknownGroup(name));
+        }
+
+        self.disabled.insert(name.clone());
+        self.enabled.remove(&name);
+        self.option_sets.remove(&name);
+
+        Ok(())
+    }
+
+    pub fn build(&self) -> Result<Vec<TuningFlag>, Error> {
+        let mut enabled_flags = HashSet::new();
+        let mut disabled_flags = HashSet::new();
+
+        for enabled in &self.enabled {
+            let Some(group) = self.groups.get(enabled) else {
+                continue;
+            };
+
+            let mut to = &group.root;
+
+            if let Some(option) = self.option_sets.get(enabled) {
+                if let Some(choice) = group.choices.iter().find(|kv| &kv.key == option) {
+                    to = &choice.value;
+                }
+            }
+
+            enabled_flags.extend(to.enabled.clone());
+        }
+
+        for disabled in &self.disabled {
+            let Some(group) = self.groups.get(disabled) else {
+                continue;
+            };
+            disabled_flags.extend(group.root.disabled.clone());
+        }
+
+        for flag in enabled_flags.iter().chain(&disabled_flags) {
+            if !self.flags.contains_key(flag) {
+                return Err(Error::UnknownFlag(flag.clone()));
+            }
+        }
+
+        Ok(enabled_flags
+            .iter()
+            .chain(&disabled_flags)
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .filter_map(|flag| self.flags.get(flag).cloned())
+            .collect())
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("unknown flag {0}")]
+    UnknownFlag(String),
+    #[error("unknown group {0}")]
+    UnknownGroup(String),
+    #[error("unknown value {0} for group {1}")]
+    UnknownGroupValue(String, String),
 }

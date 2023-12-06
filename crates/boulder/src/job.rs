@@ -8,7 +8,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use stone_recipe::{script, Recipe, Script, Upstream};
+use stone_recipe::{script, tuning, Recipe, Script, Upstream};
 use thiserror::Error;
 
 pub use self::step::Step;
@@ -111,6 +111,8 @@ pub enum Error {
     MissingArchMacros(String),
     #[error("script")]
     Script(#[from] script::Error),
+    #[error("tuning")]
+    Tuning(#[from] tuning::Error),
     #[error("io")]
     Io(#[from] io::Error),
 }

@@ -2,7 +2,14 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use stone_recipe::{script, tuning::Toolchain, Recipe, Script};
+use std::collections::HashSet;
+
+use itertools::Itertools;
+use stone_recipe::{
+    script,
+    tuning::{self, Toolchain},
+    Recipe, Script,
+};
 
 use tui::Stylize;
 
@@ -119,11 +126,11 @@ impl Step {
                 .cloned()
                 .ok_or_else(|| Error::MissingArchMacros(arch.to_string()))?;
 
-            parser.add_macros(macros);
+            parser.add_macros(macros.clone());
         }
 
         for macros in macros.actions.clone() {
-            parser.add_macros(macros);
+            parser.add_macros(macros.clone());
         }
 
         parser.add_definition("name", &recipe.source.name);
@@ -183,6 +190,8 @@ impl Step {
         }
 
         parser.add_definition("pgo_dir", format!("{}-pgo", build_dir.display()));
+
+        add_tuning(target, pgo_stage, recipe, macros, &mut parser)?;
 
         Ok(Some(parser.parse(&content)?))
     }
@@ -244,4 +253,112 @@ fn prepare_script(upstreams: &[stone_recipe::Upstream]) -> String {
     }
 
     content
+}
+
+fn add_tuning(
+    target: BuildTarget,
+    pgo_stage: Option<pgo::Stage>,
+    recipe: &Recipe,
+    macros: &Macros,
+    parser: &mut script::Parser,
+) -> Result<(), Error> {
+    let mut tuning = tuning::Builder::new();
+
+    let build_target = target.to_string();
+
+    for arch in ["base", &build_target] {
+        let macros = macros
+            .arch
+            .get(arch)
+            .cloned()
+            .ok_or_else(|| Error::MissingArchMacros(arch.to_string()))?;
+
+        tuning.add_macros(macros);
+    }
+
+    for macros in macros.actions.clone() {
+        tuning.add_macros(macros);
+    }
+
+    tuning.enable("architecture", None)?;
+
+    for kv in &recipe.tuning {
+        match &kv.value {
+            stone_recipe::Tuning::Enable => tuning.enable(&kv.key, None)?,
+            stone_recipe::Tuning::Disable => tuning.disable(&kv.key)?,
+            stone_recipe::Tuning::Config(config) => tuning.enable(&kv.key, Some(config.clone()))?,
+        }
+    }
+
+    // Add defaults that aren't already in recipe
+    for group in default_tuning_groups(target, macros) {
+        if !recipe.tuning.iter().any(|kv| &kv.key == group) {
+            tuning.enable(group, None)?;
+        }
+    }
+
+    if let Some(stage) = pgo_stage {
+        match stage {
+            pgo::Stage::One => tuning.enable("pgostage1", None)?,
+            pgo::Stage::Two => tuning.enable("pgostage2", None)?,
+            pgo::Stage::Use => {
+                tuning.enable("pgouse", None)?;
+                if recipe.options.samplepgo {
+                    tuning.enable("pgosample", None)?;
+                }
+            }
+        }
+    }
+
+    fn fmt_flags<'a>(flags: impl Iterator<Item = &'a str>) -> String {
+        flags
+            .map(|s| s.trim())
+            .filter(|s| s.len() > 1)
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .join(" ")
+    }
+
+    let toolchain = recipe.options.toolchain;
+    let flags = tuning.build()?;
+
+    let cflags = fmt_flags(
+        flags
+            .iter()
+            .filter_map(|flag| flag.get(tuning::CompilerFlag::C, toolchain)),
+    );
+    let cxxflags = fmt_flags(
+        flags
+            .iter()
+            .filter_map(|flag| flag.get(tuning::CompilerFlag::Cxx, toolchain)),
+    );
+    let ldflags = fmt_flags(
+        flags
+            .iter()
+            .filter_map(|flag| flag.get(tuning::CompilerFlag::Ld, toolchain)),
+    );
+
+    parser.add_definition("cflags", cflags);
+    parser.add_definition("cxxflags", cxxflags);
+    parser.add_definition("ldflags", ldflags);
+
+    Ok(())
+}
+
+fn default_tuning_groups(target: BuildTarget, macros: &Macros) -> &[String] {
+    let build_target = target.to_string();
+
+    for arch in [&build_target, "base"] {
+        let Some(arch_macros) = macros.arch.get(arch) else {
+            continue;
+        };
+
+        if arch_macros.default_tuning_groups.is_empty() {
+            continue;
+        }
+
+        return &arch_macros.default_tuning_groups;
+    }
+
+    &[]
 }
