@@ -35,6 +35,7 @@ pub fn chroot(paths: &Paths, networking: bool) -> Result<(), Error> {
 pub fn exec(step: Step, paths: &Paths, job: &Job, script: &Script) -> Result<(), Error> {
     let build_dir = &job.build_dir;
     let work_dir = &job.work_dir;
+    let emul32 = job.target.emul32();
 
     run(paths, job.networking, || {
         // We're in the container now =)
@@ -48,7 +49,7 @@ pub fn exec(step: Step, paths: &Paths, job: &Job, script: &Script) -> Result<(),
             &build_dir
         };
 
-        let mut command = logged(step, "/bin/sh")?
+        let mut command = logged(step, emul32, "/bin/sh")?
             .arg(script_path)
             .env_clear()
             .env("HOME", build_dir)
@@ -81,9 +82,9 @@ fn run(paths: &Paths, networking: bool, f: impl FnMut() -> Result<(), Error>) ->
         .run(f)
 }
 
-fn logged(step: Step, command: &str) -> Result<process::Command, io::Error> {
-    let out_log = log(step)?;
-    let err_log = log(step)?;
+fn logged(step: Step, emul32: bool, command: &str) -> Result<process::Command, io::Error> {
+    let out_log = log(step, emul32)?;
+    let err_log = log(step, emul32)?;
 
     let mut command = process::Command::new(command);
     command
@@ -93,9 +94,28 @@ fn logged(step: Step, command: &str) -> Result<process::Command, io::Error> {
     Ok(command)
 }
 
-fn log(step: Step) -> Result<Child, io::Error> {
-    let step = step.styled(format!("{step:>8}"));
-    let tag = format!("{step} {} ", ":".dim());
+// TODO: Ikey plz make look nice
+fn log(step: Step, emul32: bool) -> Result<Child, io::Error> {
+    let min_fill = if step.pgo_stage.is_some() { 13 } else { 7 };
+
+    let fill_len = min_fill
+        - step.kind.to_string().len()
+        - step
+            .pgo_stage
+            .as_ref()
+            .map(ToString::to_string)
+            .unwrap_or_default()
+            .len();
+    let fill = format!("{:>fill_len$}", "");
+
+    let emul32 = emul32.then_some("(emul32) ").unwrap_or_default().red();
+    let pgo = step
+        .pgo_stage
+        .map(|stage| format!("({stage}) "))
+        .unwrap_or_default()
+        .dim();
+    let kind = step.kind.styled(step.kind);
+    let tag = format!("{fill}{emul32}{pgo}{kind} {} ", ":".dim());
 
     process::Command::new("awk")
         .arg(format!(r#"{{ print "{tag}" $0 }}"#))
