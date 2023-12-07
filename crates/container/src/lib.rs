@@ -2,16 +2,20 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 use std::env::set_current_dir;
-use std::fs::{copy, create_dir_all, remove_dir, write};
+use std::fs::{self, copy, create_dir_all, remove_dir};
+use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicI32, Ordering};
 
 use nix::libc::SIGCHLD;
 use nix::mount::{mount, umount2, MntFlags, MsFlags};
 use nix::sched::{clone, CloneFlags};
-use nix::sys::wait::waitpid;
-use nix::unistd::{close, getgid, getuid, pipe, pivot_root, read, sethostname, Uid};
-
-pub type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
+use nix::sys::prctl::set_pdeathsig;
+use nix::sys::signal::{kill, sigaction, SaFlags, SigAction, SigHandler, Signal};
+use nix::sys::signalfd::SigSet;
+use nix::sys::wait::{waitpid, WaitStatus};
+use nix::unistd::{close, getgid, getuid, pipe, pivot_root, read, sethostname, write, Pid, Uid};
+use thiserror::Error;
 
 pub struct Container {
     root: PathBuf,
@@ -19,6 +23,7 @@ pub struct Container {
     binds: Vec<Bind>,
     networking: bool,
     hostname: Option<String>,
+    ignore_host_sigint: bool,
 }
 
 impl Container {
@@ -29,6 +34,7 @@ impl Container {
             binds: vec![],
             networking: false,
             hostname: None,
+            ignore_host_sigint: false,
         }
     }
 
@@ -71,7 +77,19 @@ impl Container {
         }
     }
 
-    pub fn run(self, mut f: impl FnMut() -> Result<(), Error>) -> Result<(), Error> {
+    /// Ignore `SIGINT` from the parent process. This allows it to be forwarded to a
+    /// spawned process inside the container by using [`forward_sigint`].
+    pub fn ignore_host_sigint(self, ignore: bool) -> Self {
+        Self {
+            ignore_host_sigint: ignore,
+            ..self
+        }
+    }
+
+    pub fn run<E>(self, mut f: impl FnMut() -> Result<(), E>) -> Result<(), Error>
+    where
+        E: std::error::Error + 'static,
+    {
         static mut STACK: [u8; 4 * 1024 * 1024] = [0u8; 4 * 1024 * 1024];
 
         let rootless = !Uid::effective().is_root();
@@ -96,8 +114,21 @@ impl Container {
             clone(
                 Box::new(|| match enter(&self, sync, &mut f) {
                     Ok(_) => 0,
-                    Err(e) => {
-                        eprintln!("Error: {e}");
+                    // Write error back to parent process
+                    Err(error) => {
+                        let error = error.to_string();
+                        let mut pos = 0;
+
+                        while pos < error.len() {
+                            let Ok(len) = write(sync.1, &error.as_bytes()[pos..]) else {
+                                break;
+                            };
+
+                            pos += len;
+                        }
+
+                        let _ = close(sync.1);
+
                         1
                     }
                 }),
@@ -109,37 +140,75 @@ impl Container {
 
         if rootless {
             // Update uid / gid map to map current user to root in container
-            write(format!("/proc/{pid}/setgroups"), "deny")?;
-            write(format!("/proc/{pid}/uid_map"), format!("0 {} 1", getuid()))?;
-            write(format!("/proc/{pid}/gid_map"), format!("0 {} 1", getgid()))?;
+            fs::write(format!("/proc/{pid}/setgroups"), "deny")?;
+            fs::write(format!("/proc/{pid}/uid_map"), format!("0 {} 1", getuid()))?;
+            fs::write(format!("/proc/{pid}/gid_map"), format!("0 {} 1", getgid()))?;
         }
 
         // Allow child to continue
+        write(sync.1, &[Message::Continue as u8])?;
+        // Write no longer needed
         close(sync.1)?;
 
-        waitpid(pid, None)?;
+        if self.ignore_host_sigint {
+            ignore_sigint()?;
+        }
 
-        Ok(())
+        let status = waitpid(pid, None)?;
+
+        match status {
+            WaitStatus::Exited(_, 0) => Ok(()),
+            WaitStatus::Exited(_, _) => {
+                let mut error = String::new();
+                let mut buffer = [0u8; 1024];
+
+                loop {
+                    let len = read(sync.0, &mut buffer)?;
+
+                    if len == 0 {
+                        break;
+                    }
+
+                    error.push_str(String::from_utf8_lossy(&buffer[..len]).as_ref());
+                }
+
+                Err(Error::Failure(error))
+            }
+            WaitStatus::Signaled(_, signal, _) => Err(Error::Signaled(signal)),
+            WaitStatus::Stopped(_, _)
+            | WaitStatus::PtraceEvent(_, _, _)
+            | WaitStatus::PtraceSyscall(_)
+            | WaitStatus::Continued(_)
+            | WaitStatus::StillAlive => Err(Error::UnknownExit),
+        }
     }
 }
 
-fn enter(
+fn enter<E>(
     container: &Container,
     sync: (i32, i32),
-    mut f: impl FnMut() -> Result<(), Error>,
-) -> Result<(), Error> {
-    // Close unused write end
-    close(sync.1)?;
-    // Got EOF, continue
-    read(sync.0, &mut [0u8; 1])?;
+    mut f: impl FnMut() -> Result<(), E>,
+) -> Result<(), ContainerError>
+where
+    E: std::error::Error + 'static,
+{
+    // Ensure process is cleaned up if parent dies
+    set_pdeathsig(Signal::SIGKILL)?;
+
+    // Wait for continue message
+    let mut message = [0u8; 1];
+    read(sync.0, &mut message)?;
+    assert_eq!(message[0], Message::Continue as u8);
+
+    // Close unused read end
     close(sync.0)?;
 
     setup(container)?;
 
-    f()
+    f().map_err(|e| ContainerError::Run(Box::new(e)))
 }
 
-fn setup(container: &Container) -> Result<(), Error> {
+fn setup(container: &Container) -> Result<(), ContainerError> {
     if container.networking {
         setup_networking(&container.root)?;
     }
@@ -159,7 +228,7 @@ fn setup(container: &Container) -> Result<(), Error> {
     Ok(())
 }
 
-fn pivot(root: &Path, binds: &[Bind]) -> Result<(), Error> {
+fn pivot(root: &Path, binds: &[Bind]) -> Result<(), ContainerError> {
     const OLD_PATH: &str = "old_root";
 
     let old_root = root.join(OLD_PATH);
@@ -210,21 +279,21 @@ fn pivot(root: &Path, binds: &[Bind]) -> Result<(), Error> {
     Ok(())
 }
 
-fn setup_root_user() -> Result<(), Error> {
+fn setup_root_user() -> Result<(), ContainerError> {
     enusure_directory("/etc")?;
-    write("/etc/passwd", "root:x:0:0:root::/bin/bash")?;
-    write("/etc/group", "root:x:0:")?;
+    fs::write("/etc/passwd", "root:x:0:0:root::/bin/bash")?;
+    fs::write("/etc/group", "root:x:0:")?;
     Ok(())
 }
 
-fn setup_networking(root: &Path) -> Result<(), Error> {
+fn setup_networking(root: &Path) -> Result<(), ContainerError> {
     enusure_directory(root.join("etc"))?;
     copy("/etc/resolv.conf", root.join("etc/resolv.conf"))?;
     copy("/etc/protocols", root.join("etc/protocols"))?;
     Ok(())
 }
 
-fn enusure_directory(path: impl AsRef<Path>) -> Result<(), Error> {
+fn enusure_directory(path: impl AsRef<Path>) -> Result<(), ContainerError> {
     let path = path.as_ref();
     if !path.exists() {
         create_dir_all(path)?;
@@ -237,7 +306,7 @@ fn add_mount<T: AsRef<Path>>(
     target: T,
     fs_type: Option<&str>,
     flags: MsFlags,
-) -> Result<(), Error> {
+) -> Result<(), ContainerError> {
     enusure_directory(&target)?;
     mount(
         source.as_ref().map(AsRef::as_ref),
@@ -249,8 +318,64 @@ fn add_mount<T: AsRef<Path>>(
     Ok(())
 }
 
+fn ignore_sigint() -> Result<(), nix::Error> {
+    let action = SigAction::new(SigHandler::SigIgn, SaFlags::empty(), SigSet::empty());
+    unsafe { sigaction(Signal::SIGINT, &action)? };
+    Ok(())
+}
+
+/// Forwards `SIGINT` from the current process to the [`Pid`] process
+pub fn forward_sigint(pid: Pid) -> Result<(), nix::Error> {
+    static PID: AtomicI32 = AtomicI32::new(0);
+
+    PID.store(pid.as_raw(), Ordering::Relaxed);
+
+    extern "C" fn on_int(_: i32) {
+        let pid = Pid::from_raw(PID.load(Ordering::Relaxed));
+        let _ = kill(pid, Signal::SIGINT);
+    }
+
+    let action = SigAction::new(
+        SigHandler::Handler(on_int),
+        SaFlags::empty(),
+        SigSet::empty(),
+    );
+    unsafe { sigaction(Signal::SIGINT, &action)? };
+
+    Ok(())
+}
+
 struct Bind {
     source: PathBuf,
     target: PathBuf,
     read_only: bool,
+}
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("exited with failure: {0}")]
+    Failure(String),
+    #[error("stopped by signal: {}", .0.as_str())]
+    Signaled(Signal),
+    #[error("unknown exit reason")]
+    UnknownExit,
+    #[error("nix")]
+    Nix(#[from] nix::Error),
+    #[error("io")]
+    Io(#[from] io::Error),
+}
+
+#[derive(Debug, Error)]
+enum ContainerError {
+    #[error(transparent)]
+    Run(#[from] Box<dyn std::error::Error>),
+    #[error(transparent)]
+    Nix(#[from] nix::Error),
+    #[error(transparent)]
+    Io(#[from] io::Error),
+}
+
+#[repr(u8)]
+enum Message {
+    Continue = 1,
 }

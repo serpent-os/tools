@@ -377,6 +377,7 @@ name = "container"
 version = "0.1.0"
 dependencies = [
  "nix",
+ "thiserror",
 ]
 
 [[package]]

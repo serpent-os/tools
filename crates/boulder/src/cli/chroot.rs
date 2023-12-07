@@ -42,6 +42,8 @@ pub fn handle(command: Command, rt: Runtime, env: Env) -> Result<(), Error> {
         return Err(Error::MissingRootFs);
     }
 
+    rt.destroy();
+
     container::chroot(&paths, recipe.options.networking).map_err(Error::Container)?;
 
     Ok(())
@@ -54,7 +56,7 @@ pub enum Error {
     #[error("build root doesn't exist, make sure to run build first")]
     MissingRootFs,
     #[error("container")]
-    Container(Box<dyn std::error::Error + Send + Sync + 'static>),
+    Container(container::Error),
     #[error("stone recipe")]
     StoneRecipe(#[from] stone_recipe::Error),
     #[error("io")]

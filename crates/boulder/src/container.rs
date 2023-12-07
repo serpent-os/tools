@@ -4,11 +4,13 @@
 
 use std::{
     io,
+    os::unix::process::ExitStatusExt,
     process::{self, Child, Stdio},
 };
 
 use container::Container;
-pub use container::Error;
+use nix::{sys::signal::Signal, unistd::Pid};
+use thiserror::Error;
 use tui::Stylize;
 
 use crate::{job::Step, Builder, Paths};
@@ -77,7 +79,28 @@ pub fn build(builder: Builder) -> Result<(), Error> {
                         .current_dir(current_dir)
                         .spawn()?;
 
-                    command.wait()?;
+                    container::forward_sigint(Pid::from_raw(command.id() as i32))?;
+
+                    let result = command.wait()?;
+
+                    if !result.success() {
+                        match result.code() {
+                            Some(code) => {
+                                return Err(RunError::Code(code));
+                            }
+                            None => {
+                                if let Some(signal) = result
+                                    .signal()
+                                    .or_else(|| result.stopped_signal())
+                                    .and_then(|i| Signal::try_from(i).ok())
+                                {
+                                    return Err(RunError::Signal(signal));
+                                } else {
+                                    return Err(RunError::UnknownSignal);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -86,7 +109,11 @@ pub fn build(builder: Builder) -> Result<(), Error> {
     })
 }
 
-fn run(paths: &Paths, networking: bool, f: impl FnMut() -> Result<(), Error>) -> Result<(), Error> {
+fn run(
+    paths: &Paths,
+    networking: bool,
+    f: impl FnMut() -> Result<(), RunError>,
+) -> Result<(), Error> {
     let rootfs = paths.rootfs().host;
     let artefacts = paths.artefacts();
     let build = paths.build();
@@ -96,12 +123,15 @@ fn run(paths: &Paths, networking: bool, f: impl FnMut() -> Result<(), Error>) ->
     Container::new(rootfs)
         .hostname("boulder")
         .networking(networking)
+        .ignore_host_sigint(true)
         .work_dir(&build.guest)
         .bind_rw(&artefacts.host, &artefacts.guest)
         .bind_rw(&build.host, &build.guest)
         .bind_rw(&compiler.host, &compiler.guest)
         .bind_ro(&recipe.host, &recipe.guest)
-        .run(f)
+        .run::<RunError>(f)?;
+
+    Ok(())
 }
 
 fn logged(step: Step, is_pgo: bool, command: &str) -> Result<process::Command, io::Error> {
@@ -128,4 +158,26 @@ fn log(step: Step, is_pgo: bool) -> Result<Child, io::Error> {
         .env("TERM", "xterm-256color")
         .stdin(Stdio::piped())
         .spawn()
+}
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error(transparent)]
+    Container(#[from] container::Error),
+    #[error("io")]
+    Io(#[from] io::Error),
+}
+
+#[derive(Debug, Error)]
+enum RunError {
+    #[error("failed with status code {0}")]
+    Code(i32),
+    #[error("stopped by signal {}", .0.as_str())]
+    Signal(Signal),
+    #[error("stopped by unknown signal")]
+    UnknownSignal,
+    #[error(transparent)]
+    Nix(#[from] nix::Error),
+    #[error(transparent)]
+    Io(#[from] io::Error),
 }
