@@ -32,7 +32,7 @@ pub struct Paths {
 }
 
 impl Paths {
-    pub async fn new(
+    pub fn new(
         id: Id,
         recipe_path: &Path,
         host_root: impl Into<PathBuf>,
@@ -50,11 +50,11 @@ impl Paths {
             recipe_dir,
         };
 
-        util::ensure_dir_exists(&job.rootfs().host).await?;
-        util::ensure_dir_exists(&job.artefacts().host).await?;
-        util::ensure_dir_exists(&job.build().host).await?;
-        util::ensure_dir_exists(&job.ccache().host).await?;
-        util::ensure_dir_exists(&job.upstreams().host).await?;
+        util::sync::ensure_dir_exists(&job.rootfs().host)?;
+        util::sync::ensure_dir_exists(&job.artefacts().host)?;
+        util::sync::ensure_dir_exists(&job.build().host)?;
+        util::sync::ensure_dir_exists(&job.ccache().host)?;
+        util::sync::ensure_dir_exists(&job.upstreams().host)?;
 
         Ok(job)
     }

@@ -6,9 +6,8 @@ use std::io;
 use std::path::PathBuf;
 
 use boulder::builder;
-use boulder::upstream;
 use boulder::Builder;
-use boulder::{container, profile, root, Env, Runtime};
+use boulder::{profile, Env};
 use clap::Parser;
 use thiserror::Error;
 
@@ -35,7 +34,7 @@ pub struct Command {
     recipe: PathBuf,
 }
 
-pub fn handle(command: Command, rt: Runtime, env: Env) -> Result<(), Error> {
+pub fn handle(command: Command, env: Env) -> Result<(), Error> {
     let Command {
         profile,
         output,
@@ -50,20 +49,9 @@ pub fn handle(command: Command, rt: Runtime, env: Env) -> Result<(), Error> {
         return Err(Error::MissingRecipe(recipe));
     }
 
-    let builder = rt.block_on(Builder::new(&recipe, &env, ccache))?;
-
-    let profiles = rt.block_on(profile::Manager::new(&env));
-    let repos = profiles.repositories(&profile)?.clone();
-
-    rt.block_on(root::populate(&env, &builder, repos))?;
-
-    rt.block_on(upstream::sync(&builder.recipe, &builder.paths))?;
-
-    // Destroy async runtime since we will
-    // transition into the container
-    rt.destroy();
-
-    container::build(builder).map_err(Error::Container)?;
+    let builder = Builder::new(&recipe, env, profile, ccache)?;
+    builder.setup()?;
+    builder.build()?;
 
     Ok(())
 }
@@ -74,16 +62,8 @@ pub enum Error {
     MissingOutput(PathBuf),
     #[error("recipe file does not exist: {0:?}")]
     MissingRecipe(PathBuf),
-    #[error("profile")]
-    Profile(#[from] profile::Error),
-    #[error("root")]
-    Root(#[from] root::Error),
-    #[error("upstream")]
-    Upstream(#[from] upstream::Error),
     #[error("builder")]
     Builder(#[from] builder::Error),
     #[error("io")]
     Io(#[from] io::Error),
-    #[error("container")]
-    Container(#[source] container::Error),
 }

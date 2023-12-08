@@ -2,25 +2,22 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::io;
+use std::{io, path::PathBuf};
 
 use moss::repository;
 use thiserror::Error;
 
-use crate::{dependency, util, Builder, Env};
+use crate::{container, dependency, util, Builder};
 
-pub async fn populate(
-    env: &Env,
-    builder: &Builder,
-    repositories: repository::Map,
-) -> Result<(), Error> {
+pub async fn populate(builder: &Builder, repositories: repository::Map) -> Result<(), Error> {
     let packages = dependency::calculate(builder);
 
-    // Recreate root
     let rootfs = builder.paths.rootfs().host;
+
+    // Recreate root
     util::recreate_dir(&rootfs).await?;
 
-    let mut moss_client = moss::Client::new("boulder", &env.moss_dir)
+    let mut moss_client = moss::Client::new("boulder", &builder.env.moss_dir)
         .await?
         .explicit_repositories(repositories)
         .await?
@@ -28,8 +25,37 @@ pub async fn populate(
 
     moss_client.install(&packages, true).await?;
 
-    // Setup non-mounted guest paths from host
-    util::recreate_dir(&builder.paths.guest_host_path(&builder.paths.install())).await?;
+    Ok(())
+}
+
+pub fn clean(builder: &Builder) -> Result<(), Error> {
+    // Dont't need to clean if it doesn't exist
+    if !builder.paths.build().host.exists() {
+        return Ok(());
+    }
+
+    // We recreate inside the container so we don't
+    // get permissions error if this is a rootless build
+    // and there's subuid mappings into the user namespace
+    container::exec(&builder.paths, false, || {
+        // Recreate `install` dir
+        util::sync::recreate_dir(&builder.paths.install().guest)?;
+
+        for target in &builder.targets {
+            for job in &target.jobs {
+                // Recerate build dir
+                util::sync::recreate_dir(&job.build_dir)?;
+
+                // Recreate pgo dir
+                if job.pgo_stage.is_some() {
+                    let pgo_dir = PathBuf::from(format!("{}-pgo", job.build_dir.display()));
+                    util::sync::recreate_dir(&pgo_dir)?;
+                }
+            }
+        }
+
+        Ok(())
+    })?;
 
     Ok(())
 }
@@ -42,4 +68,6 @@ pub enum Error {
     MossClient(#[from] moss::client::Error),
     #[error("moss install")]
     MossInstall(#[from] moss::client::install::Error),
+    #[error("container")]
+    Container(#[from] container::Error),
 }

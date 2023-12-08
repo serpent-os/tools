@@ -16,13 +16,13 @@ pub struct Env {
 }
 
 impl Env {
-    pub async fn new(
+    pub fn new(
         cache_dir: Option<PathBuf>,
         config_dir: Option<PathBuf>,
         data_dir: Option<PathBuf>,
         moss_root: Option<PathBuf>,
     ) -> Result<Self, Error> {
-        let is_root = is_root();
+        let is_root = util::is_root();
 
         let config = if let Some(dir) = config_dir {
             config::Manager::custom(dir)
@@ -36,9 +36,9 @@ impl Env {
         let data_dir = resolve_data_dir(data_dir);
         let moss_dir = resolve_moss_root(is_root, moss_root)?;
 
-        util::ensure_dir_exists(&cache_dir).await?;
-        util::ensure_dir_exists(&data_dir).await?;
-        util::ensure_dir_exists(&moss_dir).await?;
+        util::sync::ensure_dir_exists(&cache_dir)?;
+        util::sync::ensure_dir_exists(&data_dir)?;
+        util::sync::ensure_dir_exists(&moss_dir)?;
 
         Ok(Self {
             config,
@@ -47,12 +47,6 @@ impl Env {
             moss_dir,
         })
     }
-}
-
-fn is_root() -> bool {
-    use nix::unistd::Uid;
-
-    Uid::effective().is_root()
 }
 
 fn resolve_cache_dir(is_root: bool, custom: Option<PathBuf>) -> Result<PathBuf, Error> {

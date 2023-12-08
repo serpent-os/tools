@@ -74,7 +74,8 @@ fn parse_repository(s: &str) -> Result<(repository::Id, Repository), String> {
     ))
 }
 
-pub fn handle(command: Command, rt: Runtime, env: Env) -> Result<(), Error> {
+pub fn handle(command: Command, env: Env) -> Result<(), Error> {
+    let rt = Runtime::new()?;
     let manager = rt.block_on(profile::Manager::new(&env));
 
     match command.subcommand {

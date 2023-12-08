@@ -26,7 +26,7 @@ pub struct Job {
 }
 
 impl Job {
-    pub async fn new(
+    pub fn new(
         target: BuildTarget,
         pgo_stage: Option<pgo::Stage>,
         recipe: &Recipe,
@@ -46,15 +46,6 @@ impl Job {
                 Some(result.map(|script| (step, script)))
             })
             .collect::<Result<_, _>>()?;
-
-        // Clean build dir & pgo from host (we're not in container yet)
-        let host_build_dir = paths.build().host.join(target.to_string());
-        util::recreate_dir(&host_build_dir).await?;
-
-        if pgo_stage.is_some() {
-            let host_pgo_dir = PathBuf::from(format!("{}-pgo", host_build_dir.display()));
-            util::recreate_dir(&host_pgo_dir).await?;
-        }
 
         Ok(Self {
             target,

@@ -15,8 +15,12 @@ use nix::sys::signal::{kill, sigaction, SaFlags, SigAction, SigHandler, Signal};
 use nix::sys::signalfd::SigSet;
 use nix::sys::stat::{umask, Mode};
 use nix::sys::wait::{waitpid, WaitStatus};
-use nix::unistd::{close, getgid, getuid, pipe, pivot_root, read, sethostname, write, Pid, Uid};
+use nix::unistd::{close, pipe, pivot_root, read, sethostname, write, Pid, Uid};
 use thiserror::Error;
+
+use self::idmap::idmap;
+
+mod idmap;
 
 pub struct Container {
     root: PathBuf,
@@ -139,11 +143,9 @@ impl Container {
             )?
         };
 
+        // Update uid / gid map to map current user to root in container
         if rootless {
-            // Update uid / gid map to map current user to root in container
-            fs::write(format!("/proc/{pid}/setgroups"), "deny")?;
-            fs::write(format!("/proc/{pid}/uid_map"), format!("0 {} 1", getuid()))?;
-            fs::write(format!("/proc/{pid}/gid_map"), format!("0 {} 1", getgid()))?;
+            idmap(pid)?;
         }
 
         // Allow child to continue
@@ -361,6 +363,8 @@ pub enum Error {
     Signaled(Signal),
     #[error("unknown exit reason")]
     UnknownExit,
+    #[error("error setting up rootless id map")]
+    Idmap(#[from] idmap::Error),
     #[error("nix")]
     Nix(#[from] nix::Error),
     #[error("io")]

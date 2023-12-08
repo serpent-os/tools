@@ -2,10 +2,9 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{collections::HashMap, io, path::Path};
+use std::{collections::HashMap, fs, io, path::Path};
 
 use thiserror::Error;
-use tokio::fs;
 
 use crate::{util, Env};
 
@@ -16,19 +15,17 @@ pub struct Macros {
 }
 
 impl Macros {
-    pub async fn load(env: &Env) -> Result<Self, Error> {
+    pub fn load(env: &Env) -> Result<Self, Error> {
         let macros_dir = env.data_dir.join("macros");
         let actions_dir = macros_dir.join("actions");
         let arch_dir = macros_dir.join("arch");
 
         let matcher = |p: &Path| p.extension().and_then(|s| s.to_str()) == Some("yml");
 
-        let arch_files = util::enumerate_files(&arch_dir, matcher)
-            .await
-            .map_err(Error::ArchFiles)?;
-        let action_files = util::enumerate_files(&actions_dir, matcher)
-            .await
-            .map_err(Error::ActionFiles)?;
+        let arch_files =
+            util::sync::enumerate_files(&arch_dir, matcher).map_err(Error::ArchFiles)?;
+        let action_files =
+            util::sync::enumerate_files(&actions_dir, matcher).map_err(Error::ActionFiles)?;
 
         let mut arch = HashMap::new();
         let mut actions = vec![];
@@ -40,14 +37,14 @@ impl Macros {
 
             let identifier = relative.with_extension("").display().to_string();
 
-            let bytes = fs::read(&file).await?;
+            let bytes = fs::read(&file)?;
             let macros = stone_recipe::macros::from_slice(&bytes)?;
 
             arch.insert(identifier, macros);
         }
 
         for file in action_files {
-            let bytes = fs::read(&file).await?;
+            let bytes = fs::read(&file)?;
             let macros = stone_recipe::macros::from_slice(&bytes)?;
 
             actions.push(macros);
