@@ -13,6 +13,7 @@ use nix::sched::{clone, CloneFlags};
 use nix::sys::prctl::set_pdeathsig;
 use nix::sys::signal::{kill, sigaction, SaFlags, SigAction, SigHandler, Signal};
 use nix::sys::signalfd::SigSet;
+use nix::sys::stat::{umask, Mode};
 use nix::sys::wait::{waitpid, WaitStatus};
 use nix::unistd::{close, getgid, getuid, pipe, pivot_root, read, sethostname, write, Pid, Uid};
 use thiserror::Error;
@@ -283,6 +284,7 @@ fn setup_root_user() -> Result<(), ContainerError> {
     enusure_directory("/etc")?;
     fs::write("/etc/passwd", "root:x:0:0:root::/bin/bash")?;
     fs::write("/etc/group", "root:x:0:")?;
+    umask(Mode::S_IWGRP | Mode::S_IWOTH);
     Ok(())
 }
 
