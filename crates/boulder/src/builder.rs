@@ -129,10 +129,21 @@ impl Builder {
                         if i > 0 {
                             println!("{}", "│".dim());
                         }
-                        println!("{}", format!("│ pgo-{stage}").dim());
+                        println!("{}", format!("│pgo-{stage}").dim());
                     }
 
-                    for (step, script) in job.steps.iter() {
+                    for (i, (step, script)) in job.steps.iter().enumerate() {
+                        let pipes = if job.pgo_stage.is_some() {
+                            "││".dim()
+                        } else {
+                            "│".dim()
+                        };
+
+                        if i > 0 {
+                            println!("{pipes}");
+                        }
+                        println!("{pipes}{}", step.styled(format!("{step}")));
+
                         let build_dir = &job.build_dir;
                         let work_dir = &job.work_dir;
 
@@ -201,9 +212,9 @@ fn logged(step: Step, is_pgo: bool, command: &str) -> Result<process::Command, i
 
 // TODO: Ikey plz make look nice
 fn log(step: Step, is_pgo: bool) -> Result<process::Child, io::Error> {
-    let pgo = is_pgo.then_some("│ ").unwrap_or_default().dim();
-    let kind = step.styled(format!("{step:>7}"));
-    let tag = format!("{} {pgo}{kind} {} ", "│".dim(), ":".dim());
+    let pgo = is_pgo.then_some("│").unwrap_or_default().dim();
+    let kind = step.styled(format!("{}│", step.abbrev()));
+    let tag = format!("{}{pgo}{kind} ", "│".dim());
 
     process::Command::new("awk")
         .arg(format!(r#"{{ print "{tag}" $0 }}"#))

@@ -25,7 +25,6 @@ pub fn list(pgo_stage: Option<pgo::Stage>) -> Vec<Step> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, strum::Display)]
-#[strum(serialize_all = "lowercase")]
 pub enum Step {
     Prepare,
     Setup,
@@ -44,6 +43,17 @@ impl Step {
         Step::Check,
     ];
     const WORKLOAD: &'static [Self] = &[Step::Prepare, Step::Setup, Step::Build, Step::Workload];
+
+    pub fn abbrev(&self) -> &str {
+        match self {
+            Step::Prepare => "P",
+            Step::Setup => "S",
+            Step::Build => "B",
+            Step::Install => "I",
+            Step::Check => "C",
+            Step::Workload => "W",
+        }
+    }
 
     pub fn styled(&self, s: impl ToString) -> String {
         let s = s.to_string();
