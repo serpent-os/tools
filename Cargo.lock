@@ -630,6 +630,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "fnmatch"
+version = "0.1.0"
+dependencies = [
+ "regex",
+ "thiserror",
+]
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
