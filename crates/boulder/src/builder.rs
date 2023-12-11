@@ -2,7 +2,12 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{fs, io, os::unix::process::ExitStatusExt, path::Path, process};
+use std::{
+    fs, io,
+    os::unix::process::ExitStatusExt,
+    path::{Path, PathBuf},
+    process,
+};
 
 use nix::{sys::signal::Signal, unistd::Pid};
 use stone_recipe::Recipe;
@@ -13,7 +18,7 @@ use crate::{
     architecture::BuildTarget,
     container::{self, ExecError},
     job::{self, Step},
-    macros, paths, pgo, profile, recipe, root, upstream, Env, Job, Macros, Paths, Runtime,
+    macros, paths, pgo, profile, recipe, root, upstream, util, Env, Job, Macros, Paths, Runtime,
 };
 
 pub struct Builder {
@@ -124,6 +129,14 @@ impl Builder {
 
                 for (i, job) in target.jobs.iter().enumerate() {
                     let is_pgo = job.pgo_stage.is_some();
+
+                    // Recreate work dir for each job
+                    util::sync::recreate_dir(&job.work_dir)?;
+                    // Ensure pgo dir exists
+                    if is_pgo {
+                        let pgo_dir = PathBuf::from(format!("{}-pgo", job.build_dir.display()));
+                        util::sync::ensure_dir_exists(&pgo_dir)?;
+                    }
 
                     if let Some(stage) = job.pgo_stage {
                         if i > 0 {

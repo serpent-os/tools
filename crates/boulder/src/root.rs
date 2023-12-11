@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{io, path::PathBuf};
+use std::io;
 
 use moss::repository;
 use thiserror::Error;
@@ -45,12 +45,6 @@ pub fn clean(builder: &Builder) -> Result<(), Error> {
             for job in &target.jobs {
                 // Recerate build dir
                 util::sync::recreate_dir(&job.build_dir)?;
-
-                // Recreate pgo dir
-                if job.pgo_stage.is_some() {
-                    let pgo_dir = PathBuf::from(format!("{}-pgo", job.build_dir.display()));
-                    util::sync::recreate_dir(&pgo_dir)?;
-                }
             }
         }
 
