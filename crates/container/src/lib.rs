@@ -159,6 +159,10 @@ impl Container {
 
         let status = waitpid(pid, None)?;
 
+        if self.ignore_host_sigint {
+            default_sigint()?;
+        }
+
         match status {
             WaitStatus::Exited(_, 0) => Ok(()),
             WaitStatus::Exited(_, _) => {
@@ -324,6 +328,12 @@ fn add_mount<T: AsRef<Path>>(
 
 fn ignore_sigint() -> Result<(), nix::Error> {
     let action = SigAction::new(SigHandler::SigIgn, SaFlags::empty(), SigSet::empty());
+    unsafe { sigaction(Signal::SIGINT, &action)? };
+    Ok(())
+}
+
+fn default_sigint() -> Result<(), nix::Error> {
+    let action = SigAction::new(SigHandler::SigDfl, SaFlags::empty(), SigSet::empty());
     unsafe { sigaction(Signal::SIGINT, &action)? };
     Ok(())
 }
