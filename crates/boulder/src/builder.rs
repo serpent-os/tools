@@ -102,7 +102,6 @@ impl Builder {
         root::clean(self)?;
 
         let rt = Runtime::new()?;
-
         rt.block_on(async {
             let profiles = profile::Manager::new(&self.env).await;
 
@@ -113,6 +112,7 @@ impl Builder {
 
             Ok(()) as Result<_, Error>
         })?;
+        rt.destroy();
 
         Ok(())
     }
