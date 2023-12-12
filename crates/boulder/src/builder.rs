@@ -6,11 +6,15 @@ use std::{
     fs, io,
     os::unix::process::ExitStatusExt,
     path::{Path, PathBuf},
-    process,
+    process, thread,
 };
 
-use nix::{sys::signal::Signal, unistd::Pid};
-use stone_recipe::Recipe;
+use itertools::Itertools;
+use nix::{
+    sys::signal::Signal,
+    unistd::{getpgrp, setpgid, Pid},
+};
+use stone_recipe::{script, Recipe};
 use thiserror::Error;
 use tui::Stylize;
 
@@ -121,6 +125,16 @@ impl Builder {
         container::exec(&self.paths, self.recipe.options.networking, || {
             // We're now in the container =)
 
+            // Set ourselves into our own process group
+            // and set it as fg term
+            //
+            // This is so we can restore this process back as
+            // the fg term after using `bash` for chroot below
+            // so we can reestablish SIGINT forwarding to scripts
+            setpgid(Pid::from_raw(0), Pid::from_raw(0))?;
+            let pgid = getpgrp();
+            ::container::set_term_fg(pgid)?;
+
             for (i, target) in self.targets.iter().enumerate() {
                 if i > 0 {
                     println!();
@@ -159,44 +173,80 @@ impl Builder {
 
                         let build_dir = &job.build_dir;
                         let work_dir = &job.work_dir;
-
-                        // TODO: Proper temp file
-                        let script_path = "/tmp/script";
-                        std::fs::write(script_path, &script.content).unwrap();
-
                         let current_dir = if work_dir.exists() {
                             &work_dir
                         } else {
                             &build_dir
                         };
 
-                        let mut command = logged(*step, is_pgo, "/bin/sh")?
-                            .arg(script_path)
-                            .env_clear()
-                            .env("HOME", build_dir)
-                            .env("PATH", "/usr/bin:/usr/sbin")
-                            .env("TERM", "xterm-256color")
-                            .current_dir(current_dir)
-                            .spawn()?;
+                        for command in &script.commands {
+                            match command {
+                                script::Command::Break(breakpoint) => {
+                                    println!(
+                                        "\n{}{}",
+                                        "Breakpoint".bold(),
+                                        breakpoint
+                                            .exit
+                                            .then_some(" (exit)")
+                                            .unwrap_or_default()
+                                            .dim()
+                                    );
 
-                        ::container::forward_sigint(Pid::from_raw(command.id() as i32))?;
+                                    // Write env to $HOME/.profile
+                                    std::fs::write(
+                                        build_dir.join(".profile"),
+                                        sanitize_profile(script.env.as_deref().unwrap_or_default()),
+                                    )?;
 
-                        let result = command.wait()?;
+                                    let mut command = process::Command::new("/bin/bash")
+                                        .arg("--login")
+                                        .env_clear()
+                                        .env("HOME", build_dir)
+                                        .env("PATH", "/usr/bin:/usr/sbin")
+                                        .env("TERM", "xterm-256color")
+                                        .current_dir(current_dir)
+                                        .spawn()?;
 
-                        if !result.success() {
-                            match result.code() {
-                                Some(code) => {
-                                    return Err(ExecError::Code(code));
+                                    command.wait()?;
+
+                                    // Restore ourselves as fg term since bash steals it
+                                    ::container::set_term_fg(pgid)?;
+
+                                    if breakpoint.exit {
+                                        return Ok(());
+                                    }
                                 }
-                                None => {
-                                    if let Some(signal) = result
-                                        .signal()
-                                        .or_else(|| result.stopped_signal())
-                                        .and_then(|i| Signal::try_from(i).ok())
-                                    {
-                                        return Err(ExecError::Signal(signal));
-                                    } else {
-                                        return Err(ExecError::UnknownSignal);
+                                script::Command::Content(content) => {
+                                    // TODO: Proper temp file
+                                    let script_path = "/tmp/script";
+                                    std::fs::write(script_path, content).unwrap();
+
+                                    let result = logged(*step, is_pgo, "/bin/sh", |command| {
+                                        command
+                                            .arg(script_path)
+                                            .env_clear()
+                                            .env("HOME", build_dir)
+                                            .env("PATH", "/usr/bin:/usr/sbin")
+                                            .current_dir(current_dir)
+                                    })?;
+
+                                    if !result.success() {
+                                        match result.code() {
+                                            Some(code) => {
+                                                return Err(ExecError::Code(code));
+                                            }
+                                            None => {
+                                                if let Some(signal) = result
+                                                    .signal()
+                                                    .or_else(|| result.stopped_signal())
+                                                    .and_then(|i| Signal::try_from(i).ok())
+                                                {
+                                                    return Err(ExecError::Signal(signal));
+                                                } else {
+                                                    return Err(ExecError::UnknownSignal);
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -211,30 +261,63 @@ impl Builder {
     }
 }
 
-fn logged(step: Step, is_pgo: bool, command: &str) -> Result<process::Command, io::Error> {
-    let out_log = log(step, is_pgo)?;
-    let err_log = log(step, is_pgo)?;
-
+fn logged(
+    step: Step,
+    is_pgo: bool,
+    command: &str,
+    f: impl FnOnce(&mut process::Command) -> &mut process::Command,
+) -> Result<process::ExitStatus, io::Error> {
     let mut command = process::Command::new(command);
-    command
-        .stdout(out_log.stdin.unwrap())
-        .stderr(err_log.stdin.unwrap());
 
-    Ok(command)
+    f(&mut command);
+
+    let mut child = command
+        .stdout(process::Stdio::piped())
+        .stderr(process::Stdio::piped())
+        .spawn()?;
+
+    // Log stdout and stderr
+    let stdout_log = log(step, is_pgo, child.stdout.take().unwrap());
+    let stderr_log = log(step, is_pgo, child.stderr.take().unwrap());
+
+    // Forward SIGINT to this process
+    ::container::forward_sigint(Pid::from_raw(child.id() as i32))?;
+
+    let result = child.wait()?;
+
+    let _ = stdout_log.join();
+    let _ = stderr_log.join();
+
+    Ok(result)
 }
 
-// TODO: Ikey plz make look nice
-fn log(step: Step, is_pgo: bool) -> Result<process::Child, io::Error> {
-    let pgo = is_pgo.then_some("│").unwrap_or_default().dim();
-    let kind = step.styled(format!("{}│", step.abbrev()));
-    let tag = format!("{}{pgo}{kind} ", "│".dim());
+fn log<R>(step: Step, is_pgo: bool, pipe: R) -> thread::JoinHandle<()>
+where
+    R: io::Read + Send + 'static,
+{
+    use std::io::BufRead;
 
-    process::Command::new("awk")
-        .arg(format!(r#"{{ print "{tag}" $0 }}"#))
-        .env("PATH", "/usr/bin:/usr/sbin")
-        .env("TERM", "xterm-256color")
-        .stdin(process::Stdio::piped())
-        .spawn()
+    thread::spawn(move || {
+        let pgo = is_pgo.then_some("│").unwrap_or_default().dim();
+        let kind = step.styled(format!("{}│", step.abbrev()));
+        let tag = format!("{}{pgo}{kind}", "│".dim());
+
+        let mut lines = io::BufReader::new(pipe).lines();
+
+        while let Some(Ok(line)) = lines.next() {
+            println!("{tag} {line}");
+        }
+    })
+}
+
+fn sanitize_profile(content: &str) -> String {
+    let filtered = content
+        .lines()
+        .filter(|line| {
+            !line.starts_with("#!") && !line.starts_with("set -") && !line.starts_with("TERM=")
+        })
+        .join("\n");
+    format!("{filtered}\n")
 }
 
 #[derive(Debug, Error)]

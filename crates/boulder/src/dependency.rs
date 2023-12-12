@@ -96,6 +96,7 @@ const BASE_PACKAGES: &[&str] = &[
     "binary(git)",
     "binary(nano)",
     "binary(vim)",
+    "binary(ps)",
 ];
 const BASE32_PACKAGES: &[&str] = &["glibc-32bit-devel"];
 
