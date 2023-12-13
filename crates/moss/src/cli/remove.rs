@@ -9,6 +9,7 @@ use futures::StreamExt;
 use itertools::{Either, Itertools};
 use moss::{
     client::{self, Client},
+    environment,
     package::Flags,
     registry::transaction,
     state::Selection,
@@ -34,7 +35,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
         .collect::<Vec<_>>();
 
     // Grab a client for the target, enumerate packages
-    let client = Client::new(root).await?;
+    let client = Client::new(environment::NAME, root).await?;
 
     let installed = client
         .registry

@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use clap::{arg, value_parser, ArgMatches, Command};
-use moss::client::Client;
+use moss::{client::Client, environment};
 
 pub use moss::client::install::Error;
 
@@ -36,7 +36,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     let yes = *args.get_one::<bool>("yes").unwrap();
 
     // Grab a client for the root
-    let mut client = Client::new(root).await?;
+    let mut client = Client::new(environment::NAME, root).await?;
 
     // Make ephemeral if a blit target was provided
     if let Some(blit_target) = args.get_one::<PathBuf>("to").cloned() {

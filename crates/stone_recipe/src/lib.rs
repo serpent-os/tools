@@ -8,7 +8,17 @@ use serde::Deserialize;
 use thiserror::Error;
 use url::Url;
 
-pub fn from_slice(bytes: &[u8]) -> Result<Recipe, serde_yaml::Error> {
+pub use serde_yaml::Error;
+
+pub use self::macros::Macros;
+pub use self::script::Script;
+pub use self::tuning::Tuning;
+
+pub mod macros;
+pub mod script;
+pub mod tuning;
+
+pub fn from_slice(bytes: &[u8]) -> Result<Recipe, Error> {
     serde_yaml::from_slice(bytes)
 }
 
@@ -36,7 +46,7 @@ pub struct Recipe {
     pub architectures: Vec<String>,
     #[serde(default)]
     pub tuning: Vec<KeyValue<Tuning>>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "stringy_bool")]
     pub emul32: bool,
 }
 
@@ -49,6 +59,7 @@ pub struct KeyValue<T> {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Source {
     pub name: String,
+    #[serde(deserialize_with = "force_string")]
     pub version: String,
     pub release: u64,
     pub homepage: String,
@@ -73,14 +84,14 @@ pub struct Build {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Options {
     #[serde(default)]
-    pub toolchain: Toolchain,
-    #[serde(default)]
+    pub toolchain: tuning::Toolchain,
+    #[serde(default, deserialize_with = "stringy_bool")]
     pub cspgo: bool,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "stringy_bool")]
     pub samplepgo: bool,
-    #[serde(default = "default_true")]
+    #[serde(default = "default_true", deserialize_with = "stringy_bool")]
     pub strip: bool,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "stringy_bool")]
     pub networking: bool,
 }
 
@@ -90,14 +101,8 @@ pub struct Package {
     pub description: Option<String>,
     #[serde(default, rename = "rundeps")]
     pub run_deps: Vec<String>,
-}
-
-#[derive(Debug, Clone, Copy, Default, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Toolchain {
-    #[default]
-    Llvm,
-    Gnu,
+    #[serde(default)]
+    pub paths: Vec<Path>,
 }
 
 #[derive(Debug, Clone)]
@@ -106,9 +111,9 @@ pub enum Upstream {
         uri: Url,
         hash: String,
         rename: Option<String>,
-        strip_dirs: u8,
+        strip_dirs: Option<u8>,
         unpack: bool,
-        unpack_dir: PathBuf,
+        unpack_dir: Option<PathBuf>,
     },
     Git {
         uri: Url,
@@ -123,29 +128,25 @@ impl<'de> Deserialize<'de> for Upstream {
     where
         D: serde::Deserializer<'de>,
     {
-        fn default_unpack_dir() -> PathBuf {
-            ".".into()
-        }
-
         #[derive(Debug, Deserialize)]
         #[serde(untagged)]
         enum Inner {
             Plain {
                 hash: String,
                 rename: Option<String>,
-                #[serde(default, rename = "stripdirs")]
-                strip_dirs: u8,
-                #[serde(default = "default_true")]
+                #[serde(rename = "stripdirs")]
+                strip_dirs: Option<u8>,
+                #[serde(default = "default_true", deserialize_with = "stringy_bool")]
                 unpack: bool,
-                #[serde(default = "default_unpack_dir", rename = "unpackdir")]
-                unpack_dir: PathBuf,
+                #[serde(rename = "unpackdir")]
+                unpack_dir: Option<PathBuf>,
             },
             Git {
                 #[serde(rename = "ref")]
                 ref_id: String,
                 #[serde(rename = "clonedir")]
                 clone_dir: Option<PathBuf>,
-                #[serde(default = "default_true")]
+                #[serde(default = "default_true", deserialize_with = "stringy_bool")]
                 staging: bool,
             },
         }
@@ -186,9 +187,9 @@ impl<'de> Deserialize<'de> for Upstream {
                 uri,
                 hash,
                 rename: None,
-                strip_dirs: 0,
+                strip_dirs: None,
                 unpack: default_true(),
-                unpack_dir: default_unpack_dir(),
+                unpack_dir: None,
             }),
             Some((Uri::Git(uri), Outer::String(ref_id))) => Ok(Upstream::Git {
                 uri,
@@ -239,13 +240,12 @@ impl<'de> Deserialize<'de> for Upstream {
 }
 
 #[derive(Debug, Clone)]
-pub enum Tuning {
-    Enable,
-    Disable,
-    Config(String),
+pub struct Path {
+    pub path: PathBuf,
+    pub kind: PathKind,
 }
 
-impl<'de> Deserialize<'de> for KeyValue<Tuning> {
+impl<'de> Deserialize<'de> for Path {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -253,40 +253,35 @@ impl<'de> Deserialize<'de> for KeyValue<Tuning> {
         #[derive(Debug, Deserialize)]
         #[serde(untagged)]
         enum Inner {
-            Bool(bool),
-            Config(String),
+            String(PathBuf),
+            KeyValue(HashMap<PathBuf, PathKind>),
         }
 
-        #[derive(Debug, Deserialize)]
-        #[serde(untagged)]
-        enum Outer {
-            Key(String),
-            KeyValue(HashMap<String, Inner>),
-        }
-
-        match Outer::deserialize(deserializer)? {
-            Outer::Key(key) => Ok(KeyValue {
-                key,
-                value: Tuning::Enable,
+        match Inner::deserialize(deserializer)? {
+            Inner::String(path) => Ok(Path {
+                path,
+                kind: PathKind::default(),
             }),
-            Outer::KeyValue(map) => match map.into_iter().next() {
-                Some((key, Inner::Bool(true))) => Ok(KeyValue {
-                    key,
-                    value: Tuning::Enable,
-                }),
-                Some((key, Inner::Bool(false))) => Ok(KeyValue {
-                    key,
-                    value: Tuning::Disable,
-                }),
-                Some((key, Inner::Config(config))) => Ok(KeyValue {
-                    key,
-                    value: Tuning::Config(config),
-                }),
-                // unreachable?
-                None => Err(serde::de::Error::custom("missing tuning entry")),
-            },
+            Inner::KeyValue(map) => {
+                if let Some((path, kind)) = map.into_iter().next() {
+                    Ok(Path { path, kind })
+                } else {
+                    Err(serde::de::Error::custom("missing path entry"))
+                }
+            }
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, strum::EnumString, Default)]
+#[serde(try_from = "&str")]
+#[strum(serialize_all = "lowercase")]
+pub enum PathKind {
+    #[default]
+    Any,
+    Exe,
+    Symlink,
+    Special,
 }
 
 fn default_true() -> bool {
@@ -329,6 +324,50 @@ where
             )
             .collect()
     }))
+}
+
+fn stringy_bool<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Inner {
+        Bool(bool),
+        String(String),
+    }
+
+    match Inner::deserialize(deserializer)? {
+        Inner::Bool(bool) => Ok(bool),
+        // Really yaml...
+        Inner::String(s) => match s.as_str() {
+            "y" | "Y" | "yes" | "Yes" | "YES" | "true" | "True" | "TRUE" | "on" | "On" | "ON" => {
+                Ok(true)
+            }
+            "n" | "N" | "no" | "No" | "NO" | "false" | "False" | "FALSE" | "off" | "Off"
+            | "OFF" => Ok(false),
+            _ => Err(serde::de::Error::custom(
+                "invalid boolean: expected true or false",
+            )),
+        },
+    }
+}
+
+fn force_string<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Inner {
+        String(String),
+        Number(serde_yaml::Number),
+    }
+
+    match Inner::deserialize(deserializer)? {
+        Inner::String(s) => Ok(s),
+        Inner::Number(n) => Ok(n.to_string()),
+    }
 }
 
 #[cfg(test)]

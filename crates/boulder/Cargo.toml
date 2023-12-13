@@ -6,8 +6,21 @@ edition.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+config = { path = "../config" }
 container = { path = "../container" }
 moss = { path = "../moss" }
+stone_recipe = { path = "../stone_recipe" }
+tui = { path = "../tui" }
 
 clap.workspace = true
+dirs.workspace = true
+futures.workspace = true
+hex.workspace = true
+itertools.workspace = true
+nix.workspace = true
+serde.workspace = true
+sha2.workspace = true
+strum.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
+url.workspace = true

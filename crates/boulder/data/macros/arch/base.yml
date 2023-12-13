@@ -1,0 +1,588 @@
+# Provides core definitions which each profile may override
+
+definitions:
+
+    # Basic variables required for packages to build correctly
+    - libsuffix      : ""
+    - prefix         : "/usr"
+    - bindir         : "%(prefix)/bin"
+    - sbindir        : "%(prefix)/sbin"
+    - includedir     : "%(prefix)/include"
+    - datadir        : "%(prefix)/share"
+    - localedir      : "%(datadir)/locale"
+    - infodir        : "%(datadir)/info"
+    - mandir         : "%(datadir)/man"
+    - docdir         : "%(datadir)/doc"
+    - vendordir      : "%(datadir)/defaults"
+    - completionsdir : "%(datadir)/bash-completion/completions"
+    - tmpfilesdir    : "%(prefix)/lib/tmpfiles.d"
+    - sysusersdir    : "%(prefix)/lib/sysusers.d"
+    - udevrulesdir   : "%(prefix)/lib/udev/rules.d"
+    - localstatedir  : "/var"
+    - sharedstatedir : "%(localstatedir)/lib"
+    - runstatedir    : "/run"
+    - sysconfdir     : "/etc"
+    - libdir         : "%(prefix)/lib%(libsuffix)"
+    - libexecdir     : "%(libdir)/%(name)"
+    - builddir       : "serpent_builddir"
+
+    # The vendorID is encoded into the triplet, toolchain, builds, etc.
+    # It must match the triplet from bootstrap-scripts.
+    - vendorID       : "serpent-linux"
+
+    # Must be set for CC/CXX/CPP to work
+    - cc             : "%(compiler_c)"
+    - cxx            : "%(compiler_cxx)"
+    - objc           : "%(compiler_objc)"
+    - objcxx         : "%(compiler_objcxx)"
+    - cpp            : "%(compiler_cpp)"
+    - objcpp         : "%(compiler_objcpp)"
+    - objcxxcpp      : "%(compiler_objcxxcpp)"
+    - ar             : "%(compiler_ar)"
+    - ld             : "%(compiler_ld)"
+    - objcopy        : "%(compiler_objcopy)"
+    - nm             : "%(compiler_nm)"
+    - ranlib         : "%(compiler_ranlib)"
+    - strip          : "%(compiler_strip)"
+    - path           : "%(compiler_path)"
+    - ccachedir      : "%(compiler_cache)"
+    - pkgconfigpath  : "%(libdir)/pkgconfig:/usr/share/pkgconfig"
+
+actions              :
+
+    # scriptBase is merged to the top of all newly generated build scripts.
+    - scriptBase     :
+        command: |
+            #!/bin/sh
+            set -e
+            set -x
+            TERM="dumb"; export TERM
+            PKG_CONFIG_PATH="%(pkgconfigpath)"; export PKG_CONFIG_PATH
+            CFLAGS="%(cflags)"; export CFLAGS
+            CGO_CFLAGS="%(cflags)"; export CGO_CFLAGS
+            CXXFLAGS="%(cxxflags)"; export CXXFLAGS
+            CGO_CXXFLAGS="%(cxxflags)"; export CGO_CXXFLAGS
+            LDFLAGS="%(ldflags)"; export LDFLAGS
+            CGO_LDFLAGS="%(ldflags) -Wl,--no-gc-sections"; export CGO_LDFLAGS
+            CC="%(cc)"; export CC
+            CXX="%(cxx)"; export CXX
+            OBJC="%(objc)"; export OBJC
+            OBJCXX="%(objcxx)"; export OBJCXX
+            CPP="%(cpp)"; export CPP
+            OBJCPP="%(objcpp)"; export OBJCPP
+            OBJCXXCPP="%(objcxxcpp)"; export OBJCXXCPP
+            AR="%(ar)"; export AR
+            LD="%(ld)"; export LD
+            OBJCOPY="%(objcopy)"; export OBJCOPY
+            NM="%(nm)"; export NM
+            RANLIB="%(ranlib)"; export RANLIB
+            STRIP="%(strip)"; export STRIP
+            PATH="%(path)"; export PATH
+            CCACHE_DIR="%(ccachedir)"; export CCACHE_DIR;
+            test -z "$CCACHE_DIR" && unset CCACHE_DIR;
+            LANG="en_US.UTF-8"; export LANG
+            LC_ALL="en_US.UTF-8"; export LC_ALL
+            test -d "%(workdir)" || (echo "The work directory %(workdir) does not exist"; exit 1)
+            cd "%(workdir)" && echo "The work directory %%(workdir) is ${PWD}"
+
+defaultTuningGroups :
+    - asneeded
+    - avxwidth
+    - base
+    - bindnow
+    - debug
+    - fortify
+    - frame-pointer
+    - harden
+    - icf
+    - optimize
+    - relr
+    - symbolic
+
+tuning              :
+    # A set of groups we can toggle from the "tune" key
+
+    # Architecture flags should always be enabled
+    - architecture:
+        enabled:
+            - architecture
+
+    # Base flags should almost always be enabled, but want to be able to disable
+    - base:
+        enabled:
+            - base
+
+    - debug:
+        options:
+            - lines:
+                enabled: debug-lines
+            - std:
+                enabled: debug-std
+        default: std
+
+    # Toggle frame-pointer
+    - frame-pointer:
+        enabled: no-omit-frame-pointer
+        disabled: omit-frame-pointer
+
+    # Enable bindnow functionality
+    - bindnow:
+        enabled: bindnow
+
+    # Enable symbolic
+    - symbolic:
+        options:
+            - all:
+                enabled: symbolic-all
+            - functions:
+                enabled: symbolic-functions
+            - nonweak:
+                enabled: symbolic-nonweak
+        default: functions
+
+    # Enable fortify
+    - fortify:
+        enabled: fortify
+
+    # Enable hardening
+    - harden:
+        options:
+            - none:
+                enabled: harden-none
+            - lvl1:
+                enabled: harden-lvl1
+            - lvl2:
+                enabled: harden-lvl2
+        disabled: harden-none
+        default: lvl1
+
+    # Enable optimisation per given levels
+    - optimize:
+        options:
+            - fast:
+                enabled: optimize-fast
+            - generic:
+                enabled: optimize-generic
+            - size:
+                enabled:
+                    - optimize-size
+                    - sections
+            - speed:
+                enabled: optimize-speed
+        default: generic
+
+    # Enable LTO
+    - lto:
+        options:
+            - full:
+                enabled: lto-full
+            - thin:
+                enabled: lto-thin
+        default: full
+
+    # Enable LTOextra. Requires the equivalent lto option
+    - ltoextra:
+        options:
+            - full:
+                enabled: ltoextra-full
+            - thin:
+                enabled: ltoextra-thin
+        default: full
+
+    # Enable ICF
+    - icf:
+        options:
+            - safe:
+                enabled: icf-safe
+            - all:
+                enabled: icf-all
+        default: safe
+
+    # Enable Ignore data address equality
+    - idae:
+        enabled: idae
+
+    # Enable Polly
+    - polly:
+        enabled: polly
+
+    # Enable section splitting
+    - sections:
+        enabled: sections
+
+    # Toggle common
+    - common:
+        enabled: common
+
+    # Enable math
+    - math:
+        enabled: math
+
+    # Enable noplt
+    - noplt:
+        enabled:
+            - noplt
+            - bindnow
+
+    # Enable nosemantic
+    - nosemantic:
+        enabled: nosemantic
+
+    # Enable nodaed
+    - nodaed:
+        enabled: nodaed
+
+    # Enable asneeded
+    - asneeded:
+        enabled: asneeded
+
+    # Enable avxwidth
+    - avxwidth:
+        enabled: avxwidth-128
+
+    # Enable bolt
+    - bolt:
+        enabled: bolt
+
+    # Enable runpath
+    - runpath:
+        enabled: runpath
+
+    # Enable sse2avx
+    - sse2avx:
+        enabled: sse2avx
+
+    # Enable pch-instantiate
+    - pch-instantiate:
+        enabled: pch-instantiate
+
+    # Enable visibility
+    - visibility:
+        options:
+            - inline:
+                enabled: visibility-inline
+            - hidden:
+                enabled: visibility-hidden
+        default: inline
+
+    # Enable relative-vtables
+    - relative-vtables:
+        enabled: relative-vtables
+
+    # Enable relr
+    - relr:
+        enabled: relr
+
+flags               :
+
+    # Needs overriding with -march/mtune values.
+    - architecture:
+        c         : ""
+        cxx       : ""
+        ld        : ""
+
+    # Base flags, enabled by default
+    - base:
+        c         : "-pipe -Wformat -Wformat-security -Wno-error -fPIC"
+        cxx       : "-pipe -Wformat -Wformat-security -Wno-error -fPIC"
+        ld        : "-Wl,-O2,--gc-sections"
+
+    - omit-frame-pointer:
+        c         : "-fomit-frame-pointer -momit-leaf-frame-pointer"
+        cxx       : "-fomit-frame-pointer -momit-leaf-frame-pointer"
+
+    - no-omit-frame-pointer:
+        c         : "-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
+        cxx       : "-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
+
+    # Toggle bindnow (ON)
+    - bindnow:
+        ld        : "-Wl,-z,relro,-z,now"
+
+    # Toggle symbolic (ON symbolic-functions)
+    - symbolic-all:
+        ld        : "-Wl,-Bsymbolic"
+
+    - symbolic-functions:
+        ld        : "-Wl,-Bsymbolic-functions"
+
+    - symbolic-nonweak:
+        llvm:
+            ld        : "-Wl,-Bsymbolic-non-weak-functions"
+
+    # Toggle fortify (ON)
+    - fortify:
+        c         : "-D_FORTIFY_SOURCE=2"
+        cxx       : "-D_FORTIFY_SOURCE=2"
+
+    # No hardening!
+    - harden-none:
+        c         : "-fno-stack-protector"
+        cxx       : "-fno-stack-protector"
+
+    # Hardening (ON harden-lvl1)
+    - harden-lvl1:
+        c         : "-fstack-protector --param ssp-buffer-size=32"
+        cxx       : "-fstack-protector --param ssp-buffer-size=32"
+
+    - harden-lvl2:
+        llvm:
+            c         : "-fstack-protector-strong -fstack-clash-protection -fPIE --param ssp-buffer-size=4"
+            cxx       : "-fstack-protector-strong -fstack-clash-protection -fPIE --param ssp-buffer-size=4"
+        gnu:
+            c         : "-fstack-protector-strong -fstack-clash-protection -fPIE --param ssp-buffer-size=4"
+            cxx       : "-fstack-protector-strong -fstack-clash-protection -fPIE --param ssp-buffer-size=4"
+
+    # Use section splitting, improves GC without lto only (OFF)
+    - sections:
+        c     : "-ffunction-sections -fdata-sections"
+        cxx   : "-ffunction-sections -fdata-sections"
+
+    # Optimize without care for math issues
+    - optimize-fast:
+        c         : "-Ofast"
+        cxx       : "-Ofast"
+
+    # Generic optimisation case (ON)
+    - optimize-generic:
+        c         : "-O2"
+        cxx       : "-O2"
+
+    # Optimize for size (OFF)
+    - optimize-size:
+        c     : "-Os"
+        cxx   : "-Os"
+
+    # Optimize for speed (OFF)
+    - optimize-speed:
+        c         : "-O3"
+        cxx       : "-O3"
+
+    # Enable LTO optimisations (OFF)
+    - lto-full:
+        c         : "-flto"
+        cxx       : "-flto"
+        ld        : "-flto"
+
+    # Enable Thin-LTO optimisations (OFF)
+    - lto-thin:
+        llvm:
+            c         : "-flto=thin"
+            cxx       : "-flto=thin"
+            ld        : "-flto=thin"
+
+    # Enable LTOextra optimisations (OFF)
+    - ltoextra-full:
+        gnu:
+            c         : "-fdevirtualize-at-ltrans"
+            cxx       : "-fdevirtualize-at-ltrans"
+        llvm:
+            c         : "-fwhole-program-vtables -fvirtual-function-elimination"
+            cxx       : "-fwhole-program-vtables -fvirtual-function-elimination"
+
+    # Enable Thin-LTOextra optimisations (OFF)
+    - ltoextra-thin:
+        llvm:
+            c         : "-fwhole-program-vtables"
+            cxx       : "-fwhole-program-vtables"
+
+    # Enable ALL LLVM ICF optimisations (OFF)
+    - icf-all:
+        llvm:
+            ld    : "-Wl,--icf=all"
+
+    # Enable LLVM ICF optimisations (ON)
+    - icf-safe:
+        llvm:
+            ld    : "-Wl,--icf=safe"
+
+    # Ignore data address equality (OFF)
+    - idae:
+        llvm:
+            ld    : "-Wl,--ignore-data-address-equality"
+
+    # Enable LLVM polly optimisations (OFF)
+    - polly:
+        llvm:
+            c     : "-Xclang -mllvm -Xclang -polly -Xclang -mllvm -Xclang -polly-vectorizer=stripmine"
+            cxx   : "-Xclang -mllvm -Xclang -polly -Xclang -mllvm -Xclang -polly-vectorizer=stripmine"
+
+    # Toggle options you want to use with llvm-bolt (OFF)
+    - bolt:
+        gnu:
+            c         : "-fno-reorder-blocks-and-partition​"
+            cxx       : "-fno-reorder-blocks-and-partition​"
+            ld        : "-Wl,-q"
+        llvm:
+            ld        : "-Wl,-q"
+
+    # Toggle -fcommon (OFF)
+    - common:
+        c         : "-fcommon"
+        cxx       : "-fcommon"
+
+    # Toggle debug-lines optimisations
+    - debug-lines:
+        llvm:
+            c         : "-gline-tables-only -fasynchronous-unwind-tables"
+            cxx       : "-gline-tables-only -fasynchronous-unwind-tables"
+
+    # Toggle debug-std optimisations (ON)
+    - debug-std:
+        c         : "-g -feliminate-unused-debug-types -fasynchronous-unwind-tables"
+        cxx       : "-g -feliminate-unused-debug-types -fasynchronous-unwind-tables"
+
+    # Toggle fast math (OFF)
+    - math:
+        gnu:
+            c         : "-fno-math-errno -fno-trapping-math"
+            cxx       : "-fno-math-errno -fno-trapping-math"
+        llvm:
+            c         : "-fno-math-errno -fno-trapping-math -ffp-contract=fast -ffp-model=fast"
+            cxx       : "-fno-math-errno -fno-trapping-math -ffp-contract=fast -ffp-model=fast"
+
+    # Toggle noplt, requires bindnow (OFF)
+    - noplt:
+        c         : "-fno-plt"
+        cxx       : "-fno-plt"
+
+    # Toggle -fno-semantic-interposition (OFF)
+    - nosemantic:
+        c         : "-fno-semantic-interposition"
+        cxx       : "-fno-semantic-interposition"
+
+    # Toggle -fno-direct-access-external-data (OFF)
+    - nodaed:
+        llvm:
+            c         : "-fno-direct-access-external-data"
+            cxx       : "-fno-direct-access-external-data"
+
+    # Prefer 128-bit vector width (ON)
+    - avxwidth-128:
+        c         : "-mprefer-vector-width=128"
+        cxx       : "-mprefer-vector-width=128"
+
+    # Toggle -fpch-instantiate-templates (OFF)
+    - pch-instantiate:
+        llvm:
+            c         : "-fpch-instantiate-templates"
+            cxx       : "-fpch-instantiate-templates"
+
+    # Toggle asneeded (ON)
+    - asneeded:
+        ld        : "-Wl,--as-needed"
+
+    # Toggle runpath (OFF)
+    - runpath:
+        ld        : "-Wl,--enable-new-dtags"
+
+    # Toggle sse2avx (OFF)
+    - sse2avx:
+        gnu:
+            c         : "-msse2avx"
+            cxx       : "-msse2avx"
+
+    # Toggle visibility hidden (OFF)
+    - visibility-hidden:
+        c          : "-fvisibility=hidden"
+        cxx        : "-fvisibility-inlines-hidden -fvisibility=hidden"
+
+    # Toggle visibility inlines hidden (OFF)
+    - visibility-inline:
+        cxx        : "-fvisibility-inlines-hidden"
+
+    # Enable relative vtables (OFF)
+    - relative-vtables:
+        llvm:
+            cxx       : "-fexperimental-library -fexperimental-relative-c++-abi-vtables"
+
+    # Toggle relr (ON)
+    - relr:
+        ld        : "-Wl,-z,pack-relative-relocs"
+
+# Template packages
+packages          :
+
+    # Main package
+    - "%(name)":
+        paths:
+            - "*"
+
+    # Some documentation
+    - "%(name)-docs":
+        summary: "Documentation for %(name)"
+        description: |
+            Documentation files for the %(name) package
+        paths:
+            - /usr/share/gtk-doc
+
+    # Main development subpackage
+    - "%(name)-devel":
+        summary: "Development files for %(name)"
+        description: |
+            Install this package if you intend to build software against
+            the %(name) package.
+        paths:
+            - /usr/include
+            - /usr/lib/*.a
+            - /usr/lib/cmake
+            - /usr/lib/lib*.so
+            - /usr/lib/pkgconfig
+            - /usr/share/aclocal
+            - /usr/share/man/man2
+            - /usr/share/man/man3
+            - /usr/share/man/man9
+            - /usr/share/pkgconfig
+        rundeps:
+            - "%(name)"
+
+    # Main dbginfo package
+    - "%(name)-dbginfo":
+        summary: "Debugging symbols for %(name)"
+        description: |
+            Install this package if you need debugging information + symbols
+            for the %(name) package.
+        paths:
+            - /usr/lib/debug
+
+    # Template for a -libs sub-package which can be used by adding paths via the stone.yml file
+    - "%(name)-libs":
+        summary: "Library files for %(name)"
+        description: |
+            Library files for %(name), typically pulled in as a dependency of another package.
+
+    # 32-bit compat libraries
+    - "%(name)-32bit":
+        summary: "Provides 32-bit runtime libraries for %(name)"
+        description: |
+            Install this package if you need the 32-bit versions of the
+            %(name) package libraries.
+        paths:
+            - /usr/lib32
+            - /usr/lib32/lib*.so.*
+        rundeps:
+            - "%(name)"
+
+    # 32-bit development files
+    - "%(name)-32bit-devel":
+        summary: "Provides development files for %(name)-32bit"
+        description: |
+            Install this package if you need to build software against
+            the 32-bit version of %(name), %(name)-32bit.
+        paths:
+            - /usr/lib32/*.a
+            - /usr/lib32/cmake
+            - /usr/lib32/lib*.so
+            - /usr/lib32/pkgconfig
+        rundeps:
+            - "%(name)-32bit"
+            - "%(name)-devel"
+
+    # 32-bit debug symbols
+    - "%(name)-32bit-dbginfo":
+        summary: "Debugging symbols for %(name)-32bit"
+        description: |
+            Install this package if you need debugging information + symbols
+            for the %(name)-32bit package.
+        paths:
+            - /usr/lib32/debug

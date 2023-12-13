@@ -3,35 +3,88 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use futures::{future, StreamExt, TryStreamExt};
 use thiserror::Error;
 use tokio::{fs, io};
+use xxhash_rust::xxh3::xxh3_64;
 
 use crate::db::meta;
-use crate::{config, package, Installation};
 use crate::{environment, stone};
+use crate::{package, Installation};
 
 use crate::repository::{self, Repository};
 
+enum Source {
+    System(config::Manager),
+    Explicit {
+        identifier: String,
+        repos: repository::Map,
+    },
+}
+
+impl Source {
+    fn identifier(&self) -> &str {
+        match self {
+            Source::System(_) => environment::NAME,
+            Source::Explicit { identifier, .. } => identifier,
+        }
+    }
+}
+
 /// Manage a bunch of repositories
 pub struct Manager {
+    source: Source,
     installation: Installation,
     repositories: HashMap<repository::Id, repository::Active>,
 }
 
 impl Manager {
-    /// Create a [`Manager`] for the supplied [`Installation`]
-    pub async fn new(installation: Installation) -> Result<Self, Error> {
-        // Load all configs, default if none exist
-        let configs = config::load::<repository::Map>(&installation.root)
-            .await
-            .unwrap_or_default();
+    pub fn is_explicit(&self) -> bool {
+        matches!(self.source, Source::Explicit { .. })
+    }
+
+    /// Create a [`Manager`] for the supplied [`Installation`] using system configurations
+    pub async fn system(
+        config: config::Manager,
+        installation: Installation,
+    ) -> Result<Self, Error> {
+        Self::new(Source::System(config), installation).await
+    }
+
+    /// Create a [`Manager`] for the supplied [`Installation`] using the provided configurations
+    ///
+    /// [`Manager`] can't be used to `add` new repos in this mode
+    pub async fn explicit(
+        identifier: impl ToString,
+        repos: repository::Map,
+        installation: Installation,
+    ) -> Result<Self, Error> {
+        Self::new(
+            Source::Explicit {
+                identifier: identifier.to_string(),
+                repos,
+            },
+            installation,
+        )
+        .await
+    }
+
+    async fn new(source: Source, installation: Installation) -> Result<Self, Error> {
+        let configs = match &source {
+            Source::System(config) =>
+            // Load all configs, default if none exist
+            {
+                config.load::<repository::Map>().await.unwrap_or_default()
+            }
+            Source::Explicit { repos, .. } => repos.clone(),
+        };
 
         // Open all repo meta dbs and collect into hash map
         let repositories =
             future::try_join_all(configs.into_iter().map(|(id, repository)| async {
-                let db = open_meta_db(&id, &installation).await?;
+                let db = open_meta_db(source.identifier(), &repository, &installation).await?;
 
                 Ok::<_, Error>((id.clone(), repository::Active { id, repository, db }))
             }))
@@ -40,6 +93,7 @@ impl Manager {
             .collect();
 
         Ok(Self {
+            source,
             installation,
             repositories,
         })
@@ -51,32 +105,23 @@ impl Manager {
         id: repository::Id,
         repository: Repository,
     ) -> Result<(), Error> {
+        let Source::System(config) = &self.source else {
+            return Err(Error::ExplicitUnsupported);
+        };
+
         // Save repo as new config file
         // We save it as a map for easy merging across
         // multiple configuration files
         {
             let map = repository::Map::with([(id.clone(), repository.clone())]);
 
-            config::save(&self.installation.root, &id, &map)
-                .await
-                .map_err(Error::SaveConfig)?;
+            config.save(&id, &map).await.map_err(Error::SaveConfig)?;
         }
 
-        let db = open_meta_db(&id, &self.installation).await?;
+        let db = open_meta_db(self.source.identifier(), &repository, &self.installation).await?;
 
         self.repositories
             .insert(id.clone(), repository::Active { id, repository, db });
-
-        Ok(())
-    }
-
-    /// Remove a [`Repository`]
-    pub async fn remove_repository(&mut self, id: repository::Id) -> Result<(), Error> {
-        self.repositories.remove(&id);
-
-        let path = self.installation.repo_path(id.to_string());
-
-        fs::remove_dir_all(path).await.map_err(Error::RemoveDir)?;
 
         Ok(())
     }
@@ -86,9 +131,9 @@ impl Manager {
     pub async fn refresh_all(&mut self) -> Result<(), Error> {
         // Fetch index file + add to meta_db
         future::try_join_all(
-            self.repositories
-                .iter()
-                .map(|(id, state)| refresh_index(id, state, &self.installation)),
+            self.repositories.iter().map(|(id, state)| {
+                refresh_index(self.source.identifier(), state, &self.installation)
+            }),
         )
         .await?;
 
@@ -98,7 +143,7 @@ impl Manager {
     /// Refresh a [`Repository`] by Id
     pub async fn refresh(&mut self, id: &repository::Id) -> Result<(), Error> {
         if let Some(repo) = self.repositories.get(id) {
-            refresh_index(id, repo, &self.installation).await
+            refresh_index(self.source.identifier(), repo, &self.installation).await
         } else {
             Err(Error::UnknownRepo(id.clone()))
         }
@@ -117,13 +162,23 @@ impl Manager {
     }
 }
 
+/// Directory for the repo cached data (db & stone index), hashed by identifier & repo URI
+fn cache_dir(identifier: &str, repo: &Repository, installation: &Installation) -> PathBuf {
+    let hash = format!(
+        "{:02x}",
+        xxh3_64(format!("{}-{}", identifier, repo.uri).as_bytes())
+    );
+    installation.repo_path(hash)
+}
+
 /// Open the meta db file, ensuring it's
 /// directory exists
 async fn open_meta_db(
-    id: &repository::Id,
+    identifier: &str,
+    repo: &Repository,
     installation: &Installation,
 ) -> Result<meta::Database, Error> {
-    let dir = installation.repo_path(id.to_string());
+    let dir = cache_dir(identifier, repo, installation);
 
     fs::create_dir_all(&dir).await.map_err(Error::CreateDir)?;
 
@@ -136,11 +191,11 @@ async fn open_meta_db(
 /// saves it to the repo installation path, then
 /// loads it's metadata into the meta db
 async fn refresh_index(
-    id: &repository::Id,
+    identifier: &str,
     state: &repository::Active,
     installation: &Installation,
 ) -> Result<(), Error> {
-    let out_dir = installation.repo_path(id.to_string());
+    let out_dir = cache_dir(identifier, &state.repository, installation);
 
     fs::create_dir_all(&out_dir)
         .await
@@ -203,6 +258,8 @@ async fn refresh_index(
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("Can't add repos when using explicit configs")]
+    ExplicitUnsupported,
     #[error("Missing metadata field: {0:?}")]
     MissingMetaField(stone::payload::meta::Tag),
     #[error("create directory")]

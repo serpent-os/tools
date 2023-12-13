@@ -4,6 +4,7 @@
 
 use std::{collections::HashMap, fmt, path::Path};
 
+use config::Config;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -13,7 +14,7 @@ use tokio::{
 };
 use url::Url;
 
-use crate::{db::meta, request, Config};
+use crate::{db::meta, request};
 
 pub use self::manager::Manager;
 
@@ -92,7 +93,7 @@ impl Ord for Priority {
 }
 
 /// A map of repositories
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Map(HashMap<Id, Repository>);
 
 impl Map {
@@ -106,6 +107,10 @@ impl Map {
 
     pub fn add(&mut self, id: Id, repo: Repository) {
         self.0.insert(id, repo);
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&Id, &Repository)> {
+        self.0.iter()
     }
 }
 

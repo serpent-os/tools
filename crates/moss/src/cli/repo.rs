@@ -72,6 +72,8 @@ pub fn command() -> Command {
 
 /// Handle subcommands to `repo`
 pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
+    let config = config::Manager::system(root, "moss");
+
     let handler = match args.subcommand() {
         Some(("add", cmd_args)) => Action::Add(
             root,
@@ -92,18 +94,19 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
 
     // dispatch to runtime handler function
     match handler {
-        Action::List(root) => list(root).await,
+        Action::List(root) => list(root, config).await,
         Action::Add(root, name, uri, comment, priority) => {
-            add(root, name, uri, comment, priority).await
+            add(root, config, name, uri, comment, priority).await
         }
         Action::Remove(_, _) => unimplemented!(),
-        Action::Update(root, name) => update(root, name).await,
+        Action::Update(root, name) => update(root, config, name).await,
     }
 }
 
 // Actual implementation of moss repo add, asynchronous
 async fn add(
     root: &Path,
+    config: config::Manager,
     name: String,
     uri: Url,
     comment: String,
@@ -111,7 +114,7 @@ async fn add(
 ) -> Result<(), Error> {
     let installation = Installation::open(root);
 
-    let mut manager = repository::Manager::new(installation).await?;
+    let mut manager = repository::Manager::system(config, installation).await?;
 
     manager
         .add_repository(
@@ -130,9 +133,9 @@ async fn add(
 }
 
 /// List the repositories and pretty print them
-async fn list(root: &Path) -> Result<(), Error> {
+async fn list(root: &Path, config: config::Manager) -> Result<(), Error> {
     let installation = Installation::open(root);
-    let manager = repository::Manager::new(installation).await?;
+    let manager = repository::Manager::system(config, installation).await?;
 
     let configured_repos = manager.list();
     if configured_repos.len() == 0 {
@@ -150,9 +153,9 @@ async fn list(root: &Path) -> Result<(), Error> {
 }
 
 /// Update specific repos or all
-async fn update(root: &Path, which: Option<String>) -> Result<(), Error> {
+async fn update(root: &Path, config: config::Manager, which: Option<String>) -> Result<(), Error> {
     let installation = Installation::open(root);
-    let mut manager = repository::Manager::new(installation).await?;
+    let mut manager = repository::Manager::system(config, installation).await?;
 
     match which {
         Some(repo) => manager.refresh(&repository::Id::new(repo)).await?,

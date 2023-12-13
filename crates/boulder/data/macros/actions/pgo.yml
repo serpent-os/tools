@@ -1,0 +1,124 @@
+actions:
+    # Actions required for PGO builds
+
+    # Merge LLVM profile data, copies to combined.profdata in case there's no stage2
+    - llvm_merge_s1:
+        command: |
+            llvm-profdata merge --failure-mode=all -output=%(pgo_dir)/ir.profdata %(pgo_dir)/IR/default*.profraw
+            cp %(pgo_dir)/ir.profdata %(pgo_dir)/combined.profdata
+    # Merge LLVM profile data after stage2 PGO workload
+    - llvm_merge_s2:
+        command: |
+            rm %(pgo_dir)/combined.profdata
+            llvm-profdata merge --failure-mode=all -output=%(pgo_dir)/combined.profdata %(pgo_dir)/ir.profdata %(pgo_dir)/CS/default*.profraw
+
+    # Instrument file with llvm-bolt
+    - bolt_instr:
+        command: |
+            binstr(){
+                mv ${1} ${1}.orig
+                mkdir -p %(pgo_dir)/BOLT
+                llvm-bolt ${1}.orig -instrument --instrumentation-file=%(pgo_dir)/BOLT/$(basename ${1}) --instrumentation-file-append-pid ${2} ${3} ${4} -o ${1}
+            }
+            binstr
+
+    # Instrument file with llvm-bolt
+    - bolt_merge:
+        command: |
+            bmerge(){
+                merge-fdata %(pgo_dir)/BOLT/$(basename ${1}).*.fdata > %(pgo_dir)/$(basename ${1}).fdata
+            }
+            bmerge
+
+    # Apply bolt profile
+    - bolt_opt:
+        command: |
+            boptim(){
+                llvm-bolt ${1}.orig -o ${1}.bolt -data=%(pgo_dir)/$(basename ${1}).fdata -reorder-blocks=cache+ -reorder-functions=hfsort+ -split-functions=3 -split-all-cold -split-eh -dyno-stats -icf=1 -use-gnu-stack ${2} ${3} ${4}
+                cp ${1}.bolt ${1}
+            }
+            boptim
+        dependencies:
+            - llvm-bolt
+
+    # Collect perf data suitable for the bolt macros
+    - bolt_perf:
+        command: |
+            bperf(){
+                mkdir -p %(pgo_dir)/BOLT
+                perf record -F 6000 -e cycles:u -j any,u -o %(pgo_dir)/BOLT/perf.data -- ${@}
+            }
+            bperf
+        dependencies:
+            - perf
+
+    # Convert perf data into bolt equivalent
+    - bolt_perf2bolt:
+        command: |
+            bperf2bolt(){
+                cp ${1} ${1}.orig
+                perf2bolt -ignore-build-id -p %(pgo_dir)/BOLT/perf.data -o %(pgo_dir)/$(basename ${1}).fdata ${1}
+            }
+            bperf2bolt
+
+tuning              :
+    # A set of groups we can toggle from the "tune" key
+
+    # Enable pgosample
+    - pgosample:
+        enabled: pgosample
+
+    # Enable pgostage1
+    - pgostage1:
+        enabled: pgostage1
+
+    # Enable pgostage2
+    - pgostage2:
+        enabled: pgostage2
+
+    # Enable pgouse
+    - pgouse:
+        enabled: pgouse
+
+flags               :
+    # PGO flag options
+
+    # PGO sample flags for when workload is not comprehensive (workload builds only)
+    - pgosample:
+        llvm:
+            c         : "-fno-profile-sample-accurate"
+            cxx       : "-fno-profile-sample-accurate"
+            ld        : "-fno-profile-sample-accurate"
+        gnu:
+            c         : "-fprofile-partial-training"
+            cxx       : "-fprofile-partial-training"
+            ld        : "-fprofile-partial-training"
+
+    # PGO stage1 flags for ProfileStage1 (workload builds only)
+    - pgostage1:
+        llvm:
+            c         : "-fprofile-generate=%(pgo_dir)/IR"
+            cxx       : "-fprofile-generate=%(pgo_dir)/IR"
+            ld        : "-fprofile-generate=%(pgo_dir)/IR"
+        gnu:
+            c         : "-fprofile-generate -fprofile-dir=%(pgo_dir)"
+            cxx       : "-fprofile-generate -fprofile-dir=%(pgo_dir)"
+            ld        : "-fprofile-generate -fprofile-dir=%(pgo_dir)"
+
+    # PGO stage2 flags for ProfileStage2 (workload builds only)
+    - pgostage2:
+        llvm:
+            c         : "-fprofile-use=%(pgo_dir)/ir.profdata -fcs-profile-generate=%(pgo_dir)/CS"
+            cxx       : "-fprofile-use=%(pgo_dir)/ir.profdata -fcs-profile-generate=%(pgo_dir)/CS"
+            ld        : "-fprofile-use=%(pgo_dir)/ir.profdata -fcs-profile-generate=%(pgo_dir)/CS"
+
+    # PGO final flags for ProfileUse (workload builds only)
+    - pgouse:
+        llvm:
+            c         : "-fprofile-use=%(pgo_dir)/combined.profdata"
+            cxx       : "-fprofile-use=%(pgo_dir)/combined.profdata"
+            ld        : "-fprofile-use=%(pgo_dir)/combined.profdata"
+        gnu:
+            c         : "-fprofile-use -fprofile-dir=%(pgo_dir) -fprofile-correction"
+            cxx       : "-fprofile-use -fprofile-dir=%(pgo_dir) -fprofile-correction"
+            ld        : "-fprofile-use -fprofile-dir=%(pgo_dir) -fprofile-correction"

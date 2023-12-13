@@ -4,8 +4,9 @@ version = "0.1.0"
 edition.workspace = true
 
 [dependencies]
+config = { path = "../config" }
 dag = { path = "../dag" }
-stone = { version = "0.1.0", path = "../stone" }
+stone = { path = "../stone" }
 tui = { path = "../tui" }
 vfs = { path = "../vfs" }
 
@@ -30,3 +31,4 @@ tokio-stream.workspace = true
 tokio-util.workspace = true
 thiserror.workspace = true 
 url.workspace = true
+xxhash-rust.workspace = true

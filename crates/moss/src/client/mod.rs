@@ -40,6 +40,7 @@ pub mod prune;
 
 /// A Client is a connection to the underlying package management systems
 pub struct Client {
+    pub name: String,
     /// Root that we operate on
     pub installation: Installation,
     pub registry: Registry,
@@ -48,35 +49,38 @@ pub struct Client {
     pub state_db: db::state::Database,
     pub layout_db: db::layout::Database,
 
+    config: config::Manager,
     repositories: repository::Manager,
     scope: Scope,
 }
 
 impl Client {
     /// Construct a new Client
-    pub async fn new(root: impl Into<PathBuf>) -> Result<Client, Error> {
+    pub async fn new(
+        client_name: impl ToString,
+        root: impl Into<PathBuf>,
+    ) -> Result<Client, Error> {
         let root = root.into();
 
         if !root.exists() || !root.is_dir() {
             return Err(Error::RootInvalid);
         }
 
+        let config = config::Manager::system(&root, "moss");
         let installation = Installation::open(root);
-        let repositories = repository::Manager::new(installation.clone()).await?;
+        let repositories =
+            repository::Manager::system(config.clone(), installation.clone()).await?;
         let install_db =
             db::meta::Database::new(installation.db_path("install"), installation.read_only())
                 .await?;
         let state_db = db::state::Database::new(&installation).await?;
         let layout_db = db::layout::Database::new(&installation).await?;
 
-        let state = match installation.active_state {
-            Some(id) => Some(state_db.get(&id).await?),
-            None => None,
-        };
-
-        let registry = build_registry(&repositories, &install_db, state).await?;
+        let registry = build_registry(&installation, &repositories, &install_db, &state_db).await?;
 
         Ok(Client {
+            name: client_name.to_string(),
+            config,
             installation,
             repositories,
             registry,
@@ -85,11 +89,6 @@ impl Client {
             layout_db,
             scope: Scope::Stateful,
         })
-    }
-
-    /// Construct a new Client for the global installation
-    pub async fn system() -> Result<Client, Error> {
-        Client::new("/").await
     }
 
     pub fn is_ephemeral(&self) -> bool {
@@ -121,21 +120,47 @@ impl Client {
         })
     }
 
+    /// Transition the client to use the provided explicit repositories, instead of loading
+    /// repository configuration from moss config folders
+    pub async fn explicit_repositories(
+        mut self,
+        repositories: repository::Map,
+    ) -> Result<Self, Error> {
+        self.repositories =
+            repository::Manager::explicit(&self.name, repositories, self.installation.clone())
+                .await?;
+
+        // Rebuild registry
+        self.registry = build_registry(
+            &self.installation,
+            &self.repositories,
+            &self.install_db,
+            &self.state_db,
+        )
+        .await?;
+
+        Ok(self)
+    }
+
     /// Reload all configured repositories and refreshes their index file, then update
     /// registry with all active repositories.
     pub async fn refresh_repositories(&mut self) -> Result<(), Error> {
-        // Reload manager and refresh all repositories
-        self.repositories = repository::Manager::new(self.installation.clone()).await?;
+        // Reload manager if not explicit to pickup config changes
+        // then refresh indexes
+        if !self.repositories.is_explicit() {
+            self.repositories =
+                repository::Manager::system(self.config.clone(), self.installation.clone()).await?
+        };
         self.repositories.refresh_all().await?;
 
-        // Refresh State DB
-        let state = match self.installation.active_state {
-            Some(id) => Some(self.state_db.get(&id).await?),
-            None => None,
-        };
-
         // Rebuild registry
-        self.registry = build_registry(&self.repositories, &self.install_db, state).await?;
+        self.registry = build_registry(
+            &self.installation,
+            &self.repositories,
+            &self.install_db,
+            &self.state_db,
+        )
+        .await?;
 
         Ok(())
     }
@@ -628,6 +653,7 @@ BUG_REPORT_URL="https://github.com/serpent-os""#,
 
     Ok(())
 }
+
 enum Scope {
     Stateful,
     Ephemeral { blit_root: PathBuf },
@@ -708,10 +734,16 @@ impl From<PathBuf> for PendingFile {
 }
 
 async fn build_registry(
+    installation: &Installation,
     repositories: &repository::Manager,
     installdb: &db::meta::Database,
-    state: Option<State>,
+    statedb: &db::state::Database,
 ) -> Result<Registry, Error> {
+    let state = match installation.active_state {
+        Some(id) => Some(statedb.get(&id).await?),
+        None => None,
+    };
+
     let mut registry = Registry::default();
 
     registry.add_plugin(Plugin::Cobble(plugin::Cobble::default()));

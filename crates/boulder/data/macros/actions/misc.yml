@@ -1,0 +1,53 @@
+actions:
+
+    # Install files to %(bindir)
+    - install_bin:
+        command: |
+            install -Dm00755 -t %(installroot)/%(bindir)
+
+    # Macro to create an empty directory
+    - install_dir:
+        command: |
+            install -dm00755
+
+    # Macro to install a file with default executable permissions
+    - install_exe:
+        command: |
+            install -Dm00755
+
+    # Macro to install a file without executable permissions
+    - install_file:
+        command: |
+            install -Dm00644
+
+    # Patch sources from file
+    # Usage: %patch %(pkgdir)/${file}
+    # If you need to override -p#, add it after ${file}
+    # Example: %patch %(pkgdir)/some.patch -p3
+    - patch:
+        command: |
+            patch -f -p1 -i
+        dependencies:
+            - patch
+
+    # Create a tmpfiles.d file for the package with given content
+    - tmpfiles:
+        command: |
+            create_tmpfiles(){
+                if [ -z "%(libsuffix)" ]; then
+                    mkdir -p %(installroot)/%(tmpfilesdir)
+                    echo "$@" >> %(installroot)/%(tmpfilesdir)/%(name).conf
+                fi
+            }
+            create_tmpfiles
+
+    # Create a sysusers.d file for the package with given content
+    - sysusers:
+        command: |
+            create_sysusers(){
+                if [ -z "%(libsuffix)" ]; then
+                    mkdir -p %(installroot)/%(sysusersdir)
+                    echo "$@" >> %(installroot)/%(sysusersdir)/%(name).conf
+                fi
+            }
+            create_sysusers

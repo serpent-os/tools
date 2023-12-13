@@ -1,0 +1,19 @@
+# Provides -m32 builds for i686 build-hosts
+
+definitions:
+
+    - libsuffix      : "32"
+    - build_platform : i686-%(vendorID)
+    - host_platform  : i686-%(vendorID)
+    - cc             : "%(compiler_c) -m32"
+    - cxx            : "%(compiler_cxx) -m32"
+    - cpp            : "%(compiler_cpp) -m32"
+    - march          : i686
+    - mtune          : i686
+
+flags:
+
+    # Set architecture flags
+    - architecture:
+        c         : "-march=i686 -mtune=i686"
+        cxx       : "-march=i686 -mtune=i686"

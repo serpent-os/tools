@@ -1,0 +1,62 @@
+actions:
+
+    # Perform ./configure with the default options
+    - configure:
+        command: |
+            test -x ./configure || ( echo "%%configure: The ./configure script could not be found" ; exit 1 )
+            ./configure %(options_configure)
+        dependencies:
+            - autoconf
+            - automake
+
+    # Perform a make
+    # TIP: Add V=1 VERBOSE=1 after '%make' in the recipe if you need a more verbose build
+    - make:
+        command: |
+            make -j "%(jobs)"
+        dependencies:
+            - make
+
+    # Install results of build to the destination directory
+    - make_install:
+        command: |
+            %make install DESTDIR="%(installroot)"
+        dependencies:
+            - make
+
+    # Re autotools-configure a project without an autogen.sh script
+    - reconfigure:
+        command: |
+            autoreconf -vfi || ( echo "%%reconfigure: Failed to run autoreconf"; exit 1 )
+            %configure
+        dependencies:
+            - autoconf
+            - automake
+
+    # Run autogen.sh script, attempting to only configure once
+    - autogen:
+        command: |
+            NOCONFIGURE="noconfigure"; export NOCONFIGURE
+            sh ./autogen.sh %(options_configure)
+            ./configure %(options_configure)
+        dependencies:
+            - autoconf
+            - automake
+
+definitions:
+
+    # Default configuration options as passed to configure
+    - options_configure: |
+        --prefix="%(prefix)" \
+        --bindir="%(bindir)" \
+        --sbindir="%(sbindir)" \
+        --build="%(build_platform)" \
+        --host="%(host_platform)" \
+        --libdir="%(libdir)" \
+        --mandir="%(mandir)" \
+        --infodir="%(infodir)" \
+        --datadir="%(datadir)" \
+        --sysconfdir="%(sysconfdir)" \
+        --localstatedir="%(localstatedir)" \
+        --sharedstatedir="%(sharedstatedir)" \
+        --libexecdir="%(libexecdir)"
