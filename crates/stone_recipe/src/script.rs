@@ -258,7 +258,7 @@ mod test {
     #[test]
     fn parse_script() {
         let input =
-            "%patch %%escaped %{ %break %break_exit %(pkgdir)/0001-deps-analysis-elves-In-absence-of-soname.-make-one-u.patch";
+            "%patch %%escaped %{ %break_continue %break_exit %(pkgdir)/0001-deps-analysis-elves-In-absence-of-soname.-make-one-u.patch";
 
         let mut parser = Parser::new();
         parser.add_action(
