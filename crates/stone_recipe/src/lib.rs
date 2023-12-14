@@ -22,6 +22,10 @@ pub fn from_slice(bytes: &[u8]) -> Result<Recipe, Error> {
     serde_yaml::from_slice(bytes)
 }
 
+pub fn from_str(s: &str) -> Result<Recipe, Error> {
+    serde_yaml::from_str(s)
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Recipe {
     #[serde(flatten)]

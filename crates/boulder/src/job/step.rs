@@ -8,13 +8,13 @@ use itertools::Itertools;
 use stone_recipe::{
     script,
     tuning::{self, Toolchain},
-    Recipe, Script,
+    Script,
 };
 
 use tui::Stylize;
 
 use super::{work_dir, Error};
-use crate::{architecture::BuildTarget, pgo, recipe, util, Macros, Paths};
+use crate::{architecture::BuildTarget, pgo, util, Macros, Paths, Recipe};
 
 pub fn list(pgo_stage: Option<pgo::Stage>) -> Vec<Step> {
     if matches!(pgo_stage, Some(pgo::Stage::One | pgo::Stage::Two)) {
@@ -80,17 +80,17 @@ impl Step {
         macros: &Macros,
         ccache: bool,
     ) -> Result<Option<Script>, Error> {
-        let build = recipe::build_target_definition(recipe, target);
+        let build = recipe.build_target_definition(target);
 
         let Some(content) = (match self {
-            Step::Prepare => Some(prepare_script(&recipe.upstreams)),
+            Step::Prepare => Some(prepare_script(&recipe.parsed.upstreams)),
             Step::Setup => build.setup.clone(),
             Step::Build => build.build.clone(),
             Step::Check => build.check.clone(),
             Step::Install => build.install.clone(),
             Step::Workload => match build.workload.clone() {
                 Some(mut content) => {
-                    if matches!(recipe.options.toolchain, Toolchain::Llvm) {
+                    if matches!(recipe.parsed.options.toolchain, Toolchain::Llvm) {
                         if matches!(pgo_stage, Some(pgo::Stage::One)) {
                             content.push_str("%llvm_merge_s1");
                         } else if matches!(pgo_stage, Some(pgo::Stage::Two)) {
@@ -125,7 +125,7 @@ impl Step {
         let work_dir = if matches!(self, Step::Prepare) {
             build_dir.clone()
         } else {
-            work_dir(&build_dir, &recipe.upstreams)
+            work_dir(&build_dir, &recipe.parsed.upstreams)
         };
         let num_jobs = util::num_cpus();
 
@@ -143,9 +143,9 @@ impl Step {
             parser.add_macros(macros.clone());
         }
 
-        parser.add_definition("name", &recipe.source.name);
-        parser.add_definition("version", &recipe.source.version);
-        parser.add_definition("release", recipe.source.release);
+        parser.add_definition("name", &recipe.parsed.source.name);
+        parser.add_definition("version", &recipe.parsed.source.version);
+        parser.add_definition("release", recipe.parsed.source.release);
         parser.add_definition("jobs", num_jobs);
         parser.add_definition("pkgdir", paths.recipe().guest.join("pkg").display());
         parser.add_definition("sourcedir", paths.upstreams().guest.display());
@@ -167,7 +167,7 @@ impl Step {
         };
 
         /* Set the relevant compilers */
-        if matches!(recipe.options.toolchain, Toolchain::Llvm) {
+        if matches!(recipe.parsed.options.toolchain, Toolchain::Llvm) {
             parser.add_definition("compiler_c", "clang");
             parser.add_definition("compiler_cxx", "clang++");
             parser.add_definition("compiler_objc", "clang");
@@ -292,7 +292,7 @@ fn add_tuning(
 
     tuning.enable("architecture", None)?;
 
-    for kv in &recipe.tuning {
+    for kv in &recipe.parsed.tuning {
         match &kv.value {
             stone_recipe::Tuning::Enable => tuning.enable(&kv.key, None)?,
             stone_recipe::Tuning::Disable => tuning.disable(&kv.key)?,
@@ -302,7 +302,7 @@ fn add_tuning(
 
     // Add defaults that aren't already in recipe
     for group in default_tuning_groups(target, macros) {
-        if !recipe.tuning.iter().any(|kv| &kv.key == group) {
+        if !recipe.parsed.tuning.iter().any(|kv| &kv.key == group) {
             tuning.enable(group, None)?;
         }
     }
@@ -313,7 +313,7 @@ fn add_tuning(
             pgo::Stage::Two => tuning.enable("pgostage2", None)?,
             pgo::Stage::Use => {
                 tuning.enable("pgouse", None)?;
-                if recipe.options.samplepgo {
+                if recipe.parsed.options.samplepgo {
                     tuning.enable("pgosample", None)?;
                 }
             }
@@ -329,7 +329,7 @@ fn add_tuning(
             .join(" ")
     }
 
-    let toolchain = recipe.options.toolchain;
+    let toolchain = recipe.parsed.options.toolchain;
     let flags = tuning.build()?;
 
     let cflags = fmt_flags(

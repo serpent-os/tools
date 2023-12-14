@@ -8,11 +8,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use stone_recipe::{script, tuning, Recipe, Script, Upstream};
+use stone_recipe::{script, tuning, Script, Upstream};
 use thiserror::Error;
 
 pub use self::step::Step;
-use crate::{architecture::BuildTarget, pgo, util, Macros, Paths};
+use crate::{architecture::BuildTarget, pgo, util, Macros, Paths, Recipe};
 
 mod step;
 
@@ -35,7 +35,7 @@ impl Job {
         ccache: bool,
     ) -> Result<Self, Error> {
         let build_dir = paths.build().guest.join(target.to_string());
-        let work_dir = work_dir(&build_dir, &recipe.upstreams);
+        let work_dir = work_dir(&build_dir, &recipe.parsed.upstreams);
 
         let steps = step::list(pgo_stage)
             .into_iter()

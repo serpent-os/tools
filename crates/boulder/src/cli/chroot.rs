@@ -6,7 +6,7 @@ use std::{fs, io, path::PathBuf, process};
 
 use boulder::{
     architecture::{self, BuildTarget},
-    builder, container, job, macros, paths, Env, Macros, Paths,
+    builder, container, job, macros, recipe, Env, Macros, Paths, Recipe,
 };
 use clap::Parser;
 use thiserror::Error;
@@ -27,16 +27,9 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
         return Err(Error::MissingRecipe(recipe_path));
     }
 
-    let recipe_bytes = fs::read(&recipe_path)?;
-    let recipe = stone_recipe::from_slice(&recipe_bytes)?;
+    let recipe = Recipe::load(recipe_path)?;
     let macros = Macros::load(&env)?;
-
-    let paths = Paths::new(
-        paths::Id::new(&recipe),
-        &recipe_path,
-        env.cache_dir,
-        "/mason",
-    )?;
+    let paths = Paths::new(&recipe, env.cache_dir, "/mason")?;
 
     let rootfs = paths.rootfs().host;
 
@@ -67,7 +60,7 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
 
     let home = &paths.build().guest;
 
-    container::exec(&paths, recipe.options.networking, || {
+    container::exec(&paths, recipe.parsed.options.networking, || {
         fs::write(home.join(".profile"), profile)?;
 
         let mut child = process::Command::new("/bin/bash")
@@ -96,10 +89,10 @@ pub enum Error {
     Container(#[from] container::Error),
     #[error("macros")]
     Macros(#[from] macros::Error),
-    #[error("stone recipe")]
-    StoneRecipe(#[from] stone_recipe::Error),
     #[error("build script")]
     BuildScript(#[source] job::Error),
+    #[error("recipe")]
+    Recipe(#[from] recipe::Error),
     #[error("io")]
     Io(#[from] io::Error),
 }

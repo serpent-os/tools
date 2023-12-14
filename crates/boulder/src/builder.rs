@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
-    fs, io,
+    io,
     os::unix::process::ExitStatusExt,
     path::{Path, PathBuf},
     process, thread,
@@ -14,7 +14,7 @@ use nix::{
     sys::signal::Signal,
     unistd::{getpgrp, setpgid, Pid},
 };
-use stone_recipe::{script, Recipe, Script};
+use stone_recipe::{script, Script};
 use thiserror::Error;
 use tui::Stylize;
 
@@ -22,7 +22,7 @@ use crate::{
     architecture::BuildTarget,
     container::{self, ExecError},
     job::{self, Step},
-    macros, paths, pgo, profile, recipe, root, upstream, util, Env, Job, Macros, Paths, Runtime,
+    macros, pgo, profile, recipe, root, upstream, util, Env, Job, Macros, Paths, Recipe, Runtime,
 };
 
 pub struct Builder {
@@ -47,19 +47,13 @@ impl Builder {
         profile: profile::Id,
         ccache: bool,
     ) -> Result<Self, Error> {
-        let recipe_bytes = fs::read(recipe_path)?;
-        let recipe = stone_recipe::from_slice(&recipe_bytes)?;
+        let recipe = Recipe::load(recipe_path)?;
 
         let macros = Macros::load(&env)?;
 
-        let paths = Paths::new(
-            paths::Id::new(&recipe),
-            recipe_path,
-            &env.cache_dir,
-            "/mason",
-        )?;
+        let paths = Paths::new(&recipe, &env.cache_dir, "/mason")?;
 
-        let build_targets = recipe::build_targets(&recipe);
+        let build_targets = recipe.build_targets();
 
         if build_targets.is_empty() {
             return Err(Error::NoBuildTargets);
@@ -122,7 +116,7 @@ impl Builder {
     }
 
     pub fn build(self) -> Result<(), Error> {
-        container::exec(&self.paths, self.recipe.options.networking, || {
+        container::exec(&self.paths, self.recipe.parsed.options.networking, || {
             // We're now in the container =)
 
             // Set ourselves into our own process group
@@ -352,10 +346,10 @@ pub enum Error {
     Root(#[from] root::Error),
     #[error("upstream")]
     Upstream(#[from] upstream::Error),
-    #[error("stone recipe")]
-    StoneRecipe(#[from] stone_recipe::Error),
     #[error("container")]
     Container(#[from] container::Error),
+    #[error("recipe")]
+    Recipe(#[from] recipe::Error),
     #[error("io")]
     Io(#[from] io::Error),
 }
