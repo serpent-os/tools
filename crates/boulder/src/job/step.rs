@@ -110,17 +110,15 @@ impl Step {
             return Ok(None);
         }
 
-        let mut pre_script = String::new();
+        let mut env = build
+            .environment
+            .as_deref()
+            .filter(|env| *env != "(null)" && !env.is_empty() && !matches!(self, Step::Prepare))
+            .unwrap_or_default()
+            .to_string();
+        env = format!("%scriptBase\n{env}\n");
 
-        if let Some(env) = build.environment.as_deref() {
-            if env != "(null)" && !env.is_empty() && !matches!(self, Step::Prepare) {
-                pre_script = format!("{env}\n{content}");
-            }
-        }
-
-        pre_script = format!("%scriptBase\n{pre_script}");
-
-        let mut parser = script::Parser::new().env(pre_script);
+        let mut parser = script::Parser::new().env(env);
 
         let build_target = target.to_string();
         let build_dir = paths.build().guest.join(&build_target);

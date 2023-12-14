@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{io, process};
+use std::io;
 
 use container::Container;
 use nix::sys::signal::Signal;
@@ -16,24 +16,6 @@ pub fn exec(
     f: impl FnMut() -> Result<(), ExecError>,
 ) -> Result<(), Error> {
     run(paths, networking, f)
-}
-
-pub fn chroot(paths: &Paths, networking: bool) -> Result<(), Error> {
-    let home = &paths.build().guest;
-
-    run(paths, networking, || {
-        let mut child = process::Command::new("/bin/bash")
-            .arg("--login")
-            .env_clear()
-            .env("HOME", home)
-            .env("PATH", "/usr/bin:/usr/sbin")
-            .env("TERM", "xterm-256color")
-            .spawn()?;
-
-        child.wait()?;
-
-        Ok(())
-    })
 }
 
 fn run(
@@ -65,8 +47,6 @@ fn run(
 pub enum Error {
     #[error(transparent)]
     Container(#[from] container::Error),
-    #[error("io")]
-    Io(#[from] io::Error),
 }
 
 #[derive(Debug, Error)]

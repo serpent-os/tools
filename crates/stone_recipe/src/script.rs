@@ -67,10 +67,43 @@ impl Parser {
             &mut dependencies,
         )?;
 
+        let resolved_actions = self
+            .actions
+            .iter()
+            .filter_map(|(identifier, action)| {
+                let result = parse_content_only(
+                    &action.command,
+                    &self.actions,
+                    &self.definitions,
+                    &mut HashSet::new(),
+                )
+                .transpose()?;
+
+                Some(result.map(|resolved| (identifier.clone(), resolved)))
+            })
+            .collect::<Result<_, _>>()?;
+        let resolved_definitions = self
+            .definitions
+            .iter()
+            .filter_map(|(identifier, definition)| {
+                let result = parse_content_only(
+                    definition,
+                    &self.actions,
+                    &self.definitions,
+                    &mut HashSet::new(),
+                )
+                .transpose()?;
+
+                Some(result.map(|resolved| (identifier.clone(), resolved)))
+            })
+            .collect::<Result<_, _>>()?;
+
         Ok(Script {
             commands,
             env,
             dependencies: dependencies.into_iter().collect(),
+            resolved_actions,
+            resolved_definitions,
         })
     }
 }
@@ -93,6 +126,10 @@ pub struct Script {
     pub commands: Vec<Command>,
     pub dependencies: Vec<String>,
     pub env: Option<String>,
+    /// Fully resolved actions
+    pub resolved_actions: HashMap<String, String>,
+    /// Fully resolved definitions
+    pub resolved_definitions: HashMap<String, String>,
 }
 
 struct Parsed {
@@ -110,20 +147,9 @@ fn parse(
     let mut content = String::new();
     let mut commands = vec![];
 
-    // Extract the `parse` call as content only, used for nested parsing
-    let content_only = |parsed: Parsed| {
-        parsed.commands.into_iter().next().and_then(|command| {
-            if let Command::Content(content) = command {
-                Some(content)
-            } else {
-                None
-            }
-        })
-    };
-
     // Parse `env` since it can contain macros
     let env = env
-        .map(|env| parse(env, None, actions, definitions, dependencies).map(content_only))
+        .map(|env| parse_content_only(env, actions, definitions, dependencies))
         .transpose()?
         .flatten();
 
@@ -147,13 +173,9 @@ fn parse(
                     .ok_or(Error::UnknownAction(identifier.to_string()))?;
                 dependencies.extend(action.dependencies.clone());
 
-                if let Some(nested) = content_only(parse(
-                    &action.command,
-                    None,
-                    actions,
-                    definitions,
-                    dependencies,
-                )?) {
+                if let Some(nested) =
+                    parse_content_only(&action.command, actions, definitions, dependencies)?
+                {
                     content.push_str(&nested);
                 }
             }
@@ -163,7 +185,7 @@ fn parse(
                     .ok_or(Error::UnknownDefinition(identifier.to_string()))?;
 
                 if let Some(nested) =
-                    content_only(parse(definition, None, actions, definitions, dependencies)?)
+                    parse_content_only(definition, actions, definitions, dependencies)?
                 {
                     content.push_str(&nested);
                 }
@@ -186,6 +208,26 @@ fn parse(
     }
 
     Ok(Parsed { commands, env })
+}
+
+/// Extract the `parse` call as content only, used for parsing nested macros
+fn parse_content_only(
+    input: &str,
+    actions: &HashMap<String, Action>,
+    definitions: &HashMap<String, String>,
+    dependencies: &mut HashSet<String>,
+) -> Result<Option<String>, Error> {
+    Ok(parse(input, None, actions, definitions, dependencies)?
+        .commands
+        .into_iter()
+        .next()
+        .and_then(|command| {
+            if let Command::Content(content) = command {
+                Some(content)
+            } else {
+                None
+            }
+        }))
 }
 
 #[derive(Debug)]
