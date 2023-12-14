@@ -183,13 +183,13 @@ impl Builder {
                             match command {
                                 script::Command::Break(breakpoint) => {
                                     println!(
-                                        "\n{}{}",
+                                        "\n{} {}",
                                         "Breakpoint".bold(),
-                                        breakpoint
-                                            .exit
-                                            .then_some(" (exit)")
-                                            .unwrap_or_default()
-                                            .dim()
+                                        if breakpoint.exit {
+                                            "(exit)".dim()
+                                        } else {
+                                            "(continue)".dim()
+                                        }
                                     );
 
                                     // Write env to $HOME/.profile
