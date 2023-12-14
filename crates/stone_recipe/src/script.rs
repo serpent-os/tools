@@ -217,7 +217,7 @@ fn tokens(input: &str, f: impl FnMut(Token) -> Result<(), Error>) -> Result<(), 
 
     let token = alt((
         map(action, |action| match action {
-            "break" => Token::Break(Breakpoint { exit: false }),
+            "break_continue" => Token::Break(Breakpoint { exit: false }),
             "break_exit" => Token::Break(Breakpoint { exit: true }),
             _ => Token::Action(action),
         }),
