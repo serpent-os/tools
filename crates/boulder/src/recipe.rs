@@ -63,30 +63,36 @@ impl Recipe {
         }
     }
 
-    pub fn build_target_definition(&self, target: BuildTarget) -> &stone_recipe::Build {
-        let mut build = &self.parsed.build;
-
+    pub fn build_target_profile_key(&self, target: BuildTarget) -> Option<String> {
         let target_string = target.to_string();
+
+        if self
+            .parsed
+            .profiles
+            .iter()
+            .any(|kv| kv.key == target_string)
+        {
+            Some(target_string)
+        } else if target.emul32() && self.parsed.profiles.iter().any(|kv| &kv.key == "emul32") {
+            Some("emul32".to_string())
+        } else {
+            None
+        }
+    }
+
+    pub fn build_target_definition(&self, target: BuildTarget) -> &stone_recipe::Build {
+        let key = self.build_target_profile_key(target);
 
         if let Some(profile) = self
             .parsed
             .profiles
             .iter()
-            .find(|profile| profile.key == target_string)
+            .find(|kv| Some(&kv.key) == key.as_ref())
         {
-            build = &profile.value;
-        } else if target.emul32() {
-            if let Some(profile) = self
-                .parsed
-                .profiles
-                .iter()
-                .find(|profile| &profile.key == "emul32")
-            {
-                build = &profile.value;
-            }
+            &profile.value
+        } else {
+            &self.parsed.build
         }
-
-        build
     }
 }
 

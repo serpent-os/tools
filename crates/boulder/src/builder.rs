@@ -14,7 +14,10 @@ use nix::{
     sys::signal::Signal,
     unistd::{getpgrp, setpgid, Pid},
 };
-use stone_recipe::{script, Script};
+use stone_recipe::{
+    script::{self, Breakpoint},
+    Script,
+};
 use thiserror::Error;
 use tui::Stylize;
 
@@ -176,14 +179,24 @@ impl Builder {
                         for command in &script.commands {
                             match command {
                                 script::Command::Break(breakpoint) => {
+                                    let line_num = breakpoint_line(
+                                        breakpoint,
+                                        &self.recipe,
+                                        job.target,
+                                        *step,
+                                    )
+                                    .map(|line_num| format!(" at line {line_num}"))
+                                    .unwrap_or_default();
+
                                     println!(
-                                        "\n{} {}",
+                                        "\n{}{} {}",
                                         "Breakpoint".bold(),
+                                        line_num,
                                         if breakpoint.exit {
                                             "(exit)".dim()
                                         } else {
                                             "(continue)".dim()
-                                        }
+                                        },
                                     );
 
                                     // Write env to $HOME/.profile
@@ -330,6 +343,73 @@ pub fn build_profile(script: &Script) -> String {
         .join("\n");
 
     format!("{env}\n{action_functions}\n{definition_vars}")
+}
+
+fn breakpoint_line(
+    breakpoint: &Breakpoint,
+    recipe: &Recipe,
+    build_target: BuildTarget,
+    step: Step,
+) -> Option<usize> {
+    let profile = recipe.build_target_profile_key(build_target);
+
+    let has_key = |line: &str, key: &str| {
+        line.split_once(':')
+            .map_or(false, |(leading, _)| leading.trim().ends_with(key))
+    };
+
+    let mut lines = recipe
+        .source
+        .lines()
+        .enumerate()
+        // If no profile, we care about root keys (no leading whitespace),
+        // otherwise it will be indented
+        .filter(|(_, line)| {
+            let indented = line.trim().chars().next() != line.chars().next();
+
+            if profile.is_none() {
+                !indented
+            } else {
+                indented
+            }
+        })
+        // Skip lines occurring before profile, otherwise it's the
+        // root profile
+        .skip_while(|(_, line)| {
+            if let Some(profile) = &profile {
+                !has_key(line, profile)
+            } else {
+                false
+            }
+        });
+
+    let step = match step {
+        // Internal step, no breakpoint will occur
+        Step::Prepare => return None,
+        Step::Setup => "setup",
+        Step::Build => "build",
+        Step::Install => "install",
+        Step::Check => "check",
+        Step::Workload => "workload",
+    };
+
+    lines.find_map(|(mut line_num, line)| {
+        if has_key(line, step) {
+            // 0 based to 1 based
+            line_num += 1;
+
+            let (_, rest) = line.split_once(':').expect("line contains :");
+
+            // If block, string starts on next line
+            if rest.trim().starts_with('|') || rest.trim().starts_with('>') {
+                line_num += 1;
+            }
+
+            Some(line_num + breakpoint.line_num)
+        } else {
+            None
+        }
+    })
 }
 
 #[derive(Debug, Error)]
