@@ -21,11 +21,21 @@ use crate::{macros::Action, Macros};
 pub struct Parser {
     actions: HashMap<String, Action>,
     definitions: HashMap<String, String>,
+    env: Option<String>,
 }
 
 impl Parser {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Env is parsed and prependend to the beginning of each
+    /// [`Command::Content`]
+    pub fn env(self, env: impl ToString) -> Self {
+        Self {
+            env: Some(env.to_string()),
+            ..self
+        }
     }
 
     pub fn add_action(&mut self, identifier: impl ToString, action: Action) {
@@ -47,23 +57,87 @@ impl Parser {
     }
 
     pub fn parse(&self, input: &str) -> Result<Script, Error> {
-        parse(input, &self.actions, &self.definitions)
+        let mut dependencies = HashSet::new();
+
+        let Parsed { commands, env } = parse(
+            input,
+            self.env.as_deref(),
+            &self.actions,
+            &self.definitions,
+            &mut dependencies,
+        )?;
+
+        Ok(Script {
+            commands,
+            env,
+            dependencies: dependencies.into_iter().collect(),
+        })
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Command {
+    /// Content to execute
+    Content(String),
+    /// Breakpoint
+    Break(Breakpoint),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Breakpoint {
+    pub exit: bool,
 }
 
 #[derive(Debug)]
 pub struct Script {
-    pub content: String,
+    pub commands: Vec<Command>,
     pub dependencies: Vec<String>,
+    pub env: Option<String>,
+}
+
+struct Parsed {
+    commands: Vec<Command>,
+    env: Option<String>,
 }
 
 fn parse(
     input: &str,
+    env: Option<&str>,
     actions: &HashMap<String, Action>,
     definitions: &HashMap<String, String>,
-) -> Result<Script, Error> {
+    dependencies: &mut HashSet<String>,
+) -> Result<Parsed, Error> {
     let mut content = String::new();
-    let mut dependencies = HashSet::new();
+    let mut commands = vec![];
+
+    // Extract the `parse` call as content only, used for nested parsing
+    let content_only = |parsed: Parsed| {
+        parsed.commands.into_iter().next().and_then(|command| {
+            if let Command::Content(content) = command {
+                Some(content)
+            } else {
+                None
+            }
+        })
+    };
+
+    // Parse `env` since it can contain macros
+    let env = env
+        .map(|env| parse(env, None, actions, definitions, dependencies).map(content_only))
+        .transpose()?
+        .flatten();
+
+    // Prepend env to content
+    let prepend_env = |content: &str| {
+        format!(
+            "{}{content}",
+            env.as_ref()
+                .map(|env| format!("{env}\n"))
+                .unwrap_or_default()
+        )
+        .trim()
+        .to_string()
+    };
 
     tokens(input, |token| {
         match token {
@@ -73,30 +147,45 @@ fn parse(
                     .ok_or(Error::UnknownAction(identifier.to_string()))?;
                 dependencies.extend(action.dependencies.clone());
 
-                let script = parse(&action.command, actions, definitions)?;
-
-                content.push_str(&script.content);
-                dependencies.extend(script.dependencies);
+                if let Some(nested) = content_only(parse(
+                    &action.command,
+                    None,
+                    actions,
+                    definitions,
+                    dependencies,
+                )?) {
+                    content.push_str(&nested);
+                }
             }
             Token::Definition(identifier) => {
                 let definition = definitions
                     .get(identifier)
                     .ok_or(Error::UnknownDefinition(identifier.to_string()))?;
 
-                let script = parse(definition, actions, definitions)?;
-
-                content.push_str(&script.content);
-                dependencies.extend(script.dependencies);
+                if let Some(nested) =
+                    content_only(parse(definition, None, actions, definitions, dependencies)?)
+                {
+                    content.push_str(&nested);
+                }
             }
             Token::Plain(plain) => content.push_str(plain),
+            Token::Break(chroot) => {
+                let content = prepend_env(&std::mem::take(&mut content));
+                if !content.is_empty() {
+                    commands.push(Command::Content(content));
+                }
+                commands.push(Command::Break(chroot));
+            }
         }
         Ok(())
     })?;
 
-    Ok(Script {
-        content: content.trim().to_string(),
-        dependencies: dependencies.into_iter().collect(),
-    })
+    let content = prepend_env(&content);
+    if !content.is_empty() {
+        commands.push(Command::Content(content));
+    }
+
+    Ok(Parsed { commands, env })
 }
 
 #[derive(Debug)]
@@ -104,6 +193,7 @@ enum Token<'a> {
     Action(&'a str),
     Definition(&'a str),
     Plain(&'a str),
+    Break(Breakpoint),
 }
 
 fn tokens(input: &str, f: impl FnMut(Token) -> Result<(), Error>) -> Result<(), Error> {
@@ -126,7 +216,11 @@ fn tokens(input: &str, f: impl FnMut(Token) -> Result<(), Error>) -> Result<(), 
     ));
 
     let token = alt((
-        map(action, Token::Action),
+        map(action, |action| match action {
+            "break_continue" => Token::Break(Breakpoint { exit: false }),
+            "break_exit" => Token::Break(Breakpoint { exit: true }),
+            _ => Token::Action(action),
+        }),
         map(definition, Token::Definition),
         map(plain, Token::Plain),
     ));
@@ -164,7 +258,7 @@ mod test {
     #[test]
     fn parse_script() {
         let input =
-            "%patch %%escaped %{ %(pkgdir)/0001-deps-analysis-elves-In-absence-of-soname.-make-one-u.patch";
+            "%patch %%escaped %{ %break_continue %break_exit %(pkgdir)/0001-deps-analysis-elves-In-absence-of-soname.-make-one-u.patch";
 
         let mut parser = Parser::new();
         parser.add_action(
@@ -186,7 +280,18 @@ mod test {
 
         let script = parser.parse(input).unwrap();
 
-        assert_eq!(script.content, "patch -v --args=a,b,c %escaped %{ /mason/pkg/0001-deps-analysis-elves-In-absence-of-soname.-make-one-u.patch".to_string());
+        assert_eq!(
+            script.commands,
+            vec![
+                Command::Content("patch -v --args=a,b,c %escaped %{".to_string()),
+                Command::Break(Breakpoint { exit: false }),
+                Command::Break(Breakpoint { exit: true }),
+                Command::Content(
+                    "/mason/pkg/0001-deps-analysis-elves-In-absence-of-soname.-make-one-u.patch"
+                        .to_string()
+                )
+            ]
+        );
         assert_eq!(script.dependencies, vec!["patch".to_string()])
     }
 }

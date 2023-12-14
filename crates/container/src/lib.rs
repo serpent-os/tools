@@ -4,6 +4,7 @@
 use std::env::set_current_dir;
 use std::fs::{self, copy, create_dir_all, remove_dir};
 use std::io;
+use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicI32, Ordering};
 
@@ -15,7 +16,7 @@ use nix::sys::signal::{kill, sigaction, SaFlags, SigAction, SigHandler, Signal};
 use nix::sys::signalfd::SigSet;
 use nix::sys::stat::{umask, Mode};
 use nix::sys::wait::{waitpid, WaitStatus};
-use nix::unistd::{close, pipe, pivot_root, read, sethostname, write, Pid, Uid};
+use nix::unistd::{close, pipe, pivot_root, read, sethostname, tcsetpgrp, write, Pid, Uid};
 use thiserror::Error;
 
 use self::idmap::idmap;
@@ -335,6 +336,21 @@ fn ignore_sigint() -> Result<(), nix::Error> {
 fn default_sigint() -> Result<(), nix::Error> {
     let action = SigAction::new(SigHandler::SigDfl, SaFlags::empty(), SigSet::empty());
     unsafe { sigaction(Signal::SIGINT, &action)? };
+    Ok(())
+}
+
+pub fn set_term_fg(pgid: Pid) -> Result<(), nix::Error> {
+    // Ignore SIGTTOU and get previous handler
+    let prev_handler = unsafe {
+        sigaction(
+            Signal::SIGTTOU,
+            &SigAction::new(SigHandler::SigIgn, SaFlags::empty(), SigSet::empty()),
+        )?
+    };
+    // Set term fg to pid
+    tcsetpgrp(io::stdin().as_raw_fd(), pgid)?;
+    // Set up old handler
+    unsafe { sigaction(Signal::SIGTTOU, &prev_handler)? };
     Ok(())
 }
 
