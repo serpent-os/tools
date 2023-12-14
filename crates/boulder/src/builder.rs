@@ -14,7 +14,7 @@ use nix::{
     sys::signal::Signal,
     unistd::{getpgrp, setpgid, Pid},
 };
-use stone_recipe::{script, Recipe};
+use stone_recipe::{script, Recipe, Script};
 use thiserror::Error;
 use tui::Stylize;
 
@@ -195,7 +195,7 @@ impl Builder {
                                     // Write env to $HOME/.profile
                                     std::fs::write(
                                         build_dir.join(".profile"),
-                                        sanitize_profile(script.env.as_deref().unwrap_or_default()),
+                                        build_profile(script),
                                     )?;
 
                                     let mut command = process::Command::new("/bin/bash")
@@ -310,14 +310,32 @@ where
     })
 }
 
-fn sanitize_profile(content: &str) -> String {
-    let filtered = content
+fn build_profile(script: &Script) -> String {
+    let env = script
+        .env
+        .as_deref()
+        .unwrap_or_default()
         .lines()
         .filter(|line| {
             !line.starts_with("#!") && !line.starts_with("set -") && !line.starts_with("TERM=")
         })
         .join("\n");
-    format!("{filtered}\n")
+
+    let action_functions = script
+        .resolved_actions
+        .iter()
+        .map(|(identifier, command)| {
+            format!("a_{identifier}() {{\n{command}\n}}\nexport -f a_{identifier}")
+        })
+        .join("\n");
+
+    let definition_vars = script
+        .resolved_definitions
+        .iter()
+        .map(|(identifier, var)| format!("d_{identifier}=\"{var}\"; export d_{identifier}"))
+        .join("\n");
+
+    format!("{env}\n{action_functions}\n{definition_vars}")
 }
 
 #[derive(Debug, Error)]
