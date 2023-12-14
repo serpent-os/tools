@@ -310,7 +310,7 @@ where
     })
 }
 
-fn build_profile(script: &Script) -> String {
+pub fn build_profile(script: &Script) -> String {
     let env = script
         .env
         .as_deref()

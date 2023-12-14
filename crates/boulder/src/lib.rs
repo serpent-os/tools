@@ -16,7 +16,7 @@ pub mod container;
 mod dependency;
 pub mod env;
 pub mod job;
-mod macros;
+pub mod macros;
 pub mod paths;
 pub mod pgo;
 pub mod profile;
