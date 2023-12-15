@@ -47,9 +47,10 @@ async fn inspect(paths: Vec<PathBuf>) -> Result<(), Error> {
 
             let mut layouts = vec![];
 
-            // Grab deps/providers
+            // Grab deps/providers/conflicts
             let mut deps = vec![];
             let mut provs = vec![];
+            let mut cnfls = vec![];
 
             match payload {
                 PayloadKind::Layout(l) => layouts = l.body,
@@ -60,8 +61,13 @@ async fn inspect(paths: Vec<PathBuf>) -> Result<(), Error> {
                         let name = format!("{:?}", record.tag);
 
                         match &record.kind {
-                            meta::Kind::Provider(k, p) => deps.push(format!("{}({})", k, p)),
-                            meta::Kind::Dependency(k, d) => provs.push(format!("{}({})", k, d)),
+                            meta::Kind::Provider(k, p) if record.tag == meta::Tag::Provides => {
+                                provs.push(format!("{}({})", k, p))
+                            }
+                            meta::Kind::Provider(k, p) if record.tag == meta::Tag::Conflicts => {
+                                cnfls.push(format!("{}({})", k, p))
+                            }
+                            meta::Kind::Dependency(k, d) => deps.push(format!("{}({})", k, d)),
                             meta::Kind::String(s) => {
                                 println!("{:width$} : {}", name, s, width = COLUMN_WIDTH)
                             }
@@ -90,6 +96,12 @@ async fn inspect(paths: Vec<PathBuf>) -> Result<(), Error> {
                 println!("\n{:width$} :", "Providers", width = COLUMN_WIDTH);
                 for prov in provs {
                     println!("    - {prov}");
+                }
+            }
+            if !cnfls.is_empty() {
+                println!("\n{:width$} :", "Conflicts", width = COLUMN_WIDTH);
+                for cnfl in cnfls {
+                    println!("    - {cnfl}");
                 }
             }
 
