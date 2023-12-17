@@ -51,12 +51,6 @@ pub struct Package {
     pub flags: Flags,
 }
 
-impl Package {
-    pub fn is_installed(&self) -> bool {
-        self.flags.contains(Flags::INSTALLED)
-    }
-}
-
 impl PartialOrd for Package {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))

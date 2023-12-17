@@ -26,13 +26,21 @@ pub async fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<()
     // Resolve transaction to metadata
     let resolved = client.resolve_packages(tx.finalize()).await?;
 
+    // Get installed packages to check against
+    let installed = client
+        .registry
+        .list_installed(Flags::NONE)
+        .collect::<Vec<_>>()
+        .await;
+    let is_installed = |p: &Package| installed.iter().any(|i| i.meta.name == p.meta.name);
+
     // Get missing packages that are:
     //
     // Stateful: Not installed
     // Ephemeral: all
     let missing = resolved
         .iter()
-        .filter(|p| client.is_ephemeral() || !p.is_installed())
+        .filter(|p| client.is_ephemeral() || !is_installed(p))
         .collect::<Vec<_>>();
 
     // If no new packages exist, exit and print
@@ -40,7 +48,7 @@ pub async fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<()
     if missing.is_empty() {
         let installed = resolved
             .iter()
-            .filter(|p| p.is_installed() && input.contains(&p.id))
+            .filter(|p| is_installed(p) && input.contains(&p.id))
             .collect::<Vec<_>>();
 
         if !installed.is_empty() {
