@@ -2,6 +2,19 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+//! Use fnmatch to generate regex matchers from glob-style strings.
+//!
+//! This crate extends the conventional `glob` style strings to add matching groups
+//! by compiling to an internal [Regex].
+//!
+//!
+//! # Example
+//! ```
+//!     let pattern = "/usr/lib/modules/(version:*)/kernel".parse::<fnmatch::Pattern>().unwrap();
+//!     let result = pattern.match_path("/usr/lib/kernel/nomatch").unwrap();
+//!     // panic
+//! ```
+
 use std::{
     collections::{HashMap, HashSet},
     convert::Infallible,
@@ -84,20 +97,35 @@ impl<'a> StringWalker<'a> {
     }
 }
 
+/// Glob-style matching with groups
+///
+/// You can generate a Pattern by converting from a [String] or string-type
+/// using the [FromStr] trait.
 #[derive(Debug)]
 pub struct Pattern {
-    pub pattern: String,
+    pattern: String,
     regex: Regex,
     groups: Vec<String>,
 }
 
+/// Path match for a [Pattern]
+///
+/// A Match contains the matching path as well as any captured
+/// variables, as determined by the [Pattern]
+///
+/// Generate a Match by calling [`Pattern::match_path()`]
 #[derive(Debug)]
 pub struct Match {
     pub path: String,
+
+    /// Captured variables, as defined by the [`Pattern::groups()`]
     pub variables: HashMap<String, String>,
 }
 
 impl Pattern {
+    /// Attempt to match `path` to our `pattern`
+    ///
+    /// Returns a [Match] if the input path matches the pattern
     pub fn match_path(&self, path: &str) -> Option<Match> {
         match self.regex.captures(path) {
             Some(m) => {
@@ -113,16 +141,25 @@ impl Pattern {
             None => None,
         }
     }
+
+    /// Return a copy of the internal capture groups
+    pub fn groups(&self) -> Vec<String> {
+        self.groups.clone()
+    }
 }
 
+/// [thiserror] compatible Error
 #[derive(Error, Debug)]
 pub enum Error {
+    /// Corrupt string (unicode)
     #[error("malformed: {0}")]
     String(#[from] Infallible),
 
+    /// Illegal group syntax
     #[error("malformed group")]
     Group,
 
+    /// Illegal regex
     #[error("invalid regex: {0}")]
     Regex(#[from] regex::Error),
 }
