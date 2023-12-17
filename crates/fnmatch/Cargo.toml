@@ -8,4 +8,4 @@ edition.workspace = true
 [dependencies]
 regex = "1.10.2"
 thiserror.workspace = true
-
+serde.workspace = true

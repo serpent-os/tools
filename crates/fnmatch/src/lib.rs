@@ -9,6 +9,7 @@ use std::{
 };
 
 use regex::Regex;
+use serde::{de, Deserialize};
 use thiserror::Error;
 #[derive(Debug)]
 enum Fragment {
@@ -224,6 +225,41 @@ impl FromStr for Pattern {
             regex: Regex::new(&compiled)?,
             groups: groups.into_iter().collect(),
         })
+    }
+}
+
+impl<'de> Deserialize<'de> for Pattern {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        FromStr::from_str(&s).map_err(de::Error::custom)
+    }
+}
+
+impl PartialEq for Pattern {
+    fn eq(&self, other: &Self) -> bool {
+        self.pattern == other.pattern && self.groups == other.groups
+    }
+}
+
+impl Eq for Pattern {}
+
+impl PartialOrd for Pattern {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.pattern.partial_cmp(&other.pattern)
+    }
+}
+
+impl Ord for Pattern {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match self.pattern.cmp(&other.pattern) {
+            std::cmp::Ordering::Less => return std::cmp::Ordering::Less,
+            std::cmp::Ordering::Equal => {}
+            std::cmp::Ordering::Greater => return std::cmp::Ordering::Greater,
+        }
+        self.groups.cmp(&other.groups)
     }
 }
 
