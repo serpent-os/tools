@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
-    fs, io,
+    io,
     os::unix::process::ExitStatusExt,
     path::{Path, PathBuf},
     process, thread,
@@ -14,7 +14,10 @@ use nix::{
     sys::signal::Signal,
     unistd::{getpgrp, setpgid, Pid},
 };
-use stone_recipe::{script, Recipe, Script};
+use stone_recipe::{
+    script::{self, Breakpoint},
+    Script,
+};
 use thiserror::Error;
 use tui::Stylize;
 
@@ -22,7 +25,7 @@ use crate::{
     architecture::BuildTarget,
     container::{self, ExecError},
     job::{self, Step},
-    macros, paths, pgo, profile, recipe, root, upstream, util, Env, Job, Macros, Paths, Runtime,
+    macros, pgo, profile, recipe, root, upstream, util, Env, Job, Macros, Paths, Recipe, Runtime,
 };
 
 pub struct Builder {
@@ -47,19 +50,13 @@ impl Builder {
         profile: profile::Id,
         ccache: bool,
     ) -> Result<Self, Error> {
-        let recipe_bytes = fs::read(recipe_path)?;
-        let recipe = stone_recipe::from_slice(&recipe_bytes)?;
+        let recipe = Recipe::load(recipe_path)?;
 
         let macros = Macros::load(&env)?;
 
-        let paths = Paths::new(
-            paths::Id::new(&recipe),
-            recipe_path,
-            &env.cache_dir,
-            "/mason",
-        )?;
+        let paths = Paths::new(&recipe, &env.cache_dir, "/mason")?;
 
-        let build_targets = recipe::build_targets(&recipe);
+        let build_targets = recipe.build_targets();
 
         if build_targets.is_empty() {
             return Err(Error::NoBuildTargets);
@@ -122,7 +119,7 @@ impl Builder {
     }
 
     pub fn build(self) -> Result<(), Error> {
-        container::exec(&self.paths, self.recipe.options.networking, || {
+        container::exec(&self.paths, self.recipe.parsed.options.networking, || {
             // We're now in the container =)
 
             // Set ourselves into our own process group
@@ -182,14 +179,24 @@ impl Builder {
                         for command in &script.commands {
                             match command {
                                 script::Command::Break(breakpoint) => {
+                                    let line_num = breakpoint_line(
+                                        breakpoint,
+                                        &self.recipe,
+                                        job.target,
+                                        *step,
+                                    )
+                                    .map(|line_num| format!(" at line {line_num}"))
+                                    .unwrap_or_default();
+
                                     println!(
-                                        "\n{} {}",
+                                        "\n{}{} {}",
                                         "Breakpoint".bold(),
+                                        line_num,
                                         if breakpoint.exit {
                                             "(exit)".dim()
                                         } else {
                                             "(continue)".dim()
-                                        }
+                                        },
                                     );
 
                                     // Write env to $HOME/.profile
@@ -338,6 +345,73 @@ pub fn build_profile(script: &Script) -> String {
     format!("{env}\n{action_functions}\n{definition_vars}")
 }
 
+fn breakpoint_line(
+    breakpoint: &Breakpoint,
+    recipe: &Recipe,
+    build_target: BuildTarget,
+    step: Step,
+) -> Option<usize> {
+    let profile = recipe.build_target_profile_key(build_target);
+
+    let has_key = |line: &str, key: &str| {
+        line.split_once(':')
+            .map_or(false, |(leading, _)| leading.trim().ends_with(key))
+    };
+
+    let mut lines = recipe
+        .source
+        .lines()
+        .enumerate()
+        // If no profile, we care about root keys (no leading whitespace),
+        // otherwise it will be indented
+        .filter(|(_, line)| {
+            let indented = line.trim().chars().next() != line.chars().next();
+
+            if profile.is_none() {
+                !indented
+            } else {
+                indented
+            }
+        })
+        // Skip lines occurring before profile, otherwise it's the
+        // root profile
+        .skip_while(|(_, line)| {
+            if let Some(profile) = &profile {
+                !has_key(line, profile)
+            } else {
+                false
+            }
+        });
+
+    let step = match step {
+        // Internal step, no breakpoint will occur
+        Step::Prepare => return None,
+        Step::Setup => "setup",
+        Step::Build => "build",
+        Step::Install => "install",
+        Step::Check => "check",
+        Step::Workload => "workload",
+    };
+
+    lines.find_map(|(mut line_num, line)| {
+        if has_key(line, step) {
+            // 0 based to 1 based
+            line_num += 1;
+
+            let (_, rest) = line.split_once(':').expect("line contains :");
+
+            // If block, string starts on next line
+            if rest.trim().starts_with('|') || rest.trim().starts_with('>') {
+                line_num += 1;
+            }
+
+            Some(line_num + breakpoint.line_num)
+        } else {
+            None
+        }
+    })
+}
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("no supported build targets for recipe")]
@@ -352,10 +426,10 @@ pub enum Error {
     Root(#[from] root::Error),
     #[error("upstream")]
     Upstream(#[from] upstream::Error),
-    #[error("stone recipe")]
-    StoneRecipe(#[from] stone_recipe::Error),
     #[error("container")]
     Container(#[from] container::Error),
+    #[error("recipe")]
+    Recipe(#[from] recipe::Error),
     #[error("io")]
     Io(#[from] io::Error),
 }

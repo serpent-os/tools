@@ -11,15 +11,15 @@ use crate::Builder;
 pub fn calculate(builder: &Builder) -> Vec<&str> {
     let mut packages = BASE_PACKAGES.to_vec();
 
-    match builder.recipe.options.toolchain {
+    match builder.recipe.parsed.options.toolchain {
         Toolchain::Llvm => packages.extend(LLVM_PACKAGES),
         Toolchain::Gnu => packages.extend(GNU_PACKAGES),
     }
 
-    if builder.recipe.emul32 {
+    if builder.recipe.parsed.emul32 {
         packages.extend(BASE32_PACKAGES);
 
-        match builder.recipe.options.toolchain {
+        match builder.recipe.parsed.options.toolchain {
             Toolchain::Llvm => packages.extend(LLVM32_PACKAGES),
             Toolchain::Gnu => packages.extend(GNU32_PACKAGES),
         }
@@ -29,10 +29,26 @@ pub fn calculate(builder: &Builder) -> Vec<&str> {
         packages.push(CCACHE_PACKAGE);
     }
 
-    packages.extend(builder.recipe.build.build_deps.iter().map(String::as_str));
-    packages.extend(builder.recipe.build.check_deps.iter().map(String::as_str));
+    packages.extend(
+        builder
+            .recipe
+            .parsed
+            .build
+            .build_deps
+            .iter()
+            .map(String::as_str),
+    );
+    packages.extend(
+        builder
+            .recipe
+            .parsed
+            .build
+            .check_deps
+            .iter()
+            .map(String::as_str),
+    );
 
-    for upstream in &builder.recipe.upstreams {
+    for upstream in &builder.recipe.parsed.upstreams {
         if let Upstream::Plain { uri, .. } = upstream {
             let path = uri.path();
 

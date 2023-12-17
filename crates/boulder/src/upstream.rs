@@ -12,7 +12,6 @@ use std::{
 use futures::{stream, StreamExt, TryStreamExt};
 use nix::unistd::{linkat, LinkatFlags};
 use sha2::{Digest, Sha256};
-use stone_recipe::Recipe;
 use thiserror::Error;
 use tokio::fs::{copy, remove_dir_all};
 use tokio::io::AsyncWriteExt;
@@ -20,12 +19,13 @@ use tokio::process::Command;
 use tui::{MultiProgress, ProgressBar, ProgressStyle, Stylize};
 use url::Url;
 
-use crate::{util, Paths};
+use crate::{util, Paths, Recipe};
 
 /// Cache all upstreams from the provided [`Recipe`] and make them available
 /// in the guest rootfs.
 pub async fn sync(recipe: &Recipe, paths: &Paths) -> Result<(), Error> {
     let upstreams = recipe
+        .parsed
         .upstreams
         .iter()
         .cloned()

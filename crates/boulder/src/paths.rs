@@ -2,14 +2,9 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{
-    io,
-    path::{Path, PathBuf},
-};
+use std::{io, path::PathBuf};
 
-use stone_recipe::Recipe;
-
-use crate::util;
+use crate::{util, Recipe};
 
 #[derive(Debug, Clone)]
 pub struct Id(String);
@@ -18,7 +13,7 @@ impl Id {
     pub fn new(recipe: &Recipe) -> Self {
         Self(format!(
             "{}-{}-{}",
-            recipe.source.name, recipe.source.version, recipe.source.release
+            recipe.parsed.source.name, recipe.parsed.source.version, recipe.parsed.source.release
         ))
     }
 }
@@ -33,12 +28,14 @@ pub struct Paths {
 
 impl Paths {
     pub fn new(
-        id: Id,
-        recipe_path: &Path,
+        recipe: &Recipe,
         host_root: impl Into<PathBuf>,
         guest_root: impl Into<PathBuf>,
     ) -> io::Result<Self> {
-        let recipe_dir = recipe_path
+        let id = Id::new(recipe);
+
+        let recipe_dir = recipe
+            .path
             .parent()
             .unwrap_or(&PathBuf::default())
             .canonicalize()?;

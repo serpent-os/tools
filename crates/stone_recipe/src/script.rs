@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{alpha1, anychar, char, digit1},
+    character::complete::{alpha1, anychar, char, digit1, newline},
     combinator::{eof, iterator, map, peek, recognize, value},
     multi::{many1, many_till},
     sequence::{delimited, preceded, terminated},
@@ -118,6 +118,7 @@ pub enum Command {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Breakpoint {
+    pub line_num: usize,
     pub exit: bool,
 }
 
@@ -144,6 +145,7 @@ fn parse(
     definitions: &HashMap<String, String>,
     dependencies: &mut HashSet<String>,
 ) -> Result<Parsed, Error> {
+    let mut line_num = 0;
     let mut content = String::new();
     let mut commands = vec![];
 
@@ -191,12 +193,16 @@ fn parse(
                 }
             }
             Token::Plain(plain) => content.push_str(plain),
-            Token::Break(chroot) => {
+            Token::Newline => {
+                line_num += 1;
+                content.push('\n')
+            }
+            Token::Break { exit } => {
                 let content = prepend_env(&std::mem::take(&mut content));
                 if !content.is_empty() {
                     commands.push(Command::Content(content));
                 }
-                commands.push(Command::Break(chroot));
+                commands.push(Command::Break(Breakpoint { line_num, exit }));
             }
         }
         Ok(())
@@ -235,7 +241,8 @@ enum Token<'a> {
     Action(&'a str),
     Definition(&'a str),
     Plain(&'a str),
-    Break(Breakpoint),
+    Newline,
+    Break { exit: bool },
 }
 
 fn tokens(input: &str, f: impl FnMut(Token) -> Result<(), Error>) -> Result<(), Error> {
@@ -250,17 +257,21 @@ fn tokens(input: &str, f: impl FnMut(Token) -> Result<(), Error>) -> Result<(), 
     let macro_ = alt((action, definition));
     // %% -> %
     let escaped = |input| preceded(char('%'), value("%", char('%')))(input);
-    // Escaped or any char until escape, next macro or EOF
+    // Escaped or any char until newline, escape, next macro or EOF
     let plain = alt((
         escaped,
-        recognize(many_till(anychar, peek(alt((escaped, macro_))))),
+        recognize(many_till(
+            anychar,
+            peek(alt((recognize(newline), escaped, macro_))),
+        )),
         recognize(terminated(many1(anychar), eof)),
     ));
 
     let token = alt((
+        map(newline, |_| Token::Newline),
         map(action, |action| match action {
-            "break_continue" => Token::Break(Breakpoint { exit: false }),
-            "break_exit" => Token::Break(Breakpoint { exit: true }),
+            "break_continue" => Token::Break { exit: false },
+            "break_exit" => Token::Break { exit: true },
             _ => Token::Action(action),
         }),
         map(definition, Token::Definition),
@@ -300,7 +311,7 @@ mod test {
     #[test]
     fn parse_script() {
         let input =
-            "%patch %%escaped %{ %break_continue %break_exit %(pkgdir)/0001-deps-analysis-elves-In-absence-of-soname.-make-one-u.patch";
+            "\n\n%patch %%escaped %{ %break_continue\n%break_exit %(pkgdir)/0001-deps-analysis-elves-In-absence-of-soname.-make-one-u.patch";
 
         let mut parser = Parser::new();
         parser.add_action(
@@ -326,8 +337,14 @@ mod test {
             script.commands,
             vec![
                 Command::Content("patch -v --args=a,b,c %escaped %{".to_string()),
-                Command::Break(Breakpoint { exit: false }),
-                Command::Break(Breakpoint { exit: true }),
+                Command::Break(Breakpoint {
+                    exit: false,
+                    line_num: 2
+                }),
+                Command::Break(Breakpoint {
+                    exit: true,
+                    line_num: 3
+                }),
                 Command::Content(
                     "/mason/pkg/0001-deps-analysis-elves-In-absence-of-soname.-make-one-u.patch"
                         .to_string()
@@ -335,5 +352,40 @@ mod test {
             ]
         );
         assert_eq!(script.dependencies, vec!["patch".to_string()])
+    }
+
+    #[test]
+    fn break_line_num() {
+        let test = "patch (pkgdir)/security/CVE-2022-47016.patch\n%break_continue\nconfigure";
+
+        let breakpoint = Parser::new().parse(test).unwrap().commands.remove(1);
+
+        assert_eq!(
+            breakpoint,
+            Command::Break(Breakpoint {
+                line_num: 1,
+                exit: false
+            })
+        );
+
+        let test = "# Currently the emul32 chain for harfbuzz is on the large side. Revisit\n%meson -Dharfbuzz=disabled\n%break_continue";
+
+        let mut parser = Parser::new();
+        parser.add_action(
+            "meson",
+            Action {
+                command: "meson -j 1".into(),
+                dependencies: vec![],
+            },
+        );
+        let breakpoint = parser.parse(test).unwrap().commands.remove(1);
+
+        assert_eq!(
+            breakpoint,
+            Command::Break(Breakpoint {
+                line_num: 2,
+                exit: false
+            })
+        );
     }
 }
