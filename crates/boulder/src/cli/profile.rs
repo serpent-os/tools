@@ -39,7 +39,7 @@ pub enum Subcommand {
     },
     #[command(about = "Update a profiles repositories")]
     Update {
-        #[arg(short, long)]
+        #[arg(short, long, default_value = "default-x86_64")]
         profile: profile::Id,
     },
 }

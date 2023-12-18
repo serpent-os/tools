@@ -14,6 +14,7 @@ use crate::Env;
 
 /// A unique [`Profile`] identifier
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(from = "String")]
 pub struct Id(String);
 
 impl Id {
@@ -21,7 +22,13 @@ impl Id {
         Self(
             identifier
                 .chars()
-                .map(|c| if c.is_alphanumeric() { c } else { '_' })
+                .map(|c| {
+                    if c.is_alphanumeric() || c == '-' {
+                        c
+                    } else {
+                        '_'
+                    }
+                })
                 .collect(),
         )
     }
@@ -106,7 +113,7 @@ impl<'a> Manager<'a> {
         self.profiles
             .get(profile)
             .map(|profile| &profile.collections)
-            .ok_or(Error::MissingProfile)
+            .ok_or_else(|| Error::MissingProfile(profile.clone()))
     }
 
     pub async fn save_profile(&mut self, id: Id, profile: Profile) -> Result<(), Error> {
@@ -123,8 +130,8 @@ impl<'a> Manager<'a> {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("cannot find the provided profile")]
-    MissingProfile,
+    #[error("cannot find the provided profile: {0}")]
+    MissingProfile(Id),
     #[error("save profiles")]
     SaveProfile(#[from] config::SaveError),
 }

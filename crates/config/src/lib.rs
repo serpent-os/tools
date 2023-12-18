@@ -213,8 +213,43 @@ impl Scope {
                     },
                 ),
             ],
+            // System (root = "/") + User
             Scope::User { config, program } => {
+                let root = Path::new("/");
+
                 vec![
+                    (
+                        Entry::File,
+                        Resolve::System {
+                            root,
+                            base: SystemBase::Vendor,
+                            program,
+                        },
+                    ),
+                    (
+                        Entry::Directory,
+                        Resolve::System {
+                            root,
+                            base: SystemBase::Vendor,
+                            program,
+                        },
+                    ),
+                    (
+                        Entry::File,
+                        Resolve::System {
+                            root,
+                            base: SystemBase::Admin,
+                            program,
+                        },
+                    ),
+                    (
+                        Entry::Directory,
+                        Resolve::System {
+                            root,
+                            base: SystemBase::Admin,
+                            program,
+                        },
+                    ),
                     (Entry::File, Resolve::User { config, program }),
                     (Entry::Directory, Resolve::User { config, program }),
                 ]

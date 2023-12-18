@@ -29,7 +29,13 @@ impl Id {
         Self(
             identifier
                 .chars()
-                .map(|c| if c.is_alphanumeric() { c } else { '_' })
+                .map(|c| {
+                    if c.is_alphanumeric() || c == '-' {
+                        c
+                    } else {
+                        '_'
+                    }
+                })
                 .collect(),
         )
     }

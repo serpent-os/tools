@@ -1,0 +1,16 @@
+default-x86_64:
+  collections:
+      volatile:
+        uri: "https://dev.serpentos.com/volatile/x86_64/stone.index"
+        description: "Volatile moss repo"
+        priority: 0
+local-x86_64:
+  collections:
+      volatile:
+        uri: "https://dev.serpentos.com/volatile/x86_64/stone.index"
+        description: "Volatile moss repo"
+        priority: 0
+      local:
+        uri: "file:///var/cache/boulder/repos/local-x86_64/stone.index"
+        description: "Local development moss repo"
+        priority: 10
