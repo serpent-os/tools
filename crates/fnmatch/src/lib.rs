@@ -101,7 +101,7 @@ impl<'a> StringWalker<'a> {
 ///
 /// You can generate a Pattern by converting from a [String] or string-type
 /// using the [FromStr] trait.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Pattern {
     pattern: String,
     regex: Regex,
