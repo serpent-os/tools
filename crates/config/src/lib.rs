@@ -96,6 +96,17 @@ impl Manager {
 
         Ok(())
     }
+
+    pub async fn delete<T: Config>(&self, name: impl fmt::Display) -> Result<(), io::Error> {
+        let domain = T::domain();
+
+        let dir = self.scope.save_dir(&domain);
+        let path = dir.join(format!("{name}.{EXTENSION}"));
+
+        fs::remove_file(&path).await?;
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Error)]
