@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use futures::{future, StreamExt, TryStreamExt};
+use futures::{future, stream, StreamExt, TryStreamExt};
 use thiserror::Error;
 use tokio::{fs, io};
 use xxhash_rust::xxh3::xxh3_64;
@@ -147,6 +147,39 @@ impl Manager {
         } else {
             Err(Error::UnknownRepo(id.clone()))
         }
+    }
+
+    /// Ensures all repositories are initialized - index file downloaded and meta db
+    /// populated.
+    ///
+    /// This is useful to call when initializing the moss client in-case users added configs
+    /// manually outside the CLI
+    pub async fn ensure_all_initialized(&mut self) -> Result<(), Error> {
+        let initialized = stream::iter(&self.repositories)
+            .filter(|(id, state)| async {
+                let index_file = cache_dir(
+                    self.source.identifier(),
+                    &state.repository,
+                    &self.installation,
+                )
+                .join("stone.index");
+
+                !index_file.exists()
+            })
+            .map(|(id, state)| async {
+                println!("Initializing repo {}...", *id);
+
+                refresh_index(self.source.identifier(), state, &self.installation).await
+            })
+            .buffer_unordered(environment::MAX_NETWORK_CONCURRENCY)
+            .try_collect::<Vec<_>>()
+            .await?;
+
+        if !initialized.is_empty() {
+            println!();
+        }
+
+        Ok(())
     }
 
     /// Returns the active repositories held by this manager

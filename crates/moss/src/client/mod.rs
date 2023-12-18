@@ -60,26 +60,49 @@ impl Client {
         client_name: impl ToString,
         root: impl Into<PathBuf>,
     ) -> Result<Client, Error> {
+        Self::build(client_name, root, None).await
+    }
+
+    /// Construct a new Client with explicit repositories
+    pub async fn with_explicit_repositories(
+        client_name: impl ToString,
+        root: impl Into<PathBuf>,
+        repositories: repository::Map,
+    ) -> Result<Client, Error> {
+        Self::build(client_name, root, Some(repositories)).await
+    }
+
+    async fn build(
+        client_name: impl ToString,
+        root: impl Into<PathBuf>,
+        repositories: Option<repository::Map>,
+    ) -> Result<Client, Error> {
         let root = root.into();
 
         if !root.exists() || !root.is_dir() {
             return Err(Error::RootInvalid);
         }
 
+        let name = client_name.to_string();
         let config = config::Manager::system(&root, "moss");
         let installation = Installation::open(root);
-        let repositories =
-            repository::Manager::system(config.clone(), installation.clone()).await?;
         let install_db =
             db::meta::Database::new(installation.db_path("install"), installation.read_only())
                 .await?;
         let state_db = db::state::Database::new(&installation).await?;
         let layout_db = db::layout::Database::new(&installation).await?;
 
+        let mut repositories = if let Some(repos) = repositories {
+            repository::Manager::explicit(&name, repos, installation.clone()).await?
+        } else {
+            repository::Manager::system(config.clone(), installation.clone()).await?
+        };
+        repositories.ensure_all_initialized().await?;
+
         let registry = build_registry(&installation, &repositories, &install_db, &state_db).await?;
 
         Ok(Client {
-            name: client_name.to_string(),
+            name,
             config,
             installation,
             repositories,
@@ -118,28 +141,6 @@ impl Client {
             scope: Scope::Ephemeral { blit_root },
             ..self
         })
-    }
-
-    /// Transition the client to use the provided explicit repositories, instead of loading
-    /// repository configuration from moss config folders
-    pub async fn explicit_repositories(
-        mut self,
-        repositories: repository::Map,
-    ) -> Result<Self, Error> {
-        self.repositories =
-            repository::Manager::explicit(&self.name, repositories, self.installation.clone())
-                .await?;
-
-        // Rebuild registry
-        self.registry = build_registry(
-            &self.installation,
-            &self.repositories,
-            &self.install_db,
-            &self.state_db,
-        )
-        .await?;
-
-        Ok(self)
     }
 
     /// Reload all configured repositories and refreshes their index file, then update
