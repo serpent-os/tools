@@ -143,6 +143,8 @@ pub async fn update<'a>(
         .await?;
     moss_client.refresh_repositories().await?;
 
+    println!("Profile {profile} updated");
+
     Ok(())
 }
 #[derive(Debug, Error)]
