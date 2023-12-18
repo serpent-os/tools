@@ -58,6 +58,10 @@ impl Manager {
     }
 
     pub async fn load<T: Config>(&self) -> Option<T> {
+        self.load_all().await.into_iter().reduce(T::merge)
+    }
+
+    pub async fn load_all<T: Config>(&self) -> Vec<T> {
         let domain = T::domain();
 
         let mut configs = vec![];
@@ -70,7 +74,7 @@ impl Manager {
             }
         }
 
-        configs.into_iter().reduce(T::merge)
+        configs
     }
 
     pub async fn save<T: Config + Serialize>(
