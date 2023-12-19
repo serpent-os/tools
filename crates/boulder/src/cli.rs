@@ -9,6 +9,7 @@ use thiserror::Error;
 
 mod build;
 mod chroot;
+mod format;
 mod profile;
 
 #[derive(Debug, Parser)]
@@ -37,6 +38,7 @@ pub enum Subcommand {
     Build(build::Command),
     Chroot(chroot::Command),
     Profile(profile::Command),
+    Format(format::Command),
 }
 
 pub fn process() -> Result<(), Error> {
@@ -53,6 +55,7 @@ pub fn process() -> Result<(), Error> {
         Subcommand::Build(command) => build::handle(command, env)?,
         Subcommand::Chroot(command) => chroot::handle(command, env)?,
         Subcommand::Profile(command) => profile::handle(command, env)?,
+        Subcommand::Format(command) => format::handle(command)?,
     }
 
     Ok(())
@@ -68,4 +71,6 @@ pub enum Error {
     Profile(#[from] profile::Error),
     #[error("env")]
     Env(#[from] env::Error),
+    #[error("format")]
+    Format(#[from] format::Error),
 }

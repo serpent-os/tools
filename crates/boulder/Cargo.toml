@@ -11,6 +11,7 @@ container = { path = "../container" }
 moss = { path = "../moss" }
 stone_recipe = { path = "../stone_recipe" }
 tui = { path = "../tui" }
+yaml = { path = "../yaml" }
 
 clap.workspace = true
 dirs.workspace = true
@@ -19,6 +20,7 @@ hex.workspace = true
 itertools.workspace = true
 nix.workspace = true
 serde.workspace = true
+serde_yaml.workspace = true
 sha2.workspace = true
 strum.workspace = true
 thiserror.workspace = true
