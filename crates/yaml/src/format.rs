@@ -22,7 +22,7 @@ pub fn format<T: Serialize>(value: &T) -> Result<String, Error> {
 
     let value = serde_yaml::to_value(value)?;
 
-    nested_format(&mut f, &value, 0, false)?;
+    nested_format(&mut f, &value, 0, 0, false)?;
 
     Ok(f)
 }
@@ -31,23 +31,34 @@ fn nested_format(
     f: &mut String,
     value: &Value,
     level: usize,
+    // Nested sequence level
+    mut seq_level: usize,
     is_seq_item: bool,
 ) -> Result<(), Error> {
     match value {
-        Value::Null => writeln!(f, "{}~", indent(level, is_seq_item, 0))?,
-        Value::Bool(bool) => writeln!(f, "{}{bool}", indent(level, is_seq_item, 0))?,
-        Value::Number(number) => writeln!(f, "{}{number}", indent(level, is_seq_item, 0))?,
-        Value::String(string) => writeln!(f, "{}{string}", indent(level, is_seq_item, 0))?,
+        Value::Null => writeln!(f, "{}~", indent(level, seq_level, is_seq_item, 0))?,
+        Value::Bool(bool) => writeln!(f, "{}{bool}", indent(level, seq_level, is_seq_item, 0))?,
+        Value::Number(number) => {
+            writeln!(f, "{}{number}", indent(level, seq_level, is_seq_item, 0))?
+        }
+        Value::String(string) => {
+            writeln!(f, "{}{string}", indent(level, seq_level, is_seq_item, 0))?
+        }
         // Strip the tag, we don't support it
-        Value::Tagged(tagged) => nested_format(f, &tagged.value, level, is_seq_item)?,
+        Value::Tagged(tagged) => nested_format(f, &tagged.value, level, seq_level, is_seq_item)?,
         Value::Sequence(sequence) => {
             for (i, value) in sequence.iter().enumerate() {
-                write!(f, "{}- ", indent(level, is_seq_item, i))?;
+                write!(f, "{}- ", indent(level, seq_level, is_seq_item, i))?;
 
                 match formatted_scalar(value) {
                     Some(scalar) => writeln!(f, "{}", formatted_string(&scalar, level + 1))?,
                     None => {
-                        nested_format(f, value, level, true)?;
+                        // Only increase if we're nested
+                        if is_seq_item {
+                            seq_level += 1;
+                        }
+
+                        nested_format(f, value, level, seq_level, true)?;
                     }
                 }
             }
@@ -68,7 +79,7 @@ fn nested_format(
                 .unwrap_or_default();
 
             for (i, (key, value)) in entries.into_iter().enumerate() {
-                let indent = indent(level, is_seq_item, i);
+                let indent = indent(level, seq_level, is_seq_item, i);
 
                 match formatted_scalar(value) {
                     Some(scalar) => {
@@ -82,7 +93,7 @@ fn nested_format(
                     None => {
                         writeln!(f, "{indent}{:<max_key$} :", key.trim_end())?;
 
-                        nested_format(f, value, level + 1, false)?;
+                        nested_format(f, value, level + 1, seq_level, false)?;
                     }
                 }
             }
@@ -110,20 +121,22 @@ fn formatted_string(s: &str, level: usize) -> Cow<str> {
     if num_newlines == 0 {
         Cow::Borrowed(s)
     } else {
-        let indent = indent(level, false, 0);
+        let indent = indent(level, 0, false, 0);
         let indented = s.lines().map(|line| format!("{indent}{line}")).join("\n");
         Cow::Owned(format!("|\n{indented}"))
     }
 }
 
-fn indent(level: usize, is_seq_item: bool, i: usize) -> String {
+fn indent(level: usize, seq_level: usize, is_seq_item: bool, i: usize) -> String {
     if is_seq_item && i == 0 {
         String::new()
     } else {
-        let mut num_spaces = TAB_SIZE * level;
+        let mut num_spaces = TAB_SIZE * level + SEQ_SPACE * seq_level;
+
         if is_seq_item {
             num_spaces += SEQ_SPACE;
         }
+
         " ".repeat(num_spaces)
     }
 }
