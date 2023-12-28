@@ -12,7 +12,7 @@ mod chroot;
 mod profile;
 
 #[derive(Debug, Parser)]
-#[command()]
+#[command(version = version())]
 pub struct Command {
     #[command(flatten)]
     pub global: Global,
@@ -68,4 +68,16 @@ pub enum Error {
     Profile(#[from] profile::Error),
     #[error("env")]
     Env(#[from] env::Error),
+}
+
+fn version() -> String {
+    use moss::environment;
+
+    pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+    let hash = environment::GIT_HASH
+        .map(|hash| format!(" ({hash})"))
+        .unwrap_or_default();
+
+    format!("{VERSION}{hash}")
 }

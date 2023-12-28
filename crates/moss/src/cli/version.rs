@@ -12,5 +12,9 @@ pub fn command() -> Command {
 
 /// Print program version
 pub fn print() {
-    println!("moss {}", environment::VERSION);
+    let hash = environment::GIT_HASH
+        .map(|hash| format!(" ({hash})"))
+        .unwrap_or_default();
+
+    println!("moss {}{hash}", environment::VERSION);
 }
