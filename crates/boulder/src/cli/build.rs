@@ -14,7 +14,7 @@ use thiserror::Error;
 #[derive(Debug, Parser)]
 #[command(about = "Build ... TODO")]
 pub struct Command {
-    #[arg(short, long)]
+    #[arg(short, long, default_value = "default-x86_64")]
     profile: profile::Id,
     #[arg(
         short,

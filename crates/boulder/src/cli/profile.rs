@@ -39,7 +39,7 @@ pub enum Subcommand {
     },
     #[command(about = "Update a profiles repositories")]
     Update {
-        #[arg(short, long)]
+        #[arg(short, long, default_value = "default-x86_64")]
         profile: profile::Id,
     },
 }
@@ -140,6 +140,8 @@ pub async fn update<'a>(
     let mut moss_client =
         moss::Client::with_explicit_repositories("boulder", &env.moss_dir, repos).await?;
     moss_client.refresh_repositories().await?;
+
+    println!("Profile {profile} updated");
 
     Ok(())
 }
