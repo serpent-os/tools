@@ -86,6 +86,10 @@ pub async fn process() -> Result<(), Error> {
             version::print();
             Ok(())
         }
+        None => {
+            command().print_help().unwrap();
+            Ok(())
+        }
         _ => unreachable!(),
     }
 }
