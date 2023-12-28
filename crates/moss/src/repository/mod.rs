@@ -22,6 +22,7 @@ pub mod manager;
 
 /// A unique [`Repository`] identifier
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(from = "String")]
 pub struct Id(String);
 
 impl Id {
@@ -38,6 +39,12 @@ impl Id {
 impl fmt::Display for Id {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
+    }
+}
+
+impl From<String> for Id {
+    fn from(value: String) -> Self {
+        Self::new(value)
     }
 }
 

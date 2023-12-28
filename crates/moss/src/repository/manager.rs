@@ -154,6 +154,40 @@ impl Manager {
         self.repositories.values().cloned()
     }
 
+    /// Remove a repository, deleting any related config & cached data
+    pub async fn remove(&mut self, id: impl Into<repository::Id>) -> Result<Removal, Error> {
+        // Only allow removal for system repo manager
+        let Source::System(config) = &self.source else {
+            return Err(Error::ExplicitUnsupported);
+        };
+
+        // Remove from memory
+        let Some(repo) = self.repositories.remove(&id.into()) else {
+            return Ok(Removal::NotFound);
+        };
+
+        let cache_dir = cache_dir(
+            self.source.identifier(),
+            &repo.repository,
+            &self.installation,
+        );
+
+        // Remove cache
+        if cache_dir.exists() {
+            fs::remove_dir_all(&cache_dir)
+                .await
+                .map_err(Error::RemoveDir)?;
+        }
+
+        // Delete config, only succeeds for configs that live in their
+        // own config file w/ matching repo name
+        if config.delete::<repository::Map>(&repo.id).await.is_err() {
+            return Ok(Removal::ConfigDeleted(false));
+        }
+
+        Ok(Removal::ConfigDeleted(true))
+    }
+
     /// List all of the known repositories
     pub fn list(&self) -> impl ExactSizeIterator<Item = (&repository::Id, &Repository)> {
         self.repositories
@@ -258,7 +292,7 @@ async fn refresh_index(
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("Can't add repos when using explicit configs")]
+    #[error("Can't modify repos when using explicit configs")]
     ExplicitUnsupported,
     #[error("Missing metadata field: {0:?}")]
     MissingMetaField(stone::payload::meta::Tag),
@@ -282,4 +316,10 @@ impl From<package::MissingMetaFieldError> for Error {
     fn from(error: package::MissingMetaFieldError) -> Self {
         Self::MissingMetaField(error.0)
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Removal {
+    NotFound,
+    ConfigDeleted(bool),
 }

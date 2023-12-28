@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::path::Path;
+use std::{path::Path, process};
 
 use clap::{arg, Arg, ArgAction, ArgMatches, Command};
 use itertools::Itertools;
@@ -98,7 +98,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
         Action::Add(root, name, uri, comment, priority) => {
             add(root, config, name, uri, comment, priority).await
         }
-        Action::Remove(_, _) => unimplemented!(),
+        Action::Remove(root, name) => remove(root, config, name).await,
         Action::Update(root, name) => update(root, config, name).await,
     }
 }
@@ -116,9 +116,11 @@ async fn add(
 
     let mut manager = repository::Manager::system(config, installation).await?;
 
+    let id = repository::Id::new(name);
+
     manager
         .add_repository(
-            repository::Id::new(name),
+            id.clone(),
             Repository {
                 description: comment,
                 uri,
@@ -128,6 +130,8 @@ async fn add(
         .await?;
 
     manager.refresh_all().await?;
+
+    println!("{id} added");
 
     Ok(())
 }
@@ -160,6 +164,30 @@ async fn update(root: &Path, config: config::Manager, which: Option<String>) -> 
     match which {
         Some(repo) => manager.refresh(&repository::Id::new(repo)).await?,
         None => manager.refresh_all().await?,
+    }
+
+    Ok(())
+}
+
+/// Remove repo
+async fn remove(root: &Path, config: config::Manager, repo: String) -> Result<(), Error> {
+    let id = repository::Id::new(repo);
+
+    let installation = Installation::open(root);
+    let mut manager = repository::Manager::system(config, installation).await?;
+
+    match manager.remove(id.clone()).await? {
+        repository::manager::Removal::NotFound => {
+            println!("{id} not found");
+            process::exit(1);
+        }
+        repository::manager::Removal::ConfigDeleted(false) => {
+            println!("{id} configuration must be manually deleted since it doesn't exist in it's own configuration file");
+            process::exit(1);
+        }
+        repository::manager::Removal::ConfigDeleted(true) => {
+            println!("{id} removed");
+        }
     }
 
     Ok(())
