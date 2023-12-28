@@ -137,10 +137,8 @@ pub async fn update<'a>(
 ) -> Result<(), Error> {
     let repos = manager.repositories(profile)?.clone();
 
-    let mut moss_client = moss::Client::new("boulder", &env.moss_dir)
-        .await?
-        .explicit_repositories(repos)
-        .await?;
+    let mut moss_client =
+        moss::Client::with_explicit_repositories("boulder", &env.moss_dir, repos).await?;
     moss_client.refresh_repositories().await?;
 
     Ok(())
