@@ -10,6 +10,7 @@ use thiserror::Error;
 mod build;
 mod chroot;
 mod profile;
+mod recipe;
 
 #[derive(Debug, Parser)]
 #[command(version = version())]
@@ -37,6 +38,7 @@ pub enum Subcommand {
     Build(build::Command),
     Chroot(chroot::Command),
     Profile(profile::Command),
+    Recipe(recipe::Command),
 }
 
 pub fn process() -> Result<(), Error> {
@@ -53,6 +55,7 @@ pub fn process() -> Result<(), Error> {
         Subcommand::Build(command) => build::handle(command, env)?,
         Subcommand::Chroot(command) => chroot::handle(command, env)?,
         Subcommand::Profile(command) => profile::handle(command, env)?,
+        Subcommand::Recipe(command) => recipe::handle(command)?,
     }
 
     Ok(())
@@ -68,6 +71,8 @@ pub enum Error {
     Profile(#[from] profile::Error),
     #[error("env")]
     Env(#[from] env::Error),
+    #[error("recipe")]
+    Recipe(#[from] recipe::Error),
 }
 
 fn version() -> String {
