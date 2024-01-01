@@ -4,7 +4,10 @@
 
 use futures::{future::join_all, StreamExt};
 use thiserror::Error;
-use tui::{ask_yes_no, pretty::print_to_columns};
+use tui::{
+    dialoguer::{theme::ColorfulTheme, Confirm},
+    pretty::print_to_columns,
+};
 
 use crate::{
     client::{self, Client},
@@ -66,7 +69,15 @@ pub async fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<()
     println!();
 
     // Must we prompt?
-    if !yes && !ask_yes_no("Do you wish to continue?")? {
+    let result = if yes {
+        true
+    } else {
+        Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(" Do you wish to continue? ")
+            .default(false)
+            .interact()?
+    };
+    if !result {
         return Err(Error::Cancelled);
     }
 
@@ -153,6 +164,9 @@ pub enum Error {
 
     #[error("state db")]
     StateDB(#[from] crate::db::state::Error),
+
+    #[error("string processing")]
+    Dialog(#[from] tui::dialoguer::Error),
 
     #[error("io")]
     Io(#[from] std::io::Error),

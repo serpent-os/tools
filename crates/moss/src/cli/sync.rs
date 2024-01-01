@@ -17,7 +17,9 @@ use moss::{
     Package,
 };
 use thiserror::Error;
-use tui::ask_yes_no;
+
+use tui::dialoguer::theme::ColorfulTheme;
+use tui::dialoguer::Confirm;
 use tui::pretty::print_to_columns;
 
 pub fn command() -> Command {
@@ -89,7 +91,15 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     println!();
 
     // Must we prompt?
-    if !yes_all && !ask_yes_no("Do you wish to continue?")? {
+    let result = if yes_all {
+        true
+    } else {
+        Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(" Do you wish to continue? ")
+            .default(false)
+            .interact()?
+    };
+    if !result {
         return Err(Error::Cancelled);
     }
 
@@ -214,6 +224,9 @@ pub enum Error {
 
     #[error("state db")]
     StateDB(#[from] moss::db::state::Error),
+
+    #[error("string processing")]
+    Dialog(#[from] tui::dialoguer::Error),
 
     #[error("transaction")]
     Transaction(#[from] transaction::Error),
