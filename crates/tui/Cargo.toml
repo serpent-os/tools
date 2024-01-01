@@ -8,3 +8,4 @@ edition.workspace = true
 [dependencies]
 crossterm.workspace = true
 indicatif.workspace = true
+dialoguer.workspace = true
