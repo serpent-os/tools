@@ -11,8 +11,7 @@
 //! # Example
 //! ```
 //!     let pattern = "/usr/lib/modules/(version:*)/kernel".parse::<fnmatch::Pattern>().unwrap();
-//!     let result = pattern.match_path("/usr/lib/kernel/nomatch").unwrap();
-//!     // panic
+//!     let result = pattern.match_path("/usr/lib/modules/6.2.3/kernel").expect("no kernel match");
 //! ```
 
 use std::{
