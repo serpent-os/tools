@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright © 2020-2023 Serpent OS Developers
+// SPDX-FileCopyrightText: Copyright © 2020-2024 Serpent OS Developers
 //
 // SPDX-License-Identifier: MPL-2.0
 #![allow(clippy::map_collect_result_unit)]
