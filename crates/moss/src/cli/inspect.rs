@@ -110,7 +110,7 @@ async fn inspect(paths: Vec<PathBuf>) -> Result<(), Error> {
                 for layout in layouts {
                     match layout.entry {
                         layout::Entry::Regular(hash, target) => {
-                            println!("    - /usr/{} - [Regular] {:02x}", target, hash)
+                            println!("    - /usr/{} - [Regular] {:032x}", target, hash)
                         }
                         layout::Entry::Directory(target) => {
                             println!("    - /usr/{} [Directory]", target)
