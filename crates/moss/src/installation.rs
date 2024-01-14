@@ -130,6 +130,16 @@ impl Installation {
     pub fn staging_dir(&self) -> PathBuf {
         self.root_path("staging")
     }
+
+    /// Return the container dir itself
+    pub fn isolation_dir(&self) -> PathBuf {
+        self.root_path("isolation")
+    }
+
+    /// Build a container path for isolated triggers
+    pub fn isolation_path(&self, path: impl AsRef<Path>) -> PathBuf {
+        self.root_path("isolation").join(path)
+    }
 }
 
 /// In older versions of moss, the `/usr` entry was a symlink
@@ -174,6 +184,7 @@ fn ensure_dirs_exist(root: &Path) {
         moss.join("assets"),
         moss.join("repo"),
         moss.join("root").join("staging"),
+        moss.join("root").join("isolation"),
     ] {
         let _ = fs::create_dir_all(path);
     }

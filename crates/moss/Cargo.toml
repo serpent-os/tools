@@ -32,3 +32,5 @@ tokio-util.workspace = true
 thiserror.workspace = true 
 url.workspace = true
 xxhash-rust.workspace = true
+triggers = { version = "0.1.0", path = "../triggers" }
+container = { version = "0.1.0", path = "../container" }

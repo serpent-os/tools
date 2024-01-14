@@ -36,6 +36,7 @@ use crate::{
 
 pub mod cache;
 pub mod install;
+pub mod postblit;
 pub mod prune;
 
 /// A Client is a connection to the underlying package management systems
@@ -239,6 +240,7 @@ impl Client {
                 }
 
                 record_os_release(&self.installation.staging_dir(), Some(state.id)).await?;
+                postblit::handle_postblits(self, &self.installation).await?;
 
                 // Staging is only used with [`Scope::Stateful`]
                 self.promote_staging().await?;
@@ -603,7 +605,7 @@ impl Client {
 }
 
 /// Add root symlinks & os-release file
-async fn create_root_links(root: &Path) -> Result<(), Error> {
+async fn create_root_links(root: &Path) -> Result<(), io::Error> {
     let links = vec![
         ("usr/sbin", "sbin"),
         ("usr/bin", "bin"),
@@ -790,4 +792,6 @@ pub enum Error {
     Filesystem(#[from] vfs::tree::Error),
     #[error("blit")]
     Blit(#[from] Errno),
+    #[error("postblit")]
+    PostBlit(#[from] postblit::Error),
 }
