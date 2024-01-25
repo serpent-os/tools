@@ -2470,6 +2470,7 @@ dependencies = [
 name = "triggers"
 version = "0.1.0"
 dependencies = [
+ "dag",
  "fnmatch",
  "serde",
  "serde_yaml",
