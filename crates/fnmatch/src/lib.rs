@@ -258,7 +258,7 @@ impl FromStr for Pattern {
 
         Ok(Self {
             pattern: s.into(),
-            regex: Regex::new(&compiled)?,
+            regex: Regex::new(&format!("^{compiled}$"))?,
             groups: groups.into_iter().collect(),
         })
     }
@@ -306,9 +306,7 @@ pub mod path_tests {
     /// test me
     #[test]
     fn test_pattern() {
-        let k = "/usr/lib/modules/(version:*)/modules.symbols"
-            .parse::<Pattern>()
-            .unwrap();
+        let k = "/usr/lib/modules/(version:*)/*".parse::<Pattern>().unwrap();
 
         let good = k.match_path("/usr/lib/modules/6.2.6/modules.symbols");
         assert!(good.is_some());
@@ -318,7 +316,8 @@ pub mod path_tests {
         assert!(version.is_some());
         assert_eq!(version.unwrap(), "6.2.6");
 
-        let bad = k.match_path("/usr/lib/modules/6.2.6/l/modules.symbols");
-        assert!(bad.is_none());
+        let wide =
+            k.match_path("/usr/lib/modules/6.6.67-51.kvm/kernel/net/netfilter/nft_hash.ko.zst");
+        assert!(wide.is_none());
     }
 }
