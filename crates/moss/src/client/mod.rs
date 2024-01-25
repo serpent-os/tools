@@ -217,11 +217,12 @@ impl Client {
     ) -> Result<Option<State>, Error> {
         let old_state = self.installation.active_state;
 
-        self.blit_root(
-            selections.iter().map(|s| &s.package),
-            old_state.map(state::Id::next),
-        )
-        .await?;
+        let fstree = self
+            .blit_root(
+                selections.iter().map(|s| &s.package),
+                old_state.map(state::Id::next),
+            )
+            .await?;
 
         match &self.scope {
             Scope::Stateful => {
@@ -240,7 +241,7 @@ impl Client {
                 }
 
                 record_os_release(&self.installation.staging_dir(), Some(state.id)).await?;
-                postblit::handle_postblits(self, &self.installation).await?;
+                postblit::handle_postblits(fstree, &self.installation).await?;
 
                 // Staging is only used with [`Scope::Stateful`]
                 self.promote_staging().await?;
@@ -455,7 +456,7 @@ impl Client {
         &self,
         packages: impl IntoIterator<Item = &package::Id>,
         state_id: Option<state::Id>,
-    ) -> Result<(), Error> {
+    ) -> Result<vfs::tree::Tree<PendingFile>, Error> {
         let progress = ProgressBar::new(1).with_style(
             ProgressStyle::with_template("\n|{bar:20.red/blue}| {pos}/{len} {msg}")
                 .unwrap()
@@ -512,7 +513,7 @@ impl Client {
             close(root_dir)?;
         }
 
-        Ok(())
+        Ok(tree)
     }
 
     /// blit an element to the disk.
@@ -670,7 +671,7 @@ impl Scope {
 
 /// A pending file for blitting
 #[derive(Debug, Clone)]
-struct PendingFile {
+pub(super) struct PendingFile {
     id: package::Id,
     layout: layout::Layout,
 }
@@ -733,6 +734,12 @@ impl From<PathBuf> for PendingFile {
                 entry: layout::Entry::Directory(value.to_string_lossy().to_string()),
             },
         }
+    }
+}
+
+impl ToString for PendingFile {
+    fn to_string(&self) -> String {
+        self.path().to_string_lossy().to_string()
     }
 }
 
