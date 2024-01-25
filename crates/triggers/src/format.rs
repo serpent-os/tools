@@ -16,11 +16,39 @@ pub enum PathKind {
 }
 
 /// Execution handlers for a trigger
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(untagged)]
 pub enum Handler {
     Run { run: String, args: Vec<String> },
     Delete { delete: Vec<String> },
+}
+
+impl Handler {
+    /// Substitute all paths using matched variables
+    pub fn substituted(&self, with_match: &fnmatch::Match) -> Handler {
+        match self {
+            Handler::Run { run, args } => {
+                let mut run = run.clone();
+                for (key, value) in &with_match.variables {
+                    run = run.replace(&format!("$({key})"), value);
+                }
+                let args = args
+                    .iter()
+                    .map(|a| {
+                        let mut a = a.clone();
+                        for (key, value) in &with_match.variables {
+                            a = a.replace(&format!("$({key})"), value);
+                        }
+                        a
+                    })
+                    .collect();
+                Handler::Run { run, args }
+            }
+            Handler::Delete { delete } => Handler::Delete {
+                delete: delete.clone(),
+            },
+        }
+    }
 }
 
 /// Inhibitors prevent handlers from running based on some constraints
@@ -35,7 +63,7 @@ pub struct Inhibitors {
 pub struct PathDefinition {
     pub handlers: Vec<String>,
     #[serde(rename = "type")]
-    pub kind: PathKind,
+    pub kind: Option<PathKind>,
 }
 
 /// Serialiazation format of triggers
