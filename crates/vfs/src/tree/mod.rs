@@ -201,6 +201,7 @@ impl<T: BlitFile> Tree<T> {
             .unwrap_or(OsStr::new(""))
             .to_string_lossy()
             .to_string();
+
         match item.kind() {
             Kind::Directory => {
                 let children = start
