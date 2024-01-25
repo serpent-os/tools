@@ -141,7 +141,7 @@ impl<'a> Transaction<'a> {
 
         match self.list_conflicts(lookup).await {
             Ok(conflicts) if conflicts.is_empty() => {}
-            Ok(conflicts) => todo!(),
+            Ok(conflicts) => return Err(Error::Conflicts(conflicts)),
             Err(err) => return Err(err),
         }
 
@@ -203,7 +203,7 @@ impl<'a> Transaction<'a> {
         let mut conflicts: Vec<(package::Id, Vec<package::Id>)> = vec![];
         for (cfid, mut cfid_by) in cnfls {
             cfid_by.sort();
-            assert!(cfid_by.len() > 1);
+            assert!(!cfid_by.is_empty());
             conflicts.push((cfid, vec![cfid_by.first().unwrap().clone()]));
             for cfidd in cfid_by {
                 if let Some(last) = conflicts.last_mut() {
@@ -282,4 +282,7 @@ pub enum Error {
 
     #[error("meta db")]
     Database(#[from] crate::db::meta::Error),
+
+    #[error("There is conflicts")]
+    Conflicts(Vec<(package::Id, Vec<package::Id>)>),
 }
