@@ -200,21 +200,7 @@ impl<'a> Transaction<'a> {
             }
         }
 
-        let mut conflicts: Vec<(package::Id, Vec<package::Id>)> = vec![];
-        for (cfid, mut cfid_by) in cnfls {
-            cfid_by.sort();
-            assert!(!cfid_by.is_empty());
-            conflicts.push((cfid, vec![cfid_by.first().unwrap().clone()]));
-            for cfidd in cfid_by {
-                if let Some(last) = conflicts.last_mut() {
-                    if last.1.last() != Some(&cfidd) {
-                        last.1.push(cfidd)
-                    }
-                }
-            }
-        }
-
-        Ok(conflicts)
+        Ok(cnfls.into_iter().collect())
     }
 
     /// Attempt to resolve the filterered provider
