@@ -30,9 +30,11 @@ pub struct Container {
     networking: bool,
     hostname: Option<String>,
     ignore_host_sigint: bool,
+    override_accounts: bool,
 }
 
 impl Container {
+    /// Create a new Contaienr using the default options
     pub fn new(root: impl Into<PathBuf>) -> Self {
         Self {
             root: root.into(),
@@ -41,9 +43,11 @@ impl Container {
             networking: false,
             hostname: None,
             ignore_host_sigint: false,
+            override_accounts: true,
         }
     }
 
+    /// Override the working directory
     pub fn work_dir(self, work_dir: impl Into<PathBuf>) -> Self {
         Self {
             work_dir: Some(work_dir.into()),
@@ -51,6 +55,7 @@ impl Container {
         }
     }
 
+    /// Create a read-write bind mount
     pub fn bind_rw(mut self, host: impl Into<PathBuf>, guest: impl Into<PathBuf>) -> Self {
         self.binds.push(Bind {
             source: host.into(),
@@ -60,6 +65,7 @@ impl Container {
         self
     }
 
+    /// Create a read-only bind mount
     pub fn bind_ro(mut self, host: impl Into<PathBuf>, guest: impl Into<PathBuf>) -> Self {
         self.binds.push(Bind {
             source: host.into(),
@@ -69,6 +75,7 @@ impl Container {
         self
     }
 
+    /// Configure networking availability
     pub fn networking(self, enabled: bool) -> Self {
         Self {
             networking: enabled,
@@ -76,9 +83,18 @@ impl Container {
         }
     }
 
+    /// Override hostname (via /etc/hostname)
     pub fn hostname(self, hostname: impl ToString) -> Self {
         Self {
             hostname: Some(hostname.to_string()),
+            ..self
+        }
+    }
+
+    /// Override the system accounts (`/etc/{passwd,group}`) for builders
+    pub fn override_accounts(self, configure: bool) -> Self {
+        Self {
+            override_accounts: configure,
             ..self
         }
     }
@@ -92,6 +108,7 @@ impl Container {
         }
     }
 
+    /// Run `f` as a container process payload
     pub fn run<E>(self, mut f: impl FnMut() -> Result<(), E>) -> Result<(), Error>
     where
         E: std::error::Error + 'static,
@@ -192,6 +209,7 @@ impl Container {
     }
 }
 
+/// Reenter the container
 fn enter<E>(
     container: &Container,
     sync: (i32, i32),
@@ -216,6 +234,7 @@ where
     f().map_err(|e| ContainerError::Run(Box::new(e)))
 }
 
+/// Setup the container
 fn setup(container: &Container) -> Result<(), ContainerError> {
     if container.networking {
         setup_networking(&container.root)?;
@@ -223,7 +242,9 @@ fn setup(container: &Container) -> Result<(), ContainerError> {
 
     pivot(&container.root, &container.binds)?;
 
-    setup_root_user()?;
+    if container.override_accounts {
+        setup_root_user()?;
+    }
 
     if let Some(hostname) = &container.hostname {
         sethostname(hostname)?;
@@ -236,6 +257,7 @@ fn setup(container: &Container) -> Result<(), ContainerError> {
     Ok(())
 }
 
+/// Pivot the process into the rootfs
 fn pivot(root: &Path, binds: &[Bind]) -> Result<(), ContainerError> {
     const OLD_PATH: &str = "old_root";
 

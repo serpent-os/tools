@@ -19,7 +19,7 @@ use triggers::{
     TriggerCommand,
 };
 
-use crate::{environment, Installation};
+use crate::Installation;
 
 use super::{create_root_links, PendingFile};
 
@@ -77,11 +77,10 @@ pub(crate) async fn handle_postblits(
 /// `staging_dir` for the `/usr` tree, and execution is performed within a clone-based
 /// container.
 fn execute_trigger(install: &Installation, trigger: &TriggerCommand) -> Result<(), Error> {
-    // TODO: Use bind_ro for etc
     let isolation = Container::new(install.isolation_dir())
         .networking(false)
-        .hostname(environment::NAME)
-        .bind_rw(install.root.join("etc"), "/etc")
+        .override_accounts(false)
+        .bind_ro(install.root.join("etc"), "/etc")
         .bind_rw(install.staging_path("usr"), "/usr")
         .work_dir("/");
 
