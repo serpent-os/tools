@@ -200,7 +200,7 @@ dependencies = [
  "dirs",
  "futures",
  "hex",
- "itertools 0.12.0",
+ "itertools 0.12.1",
  "moss",
  "nix",
  "serde",
@@ -1107,9 +1107,9 @@ dependencies = [
 
 [[package]]
 name = "itertools"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25db6b064527c5d482d0423354fcd07a89a2dfe07b67892e62411946db7f07b0"
+checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
 dependencies = [
  "either",
 ]
@@ -1265,7 +1265,7 @@ dependencies = [
  "dag",
  "futures",
  "hex",
- "itertools 0.12.0",
+ "itertools 0.12.1",
  "log",
  "nix",
  "once_cell",
@@ -1992,7 +1992,7 @@ version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce81b7bd7c4493975347ef60d8c7e8b742d4694f4c49f93e0a12ea263938176c"
 dependencies = [
- "itertools 0.12.0",
+ "itertools 0.12.1",
  "nom",
  "unicode_categories",
 ]
@@ -2914,7 +2914,7 @@ checksum = "53be06678ed9e83edb1745eb72efc0bbcd7b5c3c35711a860906aed827a13d61"
 name = "yaml"
 version = "0.1.0"
 dependencies = [
- "itertools 0.12.0",
+ "itertools 0.12.1",
  "serde",
  "serde_yaml",
  "thiserror",
