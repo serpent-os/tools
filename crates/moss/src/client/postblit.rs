@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
 //! Operations that happen post-blit (primarily, triggers within container)
-//! Note that we support pre-activation and post-activation triggers, invoked
+//! Note that we support transaction scope and system scope triggers, invoked
 //! before `/usr` is activated and after, respectively.
 //!
-//! Note that currently we only load from `/usr/share/moss/triggers/{pre,post.d}/*.yaml`
+//! Note that currently we only load from `/usr/share/moss/triggers/{tx,sys.d}/*.yaml`
 //! and do not yet support local triggers
 use std::process;
 
@@ -23,18 +23,20 @@ use crate::Installation;
 
 use super::{create_root_links, PendingFile};
 
-/// Pre-activation triggers
-/// These are loaded from `/usr/share/moss/triggers/pre.d/*.yaml`
+/// Transaction triggers
+/// These are loaded from `/usr/share/moss/triggers/tx.d/*.yaml`
 #[derive(Deserialize, Debug)]
-struct PreTrigger(Trigger);
+struct TransactionTrigger(Trigger);
 
-impl config::Config for PreTrigger {
+impl config::Config for TransactionTrigger {
     fn domain() -> String {
-        "pre".into()
+        "tx".into()
     }
 
+    /// Despite using the config system, we load *all* trigger files
+    /// in a linear vec and never merge them
     fn merge(self, other: Self) -> Self {
-        todo!()
+        unimplemented!()
     }
 }
 
@@ -52,7 +54,7 @@ pub(crate) async fn handle_postblits(
         .join("moss")
         .join("triggers");
     let triggers: Vec<Trigger> = config::Manager::custom(datadir)
-        .load_all::<PreTrigger>()
+        .load_all::<TransactionTrigger>()
         .await
         .into_iter()
         .map(|w| w.0)
