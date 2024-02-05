@@ -11,7 +11,6 @@
 use std::process;
 
 use container::Container;
-use itertools::Itertools;
 use serde::Deserialize;
 use thiserror::Error;
 use triggers::{
@@ -47,15 +46,12 @@ pub async fn postblit(
         .join("share")
         .join("moss")
         .join("triggers");
-    let triggers: Vec<Trigger> = config::Manager::custom(datadir)
+    let triggers = config::Manager::custom(datadir)
         .load::<TransactionTrigger>()
-        .await
-        .into_iter()
-        .map(|w| w.0)
-        .collect_vec();
+        .await;
 
     // Push all transaction paths into the postblit trigger collection
-    let mut manager = triggers::Collection::new(triggers.iter())?;
+    let mut manager = triggers::Collection::new(triggers.iter().map(|t| &t.0))?;
     manager.process_paths(fstree.iter().map(|m| m.to_string()));
     let computed_triggers = manager.bake()?;
 
