@@ -51,9 +51,9 @@ pub async fn postblit(
         .await;
 
     // Push all transaction paths into the postblit trigger collection
-    let mut manager = triggers::Collection::new(triggers.iter().map(|t| &t.0))?;
-    manager.process_paths(fstree.iter().map(|m| m.to_string()));
-    let computed_triggers = manager.bake()?;
+    let mut collection = triggers::Collection::new(triggers.iter().map(|t| &t.0))?;
+    collection.process_paths(fstree.iter().map(|m| m.to_string()));
+    let computed_triggers = collection.bake()?;
 
     // Execute in dependency order
     for trigger in computed_triggers.iter() {
