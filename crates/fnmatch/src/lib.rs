@@ -284,7 +284,7 @@ impl Eq for Pattern {}
 
 impl PartialOrd for Pattern {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.pattern.partial_cmp(&other.pattern)
+        Some(self.cmp(other))
     }
 }
 

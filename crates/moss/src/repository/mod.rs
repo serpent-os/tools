@@ -125,6 +125,10 @@ impl Map {
     pub fn iter(&self) -> impl Iterator<Item = (&Id, &Repository)> {
         self.0.iter()
     }
+
+    pub fn merge(self, other: Self) -> Self {
+        Self(self.0.into_iter().chain(other.0).collect())
+    }
 }
 
 impl IntoIterator for Map {
@@ -139,10 +143,6 @@ impl IntoIterator for Map {
 impl Config for Map {
     fn domain() -> String {
         "repo".into()
-    }
-
-    fn merge(self, other: Self) -> Self {
-        Self(self.0.into_iter().chain(other.0).collect())
     }
 }
 

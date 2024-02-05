@@ -11,7 +11,6 @@
 use std::process;
 
 use container::Container;
-use itertools::Itertools;
 use serde::Deserialize;
 use thiserror::Error;
 use triggers::{
@@ -32,16 +31,10 @@ impl config::Config for TransactionTrigger {
     fn domain() -> String {
         "tx".into()
     }
-
-    /// Despite using the config system, we load *all* trigger files
-    /// in a linear vec and never merge them
-    fn merge(self, other: Self) -> Self {
-        unimplemented!()
-    }
 }
 
 /// Handle all postblit tasks
-pub(crate) async fn handle_postblits(
+pub async fn postblit(
     fstree: vfs::tree::Tree<PendingFile>,
     install: &Installation,
 ) -> Result<(), Error> {
@@ -53,17 +46,14 @@ pub(crate) async fn handle_postblits(
         .join("share")
         .join("moss")
         .join("triggers");
-    let triggers: Vec<Trigger> = config::Manager::custom(datadir)
-        .load_all::<TransactionTrigger>()
-        .await
-        .into_iter()
-        .map(|w| w.0)
-        .collect_vec();
+    let triggers = config::Manager::custom(datadir)
+        .load::<TransactionTrigger>()
+        .await;
 
     // Push all transaction paths into the postblit trigger collection
-    let mut manager = triggers::Collection::new(triggers.iter())?;
-    manager.process_paths(fstree.iter().map(|m| m.to_string()));
-    let computed_triggers = manager.bake()?;
+    let mut collection = triggers::Collection::new(triggers.iter().map(|t| &t.0))?;
+    collection.process_paths(fstree.iter().map(|m| m.to_string()));
+    let computed_triggers = collection.bake()?;
 
     // Execute in dependency order
     for trigger in computed_triggers.iter() {

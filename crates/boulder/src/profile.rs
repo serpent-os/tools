@@ -76,6 +76,10 @@ impl Map {
     pub fn iter(&self) -> impl Iterator<Item = (&Id, &Profile)> {
         self.0.iter()
     }
+
+    pub fn merge(self, other: Self) -> Self {
+        Self(self.0.into_iter().chain(other.0).collect())
+    }
 }
 
 impl IntoIterator for Map {
@@ -91,10 +95,6 @@ impl Config for Map {
     fn domain() -> String {
         "profile".into()
     }
-
-    fn merge(self, other: Self) -> Self {
-        Self(self.0.into_iter().chain(other.0).collect())
-    }
 }
 
 pub struct Manager<'a> {
@@ -104,7 +104,13 @@ pub struct Manager<'a> {
 
 impl<'a> Manager<'a> {
     pub async fn new(env: &'a Env) -> Manager<'a> {
-        let profiles = env.config.load::<Map>().await.unwrap_or_default();
+        let profiles = env
+            .config
+            .load::<Map>()
+            .await
+            .into_iter()
+            .reduce(Map::merge)
+            .unwrap_or_default();
 
         Self { env, profiles }
     }

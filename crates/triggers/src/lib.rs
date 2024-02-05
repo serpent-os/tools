@@ -100,9 +100,9 @@ impl<'a> Collection<'a> {
             // This runs *before* B
             if let Some(before) = lookup
                 .before
-                .clone()
-                .and_then(|b| self.triggers.get(&b))
-                .and_then(|f| Some(graph.add_node_or_get_index(f.name.clone())))
+                .as_ref()
+                .and_then(|b| self.triggers.get(b))
+                .map(|f| graph.add_node_or_get_index(f.name.clone()))
             {
                 graph.add_edge(before, node);
             }
@@ -110,9 +110,9 @@ impl<'a> Collection<'a> {
             // This runs *after* A
             if let Some(after) = lookup
                 .after
-                .clone()
-                .and_then(|a| self.triggers.get(&a))
-                .and_then(|f| Some(graph.add_node_or_get_index(f.name.clone())))
+                .as_ref()
+                .and_then(|a| self.triggers.get(a))
+                .map(|f| graph.add_node_or_get_index(f.name.clone()))
             {
                 graph.add_edge(node, after);
             }
@@ -121,19 +121,11 @@ impl<'a> Collection<'a> {
         // Recollect in dependency order
         let built_triggers = graph
             .topo()
-            .cloned()
-            .map(|i| {
-                self.hits
-                    .iter()
-                    .filter(move |(id, _, _)| i == *id)
-                    .collect::<Vec<_>>()
-            })
-            .flatten()
-            .collect::<Vec<_>>();
+            .flat_map(|i| self.hits.iter().filter(move |(id, _, _)| i == id));
 
         let mut runnables: BTreeMap<format::Handler, TriggerCommand> = BTreeMap::new();
         for (_, hit, handler) in built_triggers {
-            let handler = handler.substituted(&hit);
+            let handler = handler.substituted(hit);
 
             if let Some(store) = runnables.get_mut(&handler) {
                 store.files.push(hit.path.clone());
