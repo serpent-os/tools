@@ -76,7 +76,12 @@ impl Manager {
             Source::System(config) =>
             // Load all configs, default if none exist
             {
-                config.load::<repository::Map>().await.unwrap_or_default()
+                config
+                    .load::<repository::Map>()
+                    .await
+                    .into_iter()
+                    .reduce(repository::Map::merge)
+                    .unwrap_or_default()
             }
             Source::Explicit { repos, .. } => repos.clone(),
         };

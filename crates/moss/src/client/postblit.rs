@@ -32,12 +32,6 @@ impl config::Config for TransactionTrigger {
     fn domain() -> String {
         "tx".into()
     }
-
-    /// Despite using the config system, we load *all* trigger files
-    /// in a linear vec and never merge them
-    fn merge(self, other: Self) -> Self {
-        unimplemented!()
-    }
 }
 
 /// Handle all postblit tasks
@@ -54,7 +48,7 @@ pub async fn postblit(
         .join("moss")
         .join("triggers");
     let triggers: Vec<Trigger> = config::Manager::custom(datadir)
-        .load_all::<TransactionTrigger>()
+        .load::<TransactionTrigger>()
         .await
         .into_iter()
         .map(|w| w.0)

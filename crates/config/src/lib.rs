@@ -17,8 +17,6 @@ const EXTENSION: &str = "yaml";
 
 pub trait Config: DeserializeOwned {
     fn domain() -> String;
-
-    fn merge(self, other: Self) -> Self;
 }
 
 #[derive(Debug, Clone)]
@@ -57,11 +55,7 @@ impl Manager {
         }
     }
 
-    pub async fn load<T: Config>(&self) -> Option<T> {
-        self.load_all().await.into_iter().reduce(T::merge)
-    }
-
-    pub async fn load_all<T: Config>(&self) -> Vec<T> {
+    pub async fn load<T: Config>(&self) -> Vec<T> {
         let domain = T::domain();
 
         let mut configs = vec![];
