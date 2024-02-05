@@ -13,8 +13,10 @@ use moss::{
     package::Flags,
     Package, Provider,
 };
+use stone::payload::layout;
 use thiserror::Error;
 use tui::Stylize;
+use vfs::tree::BlitFile;
 
 const COLUMN_WIDTH: usize = 20;
 
@@ -22,7 +24,8 @@ pub fn command() -> Command {
     Command::new("info")
         .about("Query packages")
         .long_about("List detailed package information from all available sources")
-        .arg(arg!(<NAME> ... "packages to query").value_parser(clap::value_parser!(String)))
+        .arg(arg!(<NAME> ... "Packages to query").value_parser(clap::value_parser!(String)))
+        .arg(arg!(-f --files ... "Show files provided by package").action(clap::ArgAction::SetTrue))
 }
 
 /// For all arguments, try to match a package
@@ -33,6 +36,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
         .flatten()
         .cloned()
         .collect::<Vec<_>>();
+    let show_files = args.get_flag("files");
 
     let root = args.get_one::<PathBuf>("root").unwrap().clone();
     let client = Client::new(environment::NAME, root).await?;
@@ -49,6 +53,12 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
         }
         for candidate in resolved {
             print_package(&candidate);
+
+            if candidate.flags.contains(Flags::INSTALLED) && show_files {
+                let vfs = client.vfs([&candidate.id]).await?;
+                print_files(vfs);
+            }
+            println!();
         }
     }
 
@@ -108,11 +118,40 @@ fn print_package(pkg: &Package) {
     }
 }
 
+fn print_files(vfs: vfs::Tree<client::PendingFile>) {
+    let files = vfs
+        .iter()
+        .filter_map(|file| {
+            if matches!(file.kind(), vfs::tree::Kind::Directory) {
+                return None;
+            }
+
+            let path = file.path();
+            let meta = match file.layout.entry {
+                layout::Entry::Regular(hash, _) => Some(format!(" ({hash:2x})")),
+                layout::Entry::Symlink(source, _) => Some(format!(" -> {source}")),
+                _ => None,
+            };
+
+            Some((path, meta))
+        })
+        .collect::<Vec<_>>();
+
+    if files.is_empty() {
+        return;
+    }
+
+    print_titled("Files");
+    println!();
+    for (path, meta) in files {
+        println!("  {}{}", path.display(), meta.unwrap_or_default().dim());
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("No such package {0}")]
     NotFound(String),
-
     #[error("client")]
     Client(#[from] client::Error),
 }

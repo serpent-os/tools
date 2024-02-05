@@ -468,6 +468,26 @@ impl Client {
         Ok(())
     }
 
+    /// Build a [`vfs::Tree`] for the provided packages
+    pub async fn vfs(
+        &self,
+        packages: impl IntoIterator<Item = &package::Id>,
+    ) -> Result<vfs::Tree<PendingFile>, Error> {
+        let mut tbuild = TreeBuilder::new();
+        for id in packages.into_iter() {
+            let layouts = self.layout_db.query(id).await?;
+            for layout in layouts {
+                tbuild.push(PendingFile {
+                    id: id.clone(),
+                    layout,
+                });
+            }
+        }
+        tbuild.bake();
+        let tree = tbuild.tree()?;
+        Ok(tree)
+    }
+
     /// Blit the packages to a filesystem root
     async fn blit_root(
         &self,
@@ -483,18 +503,8 @@ impl Client {
         progress.enable_steady_tick(Duration::from_millis(150));
         progress.tick();
 
-        let mut tbuild = TreeBuilder::new();
-        for id in packages.into_iter() {
-            let layouts = self.layout_db.query(id).await?;
-            for layout in layouts {
-                tbuild.push(PendingFile {
-                    id: id.clone(),
-                    layout,
-                });
-            }
-        }
-        tbuild.bake();
-        let tree = tbuild.tree()?;
+        let tree = self.vfs(packages).await?;
+
         progress.set_length(tree.len());
         progress.set_position(0_u64);
 
@@ -688,9 +698,9 @@ impl Scope {
 
 /// A pending file for blitting
 #[derive(Debug, Clone)]
-pub(super) struct PendingFile {
-    id: package::Id,
-    layout: layout::Layout,
+pub struct PendingFile {
+    pub id: package::Id,
+    pub layout: layout::Layout,
 }
 
 impl BlitFile for PendingFile {
