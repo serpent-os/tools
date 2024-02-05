@@ -41,7 +41,7 @@ impl config::Config for TransactionTrigger {
 }
 
 /// Handle all postblit tasks
-pub(crate) async fn handle_postblits(
+pub async fn postblit(
     fstree: vfs::tree::Tree<PendingFile>,
     install: &Installation,
 ) -> Result<(), Error> {

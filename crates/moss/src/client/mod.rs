@@ -25,6 +25,7 @@ use tui::{MultiProgress, ProgressBar, ProgressStyle, Stylize};
 use vfs::tree::{builder::TreeBuilder, BlitFile, Element};
 
 use self::install::install;
+use self::postblit::postblit;
 use self::prune::prune;
 use crate::{
     db, environment, package,
@@ -36,7 +37,7 @@ use crate::{
 
 pub mod cache;
 pub mod install;
-pub mod postblit;
+mod postblit;
 pub mod prune;
 
 /// A Client is a connection to the underlying package management systems
@@ -241,7 +242,7 @@ impl Client {
                 }
 
                 record_os_release(&self.installation.staging_dir(), Some(state.id)).await?;
-                postblit::handle_postblits(fstree, &self.installation).await?;
+                postblit(fstree, &self.installation).await?;
 
                 // Staging is only used with [`Scope::Stateful`]
                 self.promote_staging().await?;
