@@ -188,4 +188,17 @@ fn ensure_dirs_exist(root: &Path) {
     ] {
         let _ = fs::create_dir_all(path);
     }
+    ensure_cachedir_tag(&moss.join("cache"));
+}
+
+fn ensure_cachedir_tag(path: &Path) {
+    let cachedir_tag = path.join("CACHEDIR.TAG");
+    if !cachedir_tag.exists() {
+        let _ = std::fs::write(
+            cachedir_tag,
+            br#"Signature: 8a477f597d28d172789f06886806bc55
+# This file is a cache directory tag created by moss.
+# For information about cache directory tags see https://bford.info/cachedir/"#,
+        );
+    }
 }
