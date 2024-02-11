@@ -25,7 +25,6 @@ use tui::{MultiProgress, ProgressBar, ProgressStyle, Stylize};
 use vfs::tree::{builder::TreeBuilder, BlitFile, Element};
 
 use self::install::install;
-use self::postblit::postblit;
 use self::prune::prune;
 use crate::{
     db, environment, package,
@@ -242,8 +241,17 @@ impl Client {
                 }
 
                 record_os_release(&self.installation.staging_dir(), Some(state.id)).await?;
-                postblit(fstree, &self.installation).await?;
 
+                // Run all of the transaction triggers
+                let triggers = postblit::triggers(
+                    postblit::TriggerScope::Transaction(&self.installation),
+                    &fstree,
+                )
+                .await?;
+                create_root_links(&self.installation.isolation_dir()).await?;
+                for trigger in triggers {
+                    trigger.execute()?;
+                }
                 // Staging is only used with [`Scope::Stateful`]
                 self.promote_staging().await?;
 
@@ -252,6 +260,14 @@ impl Client {
 
                 if let Some(id) = old_state {
                     self.archive_state(id).await?;
+                }
+
+                // At this point we're allowed to run system triggers
+                let sys_triggers =
+                    postblit::triggers(postblit::TriggerScope::System(&self.installation), &fstree)
+                        .await?;
+                for trigger in sys_triggers {
+                    trigger.execute()?;
                 }
 
                 Ok(Some(state))

@@ -8,9 +8,10 @@
 //!
 //! Note that currently we only load from `/usr/share/moss/triggers/{tx,sys.d}/*.yaml`
 //! and do not yet support local triggers
-use std::process;
+use std::{path::Path, process};
 
 use container::Container;
+use itertools::Itertools;
 use serde::Deserialize;
 use thiserror::Error;
 use triggers::{
@@ -20,7 +21,7 @@ use triggers::{
 
 use crate::Installation;
 
-use super::{create_root_links, PendingFile};
+use super::PendingFile;
 
 /// Transaction triggers
 /// These are loaded from `/usr/share/moss/triggers/tx.d/*.yaml`
@@ -33,55 +34,99 @@ impl config::Config for TransactionTrigger {
     }
 }
 
-/// Handle all postblit tasks
-pub(super) async fn postblit(
-    fstree: vfs::tree::Tree<PendingFile>,
-    install: &Installation,
-) -> Result<(), Error> {
-    create_root_links(&install.isolation_dir()).await?;
+#[derive(Deserialize, Debug)]
+struct SystemTrigger(Trigger);
 
-    // Load all pre.d triggers
-    let datadir = install
-        .staging_path("usr")
-        .join("share")
-        .join("moss")
-        .join("triggers");
-    let triggers = config::Manager::custom(datadir)
-        .load::<TransactionTrigger>()
-        .await;
-
-    // Push all transaction paths into the postblit trigger collection
-    let mut collection = triggers::Collection::new(triggers.iter().map(|t| &t.0))?;
-    collection.process_paths(fstree.iter().map(|m| m.to_string()));
-    let computed_triggers = collection.bake()?;
-
-    // Execute in dependency order
-    for trigger in computed_triggers.iter() {
-        execute_trigger(install, trigger)?;
+impl config::Config for SystemTrigger {
+    fn domain() -> String {
+        "sys".into()
     }
-
-    Ok(())
 }
 
-/// Entry point for the execution of a trigger
-///
-/// We expect each trigger to run in a virtual filesystem that uses the current
-/// `staging_dir` for the `/usr` tree, and execution is performed within a clone-based
-/// container.
-fn execute_trigger(install: &Installation, trigger: &TriggerCommand) -> Result<(), Error> {
-    let isolation = Container::new(install.isolation_dir())
-        .networking(false)
-        .override_accounts(false)
-        .bind_ro(install.root.join("etc"), "/etc")
-        .bind_rw(install.staging_path("usr"), "/usr")
-        .work_dir("/");
+/// Defines the scope of triggers
+#[derive(Clone, Copy, Debug)]
+pub(super) enum TriggerScope<'a> {
+    Transaction(&'a Installation),
+    System(&'a Installation),
+}
 
-    Ok(isolation.run(|| execute_trigger_internal(trigger))?)
+#[derive(Debug)]
+pub(super) struct TriggerRunner<'a> {
+    scope: TriggerScope<'a>,
+    trigger: TriggerCommand,
+}
+
+/// Construct an iterator of executable triggers for the given
+/// scope, which can be used with nice progress bars.
+pub(super) async fn triggers<'a>(
+    scope: TriggerScope<'a>,
+    fstree: &vfs::tree::Tree<PendingFile>,
+) -> Result<Vec<TriggerRunner<'a>>, Error> {
+    let trigger_root = Path::new("usr").join("share").join("moss").join("triggers");
+
+    // Load appropriate triggers from their locations and convert back to a vec of Trigger
+    let triggers = match scope {
+        TriggerScope::Transaction(install) => {
+            config::Manager::custom(install.staging_dir().join(trigger_root))
+                .load::<TransactionTrigger>()
+                .await
+                .into_iter()
+                .map(|t| t.0)
+                .collect_vec()
+        }
+        TriggerScope::System(install) => config::Manager::custom(install.root.join(trigger_root))
+            .load::<SystemTrigger>()
+            .await
+            .into_iter()
+            .map(|t| t.0)
+            .collect_vec(),
+    };
+
+    // Load trigger collection, process all the paths, convert to scoped TriggerRunner vec
+    let mut collection = triggers::Collection::new(triggers.iter())?;
+    collection.process_paths(fstree.iter().map(|m| m.to_string()));
+    let computed_commands = collection
+        .bake()?
+        .into_iter()
+        .map(|trigger| TriggerRunner { scope, trigger })
+        .collect_vec();
+    Ok(computed_commands)
+}
+
+impl<'a> TriggerRunner<'a> {
+    pub fn execute(&self) -> Result<(), Error> {
+        match self.scope {
+            TriggerScope::Transaction(install) => {
+                // TODO: Add caching support via /var/
+                let isolation = Container::new(install.isolation_dir())
+                    .networking(false)
+                    .override_accounts(false)
+                    .bind_ro(install.root.join("etc"), "/etc")
+                    .bind_rw(install.staging_path("usr"), "/usr")
+                    .work_dir("/");
+
+                Ok(isolation.run(|| execute_trigger_directly(&self.trigger))?)
+            }
+            TriggerScope::System(install) => {
+                // OK, if the root == `/` then we can run directly, otherwise we need to containerise with RW.
+                if install.root.to_string_lossy() == "/" {
+                    Ok(execute_trigger_directly(&self.trigger)?)
+                } else {
+                    let isolation = Container::new(install.isolation_dir())
+                        .networking(false)
+                        .override_accounts(false)
+                        .bind_rw(install.root.join("etc"), "/etc")
+                        .bind_rw(install.root.join("usr"), "/usr")
+                        .work_dir("/");
+                    Ok(isolation.run(|| execute_trigger_directly(&self.trigger))?)
+                }
+            }
+        }
+    }
 }
 
 /// Internal executor for triggers.
-fn execute_trigger_internal(trigger: &TriggerCommand) -> Result<(), Error> {
-    eprintln!("Trigger: {:?}", trigger);
+fn execute_trigger_directly(trigger: &TriggerCommand) -> Result<(), Error> {
     match &trigger.handler {
         Handler::Run { run, args } => {
             let cmd = process::Command::new(run)
@@ -92,7 +137,7 @@ fn execute_trigger_internal(trigger: &TriggerCommand) -> Result<(), Error> {
             if let Some(code) = cmd.status.code() {
                 if code != 0 {
                     eprintln!("Trigger exited with non-zero status code: {run} {args:?}");
-                    eprintln!("   Stodut: {}", String::from_utf8(cmd.stdout).unwrap());
+                    eprintln!("   Stdout: {}", String::from_utf8(cmd.stdout).unwrap());
                     eprintln!("   Stderr: {}", String::from_utf8(cmd.stderr).unwrap());
                 }
             } else {
