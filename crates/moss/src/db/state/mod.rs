@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::{Acquire, Executor, Pool, Sqlite};
 use thiserror::Error;
+use tokio::sync::Mutex;
 
 use crate::db::Encoding;
 use crate::state::{self, Id, Selection};
@@ -13,7 +14,7 @@ use crate::{Installation, State};
 
 #[derive(Debug)]
 pub struct Database {
-    pool: Pool<Sqlite>,
+    pool: Mutex<Pool<Sqlite>>,
 }
 
 impl Database {
@@ -34,17 +35,21 @@ impl Database {
 
         sqlx::migrate!("src/db/state/migrations").run(&pool).await?;
 
-        Ok(Self { pool })
+        Ok(Self {
+            pool: Mutex::new(pool),
+        })
     }
 
     pub async fn list_ids(&self) -> Result<Vec<(Id, DateTime<Utc>)>, Error> {
+        let pool = self.pool.lock().await;
+
         let states = sqlx::query_as::<_, encoding::Created>(
             "
             SELECT id, created
             FROM state;
             ",
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&*pool)
         .await?;
 
         Ok(states
@@ -54,6 +59,8 @@ impl Database {
     }
 
     pub async fn get(&self, id: &Id) -> Result<State, Error> {
+        let pool = self.pool.lock().await;
+
         let state_query = sqlx::query_as::<_, encoding::State>(
             "
             SELECT id, type, created, summary, description
@@ -73,10 +80,8 @@ impl Database {
         )
         .bind(id.encode());
 
-        let (state, selections_rows) = futures::try_join!(
-            state_query.fetch_one(&self.pool),
-            selections_query.fetch_all(&self.pool)
-        )?;
+        let state = state_query.fetch_one(&*pool).await?;
+        let selections_rows = selections_query.fetch_all(&*pool).await?;
 
         let selections = selections_rows
             .into_iter()
@@ -103,7 +108,8 @@ impl Database {
         summary: Option<String>,
         description: Option<String>,
     ) -> Result<State, Error> {
-        let mut transaction = self.pool.begin().await?;
+        let pool = self.pool.lock().await;
+        let mut transaction = pool.begin().await?;
 
         let encoding::StateId { id } = sqlx::query_as::<_, encoding::StateId>(
             "
@@ -138,6 +144,7 @@ impl Database {
         }
 
         transaction.commit().await?;
+        drop(pool);
 
         let state = self.get(&id.0).await?;
 
@@ -152,6 +159,8 @@ impl Database {
         &self,
         states: impl IntoIterator<Item = &state::Id>,
     ) -> Result<(), Error> {
+        let pool = self.pool.lock().await;
+
         let mut query = sqlx::QueryBuilder::new(
             "
             DELETE FROM state
@@ -165,7 +174,7 @@ impl Database {
         });
         separated.push_unseparated(");");
 
-        query.build().execute(&self.pool).await?;
+        query.build().execute(&*pool).await?;
 
         Ok(())
     }

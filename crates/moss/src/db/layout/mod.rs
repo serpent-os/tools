@@ -8,6 +8,7 @@ use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::{Pool, Sqlite};
 use stone::payload::{self};
 use thiserror::Error;
+use tokio::sync::Mutex;
 
 use crate::package;
 use crate::Installation;
@@ -16,7 +17,7 @@ use super::Encoding;
 
 #[derive(Debug)]
 pub struct Database {
-    pool: Pool<Sqlite>,
+    pool: Mutex<Pool<Sqlite>>,
 }
 
 impl Database {
@@ -39,10 +40,13 @@ impl Database {
             .run(&pool)
             .await?;
 
-        Ok(Self { pool })
+        Ok(Self {
+            pool: Mutex::new(pool),
+        })
     }
 
     pub async fn all(&self) -> Result<Vec<(package::Id, payload::Layout)>, Error> {
+        let pool = self.pool.lock().await;
         let layouts = sqlx::query_as::<_, encoding::Layout>(
             "
             SELECT package_id,
@@ -56,7 +60,7 @@ impl Database {
             FROM layout;
             ",
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&*pool)
         .await?;
 
         Ok(layouts
@@ -90,6 +94,7 @@ impl Database {
     }
 
     pub async fn file_hashes(&self) -> Result<HashSet<String>, Error> {
+        let pool = self.pool.lock().await;
         let layouts = sqlx::query_as::<_, (String,)>(
             "
             SELECT DISTINCT entry_value1
@@ -97,7 +102,7 @@ impl Database {
             WHERE entry_type = 'regular';
             ",
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&*pool)
         .await?;
 
         Ok(layouts
@@ -114,6 +119,8 @@ impl Database {
         &self,
         layouts: Vec<(package::Id, payload::Layout)>,
     ) -> Result<(), Error> {
+        let pool = self.pool.lock().await;
+
         sqlx::QueryBuilder::new(
             "
             INSERT INTO layout 
@@ -150,7 +157,7 @@ impl Database {
                 .push_bind(entry_value2);
         })
         .build()
-        .execute(&self.pool)
+        .execute(&*pool)
         .await?;
 
         Ok(())
@@ -164,6 +171,8 @@ impl Database {
         &self,
         packages: impl IntoIterator<Item = &package::Id>,
     ) -> Result<(), Error> {
+        let pool = self.pool.lock().await;
+
         let mut query = sqlx::QueryBuilder::new(
             "
             DELETE FROM layout
@@ -177,13 +186,15 @@ impl Database {
         });
         separated.push_unseparated(");");
 
-        query.build().execute(&self.pool).await?;
+        query.build().execute(&*pool).await?;
 
         Ok(())
     }
 
     /// Retrieve all entries for a given package by ID
     pub async fn query(&self, package: &package::Id) -> Result<Vec<payload::Layout>, Error> {
+        let pool = self.pool.lock().await;
+
         let query = sqlx::query_as::<_, encoding::Layout>(
             "SELECT package_id,
                    uid,
@@ -197,7 +208,7 @@ impl Database {
         )
         .bind(package.encode());
 
-        let layouts = query.fetch_all(&self.pool).await?;
+        let layouts = query.fetch_all(&*pool).await?;
 
         Ok(layouts
             .into_iter()
