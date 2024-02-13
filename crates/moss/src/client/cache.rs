@@ -2,7 +2,12 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{io, path::PathBuf};
+use std::{
+    collections::HashSet,
+    io,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use futures::{stream, StreamExt};
 use stone::{payload, read::PayloadKind};
@@ -16,6 +21,26 @@ use tokio::{
 use url::Url;
 
 use crate::{environment, package, request, Installation};
+
+/// Synchronized set of assets that are currently being
+/// unpacked. Used to prevent unpacking the same asset
+/// from different packages at the same time.
+#[derive(Debug, Clone, Default)]
+pub struct UnpackingInProgress(Arc<Mutex<HashSet<PathBuf>>>);
+
+impl UnpackingInProgress {
+    /// Marks the provided path as "in-progress".
+    ///
+    /// Returns `true` if the path was added and
+    /// `false` the file is already in progress
+    pub fn add(&self, path: PathBuf) -> bool {
+        self.0.lock().expect("mutex lock").insert(path)
+    }
+
+    pub fn remove(&self, path: &PathBuf) {
+        self.0.lock().expect("mutex lock").remove(path);
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct Progress {
@@ -39,7 +64,11 @@ pub async fn fetch(
     let url = meta.uri.as_ref().ok_or(Error::MissingUri)?.parse::<Url>()?;
     let hash = meta.hash.as_ref().ok_or(Error::MissingHash)?;
 
-    let download_path = download_path(installation, hash).await?;
+    let download_path = download_path(installation, hash)?;
+
+    if let Some(parent) = download_path.parent() {
+        fs::create_dir_all(parent).await?;
+    }
 
     if fs::try_exists(&download_path).await? {
         return Ok(Download {
@@ -97,6 +126,7 @@ impl Download {
     // TODO: Return an "Unpacked" struct which has a "blit" method on it?
     pub async fn unpack(
         self,
+        unpacking_in_progress: UnpackingInProgress,
         on_progress: impl Fn(Progress) + Send + 'static,
     ) -> Result<UnpackedAsset, Error> {
         use std::fs::{create_dir_all, remove_file, File};
@@ -181,26 +211,36 @@ impl Download {
             indicies
                 .into_iter()
                 .map(|idx| {
+                    let path = asset_path(&self.installation, &format!("{:02x}", idx.digest));
+
+                    // If file is already being unpacked by another worker, skip
+                    // to prevent clobbering IO
+                    if !unpacking_in_progress.add(path.clone()) {
+                        return Ok(());
+                    }
+
+                    // This asset already exists
+                    if path.exists() {
+                        unpacking_in_progress.remove(&path);
+                        return Ok(());
+                    }
+
+                    // Create parent dir
+                    if let Some(parent) = path.parent() {
+                        create_dir_all(parent)?;
+                    }
+
                     // Split file reader over index range
                     let mut file = &content_file;
                     file.seek(SeekFrom::Start(idx.start))?;
                     let mut split_file = (&mut file).take(idx.end - idx.start);
 
-                    let path = rt.block_on(asset_path(
-                        &self.installation,
-                        &format!("{:02x}", idx.digest),
-                    ))?;
-
-                    // Don't unpack file if it already exists (duplicate from another package)
-                    // Theres a race condition change if two packages w/ duplicates are unpacking
-                    // at the same time
-                    if path.exists() {
-                        return Ok(());
-                    }
-
-                    let mut output = File::create(path)?;
+                    let mut output = File::create(&path)?;
 
                     copy(&mut split_file, &mut output)?;
+
+                    // Remove file from in-progress
+                    unpacking_in_progress.remove(&path);
 
                     Ok(())
                 })
@@ -219,18 +259,15 @@ impl Download {
 async fn check_assets_exist(indicies: &[&payload::Index], installation: &Installation) -> bool {
     stream::iter(indicies)
         .map(|index| async move {
-            if let Ok(path) = asset_path(installation, &format!("{:02x}", index.digest)).await {
-                return fs::try_exists(path).await.unwrap_or_default();
-            }
-
-            false
+            let path = asset_path(installation, &format!("{:02x}", index.digest));
+            fs::try_exists(path).await.unwrap_or_default()
         })
         .buffer_unordered(environment::MAX_DISK_CONCURRENCY)
         .all(|exists| async move { exists })
         .await
 }
 
-pub async fn download_path(installation: &Installation, hash: &str) -> Result<PathBuf, Error> {
+pub fn download_path(installation: &Installation, hash: &str) -> Result<PathBuf, Error> {
     if hash.len() < 5 {
         return Err(Error::MalformedHash(hash.to_string()));
     }
@@ -241,14 +278,10 @@ pub async fn download_path(installation: &Installation, hash: &str) -> Result<Pa
         .join(&hash[..5])
         .join(&hash[hash.len() - 5..]);
 
-    if !directory.exists() {
-        fs::create_dir_all(&directory).await?;
-    }
-
     Ok(directory.join(hash))
 }
 
-pub async fn asset_path(installation: &Installation, hash: &str) -> Result<PathBuf, Error> {
+pub fn asset_path(installation: &Installation, hash: &str) -> PathBuf {
     let directory = if hash.len() >= 10 {
         installation
             .assets_path("v2")
@@ -259,11 +292,7 @@ pub async fn asset_path(installation: &Installation, hash: &str) -> Result<PathB
         installation.assets_path("v2")
     };
 
-    if !directory.exists() {
-        fs::create_dir_all(&directory).await?;
-    }
-
-    Ok(directory.join(hash))
+    directory.join(hash)
 }
 
 #[derive(Debug, Error)]

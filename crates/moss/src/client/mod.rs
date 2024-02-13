@@ -356,6 +356,8 @@ impl Client {
         );
         total_progress.tick();
 
+        let unpacking_in_progress = cache::UnpackingInProgress::default();
+
         // Download and unpack each package
         stream::iter(packages.iter().map(|package| async {
             // Setup the progress bar and set as downloading
@@ -397,7 +399,7 @@ impl Client {
 
             // Unpack and update progress
             let unpacked = download
-                .unpack({
+                .unpack(unpacking_in_progress.clone(), {
                     let progress_bar = progress_bar.clone();
 
                     move |progress| {
