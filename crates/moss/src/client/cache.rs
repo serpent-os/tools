@@ -191,6 +191,13 @@ impl Download {
                         &format!("{:02x}", idx.digest),
                     ))?;
 
+                    // Don't unpack file if it already exists (duplicate from another package)
+                    // Theres a race condition change if two packages w/ duplicates are unpacking
+                    // at the same time
+                    if path.exists() {
+                        return Ok(());
+                    }
+
                     let mut output = File::create(path)?;
 
                     copy(&mut split_file, &mut output)?;
