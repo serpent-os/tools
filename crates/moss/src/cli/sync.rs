@@ -79,16 +79,29 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
         .iter()
         .filter(|p| client.is_ephemeral() || !installed.iter().any(|i| i.id == p.id))
         .collect::<Vec<_>>();
+    let removed = installed
+        .iter()
+        .filter(|p| !finalized.iter().any(|f| f.meta.name == p.meta.name))
+        .cloned()
+        .collect::<Vec<_>>();
 
-    if synced.is_empty() {
+    if synced.is_empty() && removed.is_empty() {
         println!("No packages to sync");
         return Ok(());
     }
 
-    println!("The following packages will be sync'd: ");
-    println!();
-    print_to_columns(synced.as_slice());
-    println!();
+    if !synced.is_empty() {
+        println!("The following packages will be sync'd: ");
+        println!();
+        print_to_columns(synced.as_slice());
+        println!();
+    }
+    if !removed.is_empty() {
+        println!("The following orphaned packages will be removed: ");
+        println!();
+        print_to_columns(removed.as_slice());
+        println!();
+    }
 
     // Must we prompt?
     let result = if yes_all {
