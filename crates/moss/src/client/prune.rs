@@ -8,7 +8,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use futures::{stream, Future, FutureExt, StreamExt, TryStreamExt};
+use futures::{stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use thiserror::Error;
 use tokio::{fs, task};
@@ -155,11 +155,7 @@ pub async fn prune(
         // final set of hashes to compare against
         install_db.file_hashes().await?,
         // path builder using hash
-        |hash| async move {
-            cache::download_path(installation, &hash)
-                .map(Result::ok)
-                .await
-        },
+        |hash| cache::download_path(installation, &hash).ok(),
     )
     .await?;
 
@@ -170,7 +166,7 @@ pub async fn prune(
         // final set of hashes to compare against
         layout_db.file_hashes().await?,
         // path builder using hash
-        |hash| async move { cache::asset_path(installation, &hash).map(Result::ok).await },
+        |hash| Some(cache::asset_path(installation, &hash)),
     )
     .await?;
 
@@ -206,14 +202,11 @@ async fn prune_databases(
 }
 
 /// Removes all files under `root` that no longer exist in the provided `final_hashes` set
-async fn remove_orphaned_files<F>(
+async fn remove_orphaned_files(
     root: PathBuf,
     final_hashes: HashSet<String>,
-    compute_path: impl Fn(String) -> F,
-) -> Result<(), Error>
-where
-    F: Future<Output = Option<PathBuf>>,
-{
+    compute_path: impl Fn(String) -> Option<PathBuf>,
+) -> Result<(), Error> {
     // Compute hashes to remove by (installed - final)
     let installed_hashes = enumerate_file_hashes(&root).await?;
     let hashes_to_remove = installed_hashes.difference(&final_hashes);
@@ -222,7 +215,7 @@ where
     stream::iter(hashes_to_remove)
         .map(|hash| async {
             // Compute path to file using hash
-            let Some(file) = compute_path(hash.clone()).await else {
+            let Some(file) = compute_path(hash.clone()) else {
                 return Ok(());
             };
 
