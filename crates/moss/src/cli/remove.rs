@@ -16,7 +16,11 @@ use moss::{
     Provider,
 };
 use thiserror::Error;
-use tui::{pretty::print_to_columns, Stylize};
+use tui::{
+    dialoguer::{theme::ColorfulTheme, Confirm},
+    pretty::print_to_columns,
+    Stylize,
+};
 
 pub fn command() -> Command {
     Command::new("remove")
@@ -33,6 +37,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
         .flatten()
         .map(|name| Provider::from_name(name).unwrap())
         .collect::<Vec<_>>();
+    let yes = *args.get_one::<bool>("yes").unwrap();
 
     // Grab a client for the target, enumerate packages
     let client = Client::new(environment::NAME, root).await?;
@@ -70,7 +75,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
         .await?;
 
     // Remove all pkgs for removal
-    transaction.remove(for_removal).await?;
+    transaction.remove(for_removal).await;
 
     // Finalized tx has all reverse deps removed
     let finalized = transaction.finalize().cloned().collect::<HashSet<_>>();
@@ -84,6 +89,18 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     println!();
     print_to_columns(&removed);
     println!();
+
+    let result = if yes {
+        true
+    } else {
+        Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(" Do you wish to continue? ")
+            .default(false)
+            .interact()?
+    };
+    if !result {
+        return Err(Error::Cancelled);
+    }
 
     // Print each package to stdout
     for package in removed {
@@ -132,6 +149,9 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("cancelled")]
+    Cancelled,
+
     #[error("Not yet implemented")]
     NotImplemented,
 
@@ -146,4 +166,7 @@ pub enum Error {
 
     #[error("io")]
     Io(#[from] std::io::Error),
+
+    #[error("string processing")]
+    Dialog(#[from] tui::dialoguer::Error),
 }

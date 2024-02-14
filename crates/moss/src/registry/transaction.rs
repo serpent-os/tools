@@ -69,7 +69,7 @@ impl<'a> Transaction<'a> {
     }
 
     /// Remove a set of packages and their reverse dependencies
-    pub async fn remove(&mut self, packages: Vec<package::Id>) -> Result<(), Error> {
+    pub async fn remove(&mut self, packages: Vec<package::Id>) {
         // Get transposed subgraph
         let transposed = self.packages.transpose();
         let subgraph = transposed.subgraph(&packages);
@@ -79,8 +79,6 @@ impl<'a> Transaction<'a> {
             // Remove that package
             self.packages.remove_node(package);
         });
-
-        Ok(())
     }
 
     /// Return the package IDs in the fully baked configuration
