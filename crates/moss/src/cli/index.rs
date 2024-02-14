@@ -21,6 +21,7 @@ use tui::{MultiProgress, ProgressBar, ProgressStyle, Stylize};
 
 pub fn command() -> Command {
     Command::new("index")
+        .visible_alias("ix")
         .about("Index a collection of packages")
         .arg(arg!(<INDEX_DIR> "directory of index files").value_parser(value_parser!(PathBuf)))
 }

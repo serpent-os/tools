@@ -33,6 +33,7 @@ pub fn command() -> Command {
         .subcommand_required(true)
         .subcommand(
             Command::new("add")
+                .visible_alias("ar")
                 .arg(arg!(<NAME> "repo name").value_parser(clap::value_parser!(String)))
                 .arg(arg!(<URI> "repo uri").value_parser(clap::value_parser!(Url)))
                 .arg(
@@ -54,16 +55,19 @@ pub fn command() -> Command {
         )
         .subcommand(
             Command::new("list")
+                .visible_alias("lr")
                 .about("List system software repositories")
                 .long_about("List all of the system repositories and their status"),
         )
         .subcommand(
             Command::new("remove")
+                .visible_alias("rr")
                 .about("Remove a repository for the system")
                 .arg(arg!(<NAME> "repo name").value_parser(clap::value_parser!(String))),
         )
         .subcommand(
             Command::new("update")
+                .visible_alias("ur")
                 .about("Update the system repositories")
                 .long_about("If no repository is named, update them all")
                 .arg(arg!([NAME] "repo name").value_parser(clap::value_parser!(String))),

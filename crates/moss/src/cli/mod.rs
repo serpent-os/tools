@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 
 use clap::{Arg, ArgAction, Command};
 use thiserror::Error;
@@ -63,7 +63,9 @@ fn command() -> Command {
 
 /// Process all CLI arguments
 pub async fn process() -> Result<(), Error> {
-    let matches = command().get_matches();
+    let args = replace_aliases(env::args());
+    let matches = command().get_matches_from(args);
+
     if matches.get_flag("version") {
         version::print();
         return Ok(());
@@ -71,7 +73,7 @@ pub async fn process() -> Result<(), Error> {
 
     let root = matches.get_one::<PathBuf>("root").unwrap();
 
-    match command().get_matches().subcommand() {
+    match matches.subcommand() {
         Some(("extract", args)) => extract::handle(args).await.map_err(Error::Extract),
         Some(("index", args)) => index::handle(args).await.map_err(Error::Index),
         Some(("info", args)) => info::handle(args).await.map_err(Error::Info),
@@ -92,6 +94,37 @@ pub async fn process() -> Result<(), Error> {
         }
         _ => unreachable!(),
     }
+}
+
+fn replace_aliases(args: env::Args) -> Vec<String> {
+    const ALIASES: &[(&str, &[&str])] = &[
+        ("li", &["list", "installed"]),
+        ("la", &["list", "available"]),
+        ("ls", &["list", "sync"]),
+        ("lu", &["list", "sync"]),
+        ("ar", &["repo", "add"]),
+        ("lr", &["repo", "list"]),
+        ("rr", &["repo", "remove"]),
+        ("ur", &["repo", "update"]),
+        ("ix", &["index"]),
+        ("it", &["install"]),
+        ("rm", &["remove"]),
+        ("up", &["sync"]),
+    ];
+
+    let mut args = args.collect::<Vec<_>>();
+
+    for (alias, replacements) in ALIASES {
+        let Some(pos) = args.iter().position(|a| a == *alias) else {
+            continue;
+        };
+
+        args.splice(pos..pos + 1, replacements.iter().map(|arg| arg.to_string()));
+
+        break;
+    }
+
+    args
 }
 
 #[derive(Debug, Error)]
