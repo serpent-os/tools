@@ -6,10 +6,7 @@ use petgraph::{prelude::Graph, stable_graph::IndexType, visit::Dfs, EdgeType};
 
 /// Given an input [`Graph`] and the start nodes, construct a subgraph
 /// Used largely in transposed form for reverse dependency calculation
-pub fn subgraph<N, E, Ty, Ix>(
-    graph: &Graph<N, E, Ty, Ix>,
-    starting_nodes: &[N],
-) -> Graph<N, E, Ty, Ix>
+pub fn subgraph<N, E, Ty, Ix>(graph: &Graph<N, E, Ty, Ix>, starting_nodes: &[N]) -> Graph<N, E, Ty, Ix>
 where
     N: PartialEq + Clone,
     E: Clone,
@@ -28,8 +25,7 @@ where
     let mut dfs = Dfs::empty(&graph);
 
     for starting_node in starting_nodes {
-        let Some(starting_node_index) = graph.node_indices().find(|n| graph[*n] == *starting_node)
-        else {
+        let Some(starting_node_index) = graph.node_indices().find(|n| graph[*n] == *starting_node) else {
             continue;
         };
 

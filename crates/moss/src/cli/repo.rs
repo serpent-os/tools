@@ -83,21 +83,15 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
             Priority::new(*cmd_args.get_one::<u64>("priority").unwrap()),
         ),
         Some(("list", _)) => Action::List(root),
-        Some(("remove", cmd_args)) => {
-            Action::Remove(root, cmd_args.get_one::<String>("NAME").cloned().unwrap())
-        }
-        Some(("update", cmd_args)) => {
-            Action::Update(root, cmd_args.get_one::<String>("NAME").cloned())
-        }
+        Some(("remove", cmd_args)) => Action::Remove(root, cmd_args.get_one::<String>("NAME").cloned().unwrap()),
+        Some(("update", cmd_args)) => Action::Update(root, cmd_args.get_one::<String>("NAME").cloned()),
         _ => unreachable!(),
     };
 
     // dispatch to runtime handler function
     match handler {
         Action::List(root) => list(root, config).await,
-        Action::Add(root, name, uri, comment, priority) => {
-            add(root, config, name, uri, comment, priority).await
-        }
+        Action::Add(root, name, uri, comment, priority) => add(root, config, name, uri, comment, priority).await,
         Action::Remove(root, name) => remove(root, config, name).await,
         Action::Update(root, name) => update(root, config, name).await,
     }
@@ -147,9 +141,7 @@ async fn list(root: &Path, config: config::Manager) -> Result<(), Error> {
         return Ok(());
     }
 
-    for (id, repo) in
-        configured_repos.sorted_by(|(_, a), (_, b)| a.priority.cmp(&b.priority).reverse())
-    {
+    for (id, repo) in configured_repos.sorted_by(|(_, a), (_, b)| a.priority.cmp(&b.priority).reverse()) {
         println!(" - {} = {} [{}]", id, repo.uri, repo.priority);
     }
 
@@ -182,7 +174,9 @@ async fn remove(root: &Path, config: config::Manager, repo: String) -> Result<()
             process::exit(1);
         }
         repository::manager::Removal::ConfigDeleted(false) => {
-            println!("{id} configuration must be manually deleted since it doesn't exist in it's own configuration file");
+            println!(
+                "{id} configuration must be manually deleted since it doesn't exist in it's own configuration file"
+            );
             process::exit(1);
         }
         repository::manager::Removal::ConfigDeleted(true) => {

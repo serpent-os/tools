@@ -13,8 +13,7 @@ pub fn stages(recipe: &Recipe, target: BuildTarget) -> Option<Vec<Stage>> {
     build.workload.is_some().then(|| {
         let mut stages = vec![Stage::One];
 
-        if matches!(recipe.parsed.options.toolchain, Toolchain::Llvm) && recipe.parsed.options.cspgo
-        {
+        if matches!(recipe.parsed.options.toolchain, Toolchain::Llvm) && recipe.parsed.options.cspgo {
             stages.push(Stage::Two);
         }
 

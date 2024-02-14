@@ -60,9 +60,7 @@ pub enum Upstream {
 fn parse_upstream(s: &str) -> Result<Upstream, String> {
     match s.strip_prefix("git|") {
         Some(rev) => Ok(Upstream::Git(rev.to_string())),
-        None => Ok(Upstream::Plain(
-            s.parse::<Url>().map_err(|e| e.to_string())?,
-        )),
+        None => Ok(Upstream::Plain(s.parse::<Url>().map_err(|e| e.to_string())?)),
     }
 }
 
@@ -77,12 +75,7 @@ pub fn handle(command: Command) -> Result<(), Error> {
     }
 }
 
-fn update(
-    recipe: Option<PathBuf>,
-    overwrite: bool,
-    version: String,
-    upstreams: Vec<Upstream>,
-) -> Result<(), Error> {
+fn update(recipe: Option<PathBuf>, overwrite: bool, version: String, upstreams: Vec<Upstream>) -> Result<(), Error> {
     if overwrite && recipe.is_none() {
         return Err(Error::OverwriteRecipeRequired);
     }
@@ -91,10 +84,7 @@ fn update(
         fs::read_to_string(recipe).map_err(Error::Read)?
     } else {
         let mut bytes = vec![];
-        io::stdin()
-            .lock()
-            .read_to_end(&mut bytes)
-            .map_err(Error::Read)?;
+        io::stdin().lock().read_to_end(&mut bytes).map_err(Error::Read)?;
         String::from_utf8(bytes)?
     };
 
@@ -111,10 +101,7 @@ fn update(
         GitUpstream(usize, serde_yaml::Value, String),
     }
 
-    let mut updates = vec![
-        Update::Version(version),
-        Update::Release(parsed.source.release + 1),
-    ];
+    let mut updates = vec![Update::Version(version), Update::Release(parsed.source.release + 1)];
 
     for (i, (original, update)) in parsed.upstreams.iter().zip(upstreams).enumerate() {
         match (original, update) {

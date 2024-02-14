@@ -101,9 +101,7 @@ impl<'a> Transaction<'a> {
 
                 // Grab this package in question
                 let matches = self.registry.by_id(check_id).collect::<Vec<_>>().await;
-                let package = matches
-                    .first()
-                    .ok_or(Error::NoCandidate(check_id.clone().into()))?;
+                let package = matches.first().ok_or(Error::NoCandidate(check_id.clone().into()))?;
                 for dependency in package.meta.dependencies.iter() {
                     let provider = Provider {
                         kind: dependency.kind.clone(),
@@ -113,10 +111,7 @@ impl<'a> Transaction<'a> {
                     // Now get it resolved
                     let search = match lookup {
                         Lookup::Global => self.resolve_installation_provider(provider).await?,
-                        Lookup::InstalledOnly => {
-                            self.resolve_provider(ProviderFilter::InstalledOnly(provider))
-                                .await?
-                        }
+                        Lookup::InstalledOnly => self.resolve_provider(ProviderFilter::InstalledOnly(provider)).await?,
                     };
 
                     // Add dependency node
@@ -176,19 +171,13 @@ impl<'a> Transaction<'a> {
     }
 
     // Try all strategies to resolve a provider for installation
-    async fn resolve_installation_provider(
-        &self,
-        provider: Provider,
-    ) -> Result<package::Id, Error> {
+    async fn resolve_installation_provider(&self, provider: Provider) -> Result<package::Id, Error> {
         self.resolve_provider(ProviderFilter::Selections(provider.clone()))
             .or_else(|_| async {
                 self.resolve_provider(ProviderFilter::InstalledOnly(provider.clone()))
                     .await
             })
-            .or_else(|_| async {
-                self.resolve_provider(ProviderFilter::All(provider.clone()))
-                    .await
-            })
+            .or_else(|_| async { self.resolve_provider(ProviderFilter::All(provider.clone())).await })
             .await
     }
 }

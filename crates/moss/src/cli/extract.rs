@@ -55,10 +55,7 @@ fn extract(paths: Vec<PathBuf>) -> Result<(), Error> {
         let payloads = reader.payloads()?.collect::<Result<Vec<_>, _>>()?;
         let content = payloads.iter().find_map(PayloadKind::content);
         let layouts = payloads.iter().find_map(PayloadKind::layout);
-        let meta = payloads
-            .iter()
-            .find_map(PayloadKind::meta)
-            .ok_or(Error::MissingMeta)?;
+        let meta = payloads.iter().find_map(PayloadKind::meta).ok_or(Error::MissingMeta)?;
 
         let pkg = package::Meta::from_stone_payload(&meta.body).map_err(Error::MalformedMeta)?;
         let extraction_root = PathBuf::from(pkg.id().to_string());

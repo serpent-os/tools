@@ -23,12 +23,7 @@ pub struct Command {
         default_value = "false"
     )]
     ccache: bool,
-    #[arg(
-        short,
-        long,
-        default_value = ".",
-        help = "Directory to store build results"
-    )]
+    #[arg(short, long, default_value = ".", help = "Directory to store build results")]
     output: PathBuf,
     #[arg(default_value = "./stone.yml", help = "Path to recipe file")]
     recipe: PathBuf,

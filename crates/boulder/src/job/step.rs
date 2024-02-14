@@ -35,13 +35,7 @@ pub enum Step {
 }
 
 impl Step {
-    const NORMAL: &'static [Self] = &[
-        Step::Prepare,
-        Step::Setup,
-        Step::Build,
-        Step::Install,
-        Step::Check,
-    ];
+    const NORMAL: &'static [Self] = &[Step::Prepare, Step::Setup, Step::Build, Step::Install, Step::Check];
     const WORKLOAD: &'static [Self] = &[Step::Prepare, Step::Setup, Step::Build, Step::Workload];
 
     pub fn abbrev(&self) -> &str {

@@ -18,10 +18,7 @@ where
     R: Read,
 {
     pub fn new(reader: R, hasher: &'a mut Hasher) -> Self {
-        Self {
-            inner: reader,
-            hasher,
-        }
+        Self { inner: reader, hasher }
     }
 }
 

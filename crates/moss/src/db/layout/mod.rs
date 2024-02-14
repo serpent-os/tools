@@ -36,13 +36,9 @@ impl Database {
     async fn connect(options: SqliteConnectOptions) -> Result<Self, Error> {
         let pool = sqlx::SqlitePool::connect_with(options).await?;
 
-        sqlx::migrate!("src/db/layout/migrations")
-            .run(&pool)
-            .await?;
+        sqlx::migrate!("src/db/layout/migrations").run(&pool).await?;
 
-        Ok(Self {
-            pool: Mutex::new(pool),
-        })
+        Ok(Self { pool: Mutex::new(pool) })
     }
 
     pub async fn all(&self) -> Result<Vec<(package::Id, payload::Layout)>, Error> {
@@ -115,10 +111,7 @@ impl Database {
         self.batch_add(vec![(package, layout)]).await
     }
 
-    pub async fn batch_add(
-        &self,
-        layouts: Vec<(package::Id, payload::Layout)>,
-    ) -> Result<(), Error> {
+    pub async fn batch_add(&self, layouts: Vec<(package::Id, payload::Layout)>) -> Result<(), Error> {
         let pool = self.pool.lock().await;
 
         sqlx::QueryBuilder::new(
@@ -167,10 +160,7 @@ impl Database {
         self.batch_remove(Some(package)).await
     }
 
-    pub async fn batch_remove(
-        &self,
-        packages: impl IntoIterator<Item = &package::Id>,
-    ) -> Result<(), Error> {
+    pub async fn batch_remove(&self, packages: impl IntoIterator<Item = &package::Id>) -> Result<(), Error> {
         let pool = self.pool.lock().await;
 
         let mut query = sqlx::QueryBuilder::new(
@@ -288,9 +278,7 @@ mod encoding {
         }
     }
 
-    pub fn encode_entry(
-        entry: payload::layout::Entry,
-    ) -> (&'static str, Option<String>, Option<String>) {
+    pub fn encode_entry(entry: payload::layout::Entry) -> (&'static str, Option<String>, Option<String>) {
         use payload::layout::Entry;
 
         match entry {
@@ -315,21 +303,15 @@ mod test {
 
     #[tokio::test]
     async fn create_insert_select() {
-        let database =
-            Database::connect(SqliteConnectOptions::from_str("sqlite::memory:").unwrap())
-                .await
-                .unwrap();
+        let database = Database::connect(SqliteConnectOptions::from_str("sqlite::memory:").unwrap())
+            .await
+            .unwrap();
 
-        let bash_completion =
-            include_bytes!("../../../../../test/bash-completion-2.11-1-1-x86_64.stone");
+        let bash_completion = include_bytes!("../../../../../test/bash-completion-2.11-1-1-x86_64.stone");
 
         let mut stone = stone::read_bytes(bash_completion).unwrap();
 
-        let payloads = stone
-            .payloads()
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
+        let payloads = stone.payloads().unwrap().collect::<Result<Vec<_>, _>>().unwrap();
         let layouts = payloads
             .iter()
             .filter_map(PayloadKind::layout)

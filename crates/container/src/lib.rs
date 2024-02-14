@@ -120,10 +120,8 @@ impl Container {
         // Pipe to synchronize parent & child
         let sync = pipe()?;
 
-        let mut flags = CloneFlags::CLONE_NEWNS
-            | CloneFlags::CLONE_NEWPID
-            | CloneFlags::CLONE_NEWIPC
-            | CloneFlags::CLONE_NEWUTS;
+        let mut flags =
+            CloneFlags::CLONE_NEWNS | CloneFlags::CLONE_NEWPID | CloneFlags::CLONE_NEWIPC | CloneFlags::CLONE_NEWUTS;
 
         if rootless {
             flags |= CloneFlags::CLONE_NEWUSER;
@@ -210,11 +208,7 @@ impl Container {
 }
 
 /// Reenter the container
-fn enter<E>(
-    container: &Container,
-    sync: (i32, i32),
-    mut f: impl FnMut() -> Result<(), E>,
-) -> Result<(), ContainerError>
+fn enter<E>(container: &Container, sync: (i32, i32), mut f: impl FnMut() -> Result<(), E>) -> Result<(), ContainerError>
 where
     E: std::error::Error + 'static,
 {
@@ -387,11 +381,7 @@ pub fn forward_sigint(pid: Pid) -> Result<(), nix::Error> {
         let _ = kill(pid, Signal::SIGINT);
     }
 
-    let action = SigAction::new(
-        SigHandler::Handler(on_int),
-        SaFlags::empty(),
-        SigSet::empty(),
-    );
+    let action = SigAction::new(SigHandler::Handler(on_int), SaFlags::empty(), SigSet::empty());
     unsafe { sigaction(Signal::SIGINT, &action)? };
 
     Ok(())

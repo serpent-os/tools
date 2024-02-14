@@ -149,10 +149,7 @@ fn read_state_id(root: &Path) -> Option<state::Id> {
     let usr_path = root.join("usr");
     let state_path = root.join("usr").join(".stateID");
 
-    if let Some(id) = fs::read_to_string(state_path)
-        .ok()
-        .and_then(|s| s.parse::<i64>().ok())
-    {
+    if let Some(id) = fs::read_to_string(state_path).ok().and_then(|s| s.parse::<i64>().ok()) {
         return Some(state::Id::from(id));
     } else if let Ok(usr_target) = usr_path.read_link() {
         return read_legacy_state_id(&usr_target);

@@ -20,11 +20,7 @@ use crate::environment;
 /// Shared client for tcp socket reuse and connection limit
 static CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
     reqwest::ClientBuilder::new()
-        .user_agent(concat!(
-            env!("CARGO_PKG_NAME"),
-            "/",
-            env!("CARGO_PKG_VERSION")
-        ))
+        .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
         .build()
         .expect("build reqwest client")
 });

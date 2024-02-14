@@ -44,12 +44,7 @@ pub enum Subcommand {
 pub fn process() -> Result<(), Error> {
     let Command { global, subcommand } = Command::parse();
 
-    let env = Env::new(
-        global.cache_dir,
-        global.config_dir,
-        global.data_dir,
-        global.moss_root,
-    )?;
+    let env = Env::new(global.cache_dir, global.config_dir, global.data_dir, global.moss_root)?;
 
     match subcommand {
         Subcommand::Build(command) => build::handle(command, env)?,

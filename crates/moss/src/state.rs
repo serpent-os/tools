@@ -105,15 +105,8 @@ impl<'a> pretty::ColumnDisplay for ColumnDisplay<'a> {
     }
 
     fn display_column(&self, writer: &mut impl Write, col: pretty::Column, width: usize) {
-        let right_gap = matches!(col, pretty::Column::Last)
-            .then_some("   ")
-            .unwrap_or_default();
+        let right_gap = matches!(col, pretty::Column::Last).then_some("   ").unwrap_or_default();
 
-        let _ = write!(
-            writer,
-            "State {}{:width$}",
-            self.0.id.to_string().bold(),
-            " ",
-        );
+        let _ = write!(writer, "State {}{:width$}", self.0.id.to_string().bold(), " ",);
     }
 }

@@ -30,11 +30,7 @@ pub async fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<()
     let resolved = client.resolve_packages(tx.finalize()).await?;
 
     // Get installed packages to check against
-    let installed = client
-        .registry
-        .list_installed(Flags::NONE)
-        .collect::<Vec<_>>()
-        .await;
+    let installed = client.registry.list_installed(Flags::NONE).collect::<Vec<_>>().await;
     let is_installed = |p: &Package| installed.iter().any(|i| i.meta.name == p.meta.name);
 
     // Get missing packages that are:
@@ -99,9 +95,7 @@ pub async fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<()
             reason: None,
         });
 
-        missing_selections
-            .chain(previous_selections)
-            .collect::<Vec<_>>()
+        missing_selections.chain(previous_selections).collect::<Vec<_>>()
     };
 
     // Perfect, apply state.

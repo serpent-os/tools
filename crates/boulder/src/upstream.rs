@@ -33,10 +33,7 @@ pub async fn sync(recipe: &Recipe, paths: &Paths) -> Result<(), Error> {
         .collect::<Result<Vec<_>, _>>()?;
 
     println!();
-    println!(
-        "Sharing {} upstream(s) with the build container",
-        upstreams.len()
-    );
+    println!("Sharing {} upstream(s) with the build container", upstreams.len());
     println!();
 
     let mp = MultiProgress::new();
@@ -56,11 +53,8 @@ pub async fn sync(recipe: &Recipe, paths: &Paths) -> Result<(), Error> {
         .map(|upstream| async {
             let pb = mp.insert_before(
                 &tp,
-                ProgressBar::new(u64::MAX).with_message(format!(
-                    "{} {}",
-                    "Downloading".blue(),
-                    upstream.name().bold(),
-                )),
+                ProgressBar::new(u64::MAX)
+                    .with_message(format!("{} {}", "Downloading".blue(), upstream.name().bold(),)),
             );
             pb.enable_steady_tick(Duration::from_millis(150));
 
@@ -82,12 +76,7 @@ pub async fn sync(recipe: &Recipe, paths: &Paths) -> Result<(), Error> {
 
             pb.finish();
             mp.remove(&pb);
-            mp.println(format!(
-                "{} {}{}",
-                "Shared".green(),
-                upstream.name().bold(),
-                cached_tag,
-            ))?;
+            mp.println(format!("{} {}{}", "Shared".green(), upstream.name().bold(), cached_tag,))?;
             tp.inc(1);
 
             Ok(()) as Result<_, Error>
@@ -155,23 +144,14 @@ pub enum Upstream {
 impl Upstream {
     pub fn from_recipe(upstream: stone_recipe::Upstream) -> Result<Self, Error> {
         match upstream {
-            stone_recipe::Upstream::Plain {
-                uri, hash, rename, ..
-            } => Ok(Self::Plain(Plain {
+            stone_recipe::Upstream::Plain { uri, hash, rename, .. } => Ok(Self::Plain(Plain {
                 uri,
                 hash: hash.parse()?,
                 rename,
             })),
             stone_recipe::Upstream::Git {
-                uri,
-                ref_id,
-                staging,
-                ..
-            } => Ok(Self::Git(Git {
-                uri,
-                ref_id,
-                staging,
-            })),
+                uri, ref_id, staging, ..
+            } => Ok(Self::Git(Git { uri, ref_id, staging })),
         }
     }
 
@@ -366,11 +346,8 @@ impl Git {
         self.run(&args, None).await?;
 
         if self.staging {
-            self.run(
-                &["clone", "--", &clone_path_string, &final_path_string],
-                None,
-            )
-            .await?;
+            self.run(&["clone", "--", &clone_path_string, &final_path_string], None)
+                .await?;
         }
 
         self.reset_to_ref(&final_path).await?;
@@ -389,16 +366,13 @@ impl Git {
 
         self.run(&["fetch"], Some(path)).await?;
 
-        let result = self
-            .run(&["cat-file", "-e", &self.ref_id], Some(path))
-            .await;
+        let result = self.run(&["cat-file", "-e", &self.ref_id], Some(path)).await;
 
         Ok(result.is_ok())
     }
 
     async fn reset_to_ref(&self, path: &Path) -> Result<(), Error> {
-        self.run(&["reset", "--hard", &self.ref_id], Some(path))
-            .await?;
+        self.run(&["reset", "--hard", &self.ref_id], Some(path)).await?;
 
         self.run(
             &[

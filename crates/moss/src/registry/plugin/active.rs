@@ -80,11 +80,7 @@ impl Active {
     }
 
     /// Query matching by name
-    pub async fn query_name(
-        &self,
-        package_name: &package::Name,
-        flags: package::Flags,
-    ) -> Vec<Package> {
+    pub async fn query_name(&self, package_name: &package::Name, flags: package::Flags) -> Vec<Package> {
         self.query(flags, Some(db::meta::Filter::Name(package_name.clone())))
             .await
     }

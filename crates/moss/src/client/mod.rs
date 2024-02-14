@@ -57,10 +57,7 @@ pub struct Client {
 
 impl Client {
     /// Construct a new Client
-    pub async fn new(
-        client_name: impl ToString,
-        root: impl Into<PathBuf>,
-    ) -> Result<Client, Error> {
+    pub async fn new(client_name: impl ToString, root: impl Into<PathBuf>) -> Result<Client, Error> {
         Self::build(client_name, root, None).await
     }
 
@@ -87,9 +84,7 @@ impl Client {
         let name = client_name.to_string();
         let config = config::Manager::system(&root, "moss");
         let installation = Installation::open(root);
-        let install_db =
-            db::meta::Database::new(installation.db_path("install"), installation.read_only())
-                .await?;
+        let install_db = db::meta::Database::new(installation.db_path("install"), installation.read_only()).await?;
         let state_db = db::state::Database::new(&installation).await?;
         let layout_db = db::layout::Database::new(&installation).await?;
 
@@ -150,19 +145,13 @@ impl Client {
         // Reload manager if not explicit to pickup config changes
         // then refresh indexes
         if !self.repositories.is_explicit() {
-            self.repositories =
-                repository::Manager::system(self.config.clone(), self.installation.clone()).await?
+            self.repositories = repository::Manager::system(self.config.clone(), self.installation.clone()).await?
         };
         self.repositories.refresh_all().await?;
 
         // Rebuild registry
-        self.registry = build_registry(
-            &self.installation,
-            &self.repositories,
-            &self.install_db,
-            &self.state_db,
-        )
-        .await?;
+        self.registry =
+            build_registry(&self.installation, &self.repositories, &self.install_db, &self.state_db).await?;
 
         Ok(())
     }
@@ -210,27 +199,17 @@ impl Client {
     /// Then blit the filesystem, promote it, finally archiving the active ID
     ///
     /// Returns `None` if the client is ephemeral
-    pub async fn apply_state(
-        &self,
-        selections: &[Selection],
-        summary: impl ToString,
-    ) -> Result<Option<State>, Error> {
+    pub async fn apply_state(&self, selections: &[Selection], summary: impl ToString) -> Result<Option<State>, Error> {
         let old_state = self.installation.active_state;
 
         let fstree = self
-            .blit_root(
-                selections.iter().map(|s| &s.package),
-                old_state.map(state::Id::next),
-            )
+            .blit_root(selections.iter().map(|s| &s.package), old_state.map(state::Id::next))
             .await?;
 
         match &self.scope {
             Scope::Stateful => {
                 // Add to db
-                let state = self
-                    .state_db
-                    .add(selections, Some(summary.to_string()), None)
-                    .await?;
+                let state = self.state_db.add(selections, Some(summary.to_string()), None).await?;
 
                 // Write state id
                 {
@@ -243,11 +222,8 @@ impl Client {
                 record_os_release(&self.installation.staging_dir(), Some(state.id)).await?;
 
                 // Run all of the transaction triggers
-                let triggers = postblit::triggers(
-                    postblit::TriggerScope::Transaction(&self.installation),
-                    &fstree,
-                )
-                .await?;
+                let triggers =
+                    postblit::triggers(postblit::TriggerScope::Transaction(&self.installation), &fstree).await?;
                 create_root_links(&self.installation.isolation_dir()).await?;
                 for trigger in triggers {
                     trigger.execute()?;
@@ -264,8 +240,7 @@ impl Client {
 
                 // At this point we're allowed to run system triggers
                 let sys_triggers =
-                    postblit::triggers(postblit::TriggerScope::System(&self.installation), &fstree)
-                        .await?;
+                    postblit::triggers(postblit::TriggerScope::System(&self.installation), &fstree).await?;
                 for trigger in sys_triggers {
                     trigger.execute()?;
                 }
@@ -303,10 +278,7 @@ impl Client {
     /// syscall based wrapper for renameat2 so we can support musl libc which
     /// unfortunately does not expose the API.
     /// largely modelled on existing renameat2 API in nix crae
-    fn atomic_swap<A: ?Sized + nix::NixPath, B: ?Sized + nix::NixPath>(
-        old_path: &A,
-        new_path: &B,
-    ) -> nix::Result<()> {
+    fn atomic_swap<A: ?Sized + nix::NixPath, B: ?Sized + nix::NixPath>(old_path: &A, new_path: &B) -> nix::Result<()> {
         let result = old_path.with_nix_path(|old| {
             new_path.with_nix_path(|new| unsafe {
                 syscall(
@@ -389,11 +361,7 @@ impl Client {
             let package_name = package.meta.name.to_string();
 
             // Set progress to unpacking
-            progress_bar.set_message(format!(
-                "{} {}",
-                "Unpacking".yellow(),
-                package_name.clone().bold(),
-            ));
+            progress_bar.set_message(format!("{} {}", "Unpacking".yellow(), package_name.clone().bold(),));
             progress_bar.set_length(1000);
             progress_bar.set_position(0);
 
@@ -409,11 +377,7 @@ impl Client {
                 .await?;
 
             // Merge layoutdb
-            progress_bar.set_message(format!(
-                "{} {}",
-                "Store layout".white(),
-                package_name.clone().bold()
-            ));
+            progress_bar.set_message(format!("{} {}", "Store layout".white(), package_name.clone().bold()));
             // Remove old layout entries for package
             self.layout_db.remove(&package.id).await?;
             // Add new entries in batches of 1k
@@ -426,17 +390,12 @@ impl Client {
                     .ok_or(Error::CorruptedPackage)?
                     .chunks(environment::DB_BATCH_SIZE),
             ) {
-                let entries = chunk
-                    .iter()
-                    .map(|i| (package.id.clone(), i.clone()))
-                    .collect_vec();
+                let entries = chunk.iter().map(|i| (package.id.clone(), i.clone())).collect_vec();
                 self.layout_db.batch_add(entries).await?;
             }
 
             // Consume the package in the metadb
-            self.install_db
-                .add(package.id.clone(), package.meta.clone())
-                .await?;
+            self.install_db.add(package.id.clone(), package.meta.clone()).await?;
 
             // Remove this progress bar
             progress_bar.finish();
@@ -471,18 +430,12 @@ impl Client {
     }
 
     /// Build a [`vfs::Tree`] for the provided packages
-    pub async fn vfs(
-        &self,
-        packages: impl IntoIterator<Item = &package::Id>,
-    ) -> Result<vfs::Tree<PendingFile>, Error> {
+    pub async fn vfs(&self, packages: impl IntoIterator<Item = &package::Id>) -> Result<vfs::Tree<PendingFile>, Error> {
         let mut tbuild = TreeBuilder::new();
         for id in packages.into_iter() {
             let layouts = self.layout_db.query(id).await?;
             for layout in layouts {
-                tbuild.push(PendingFile {
-                    id: id.clone(),
-                    layout,
-                });
+                tbuild.push(PendingFile { id: id.clone(), layout });
             }
         }
         tbuild.bake();
@@ -511,11 +464,7 @@ impl Client {
         progress.set_position(0_u64);
 
         let cache_dir = self.installation.assets_path("v2");
-        let cache_fd = fcntl::open(
-            &cache_dir,
-            OFlag::O_DIRECTORY | OFlag::O_RDONLY,
-            Mode::empty(),
-        )?;
+        let cache_fd = fcntl::open(&cache_dir, OFlag::O_DIRECTORY | OFlag::O_RDONLY, Mode::empty())?;
 
         let blit_target = match &self.scope {
             Scope::Stateful => self.installation.staging_dir(),
@@ -527,11 +476,7 @@ impl Client {
 
         if let Some(root) = tree.structured() {
             let _ = mkdir(&blit_target, Mode::from_bits_truncate(0o755));
-            let root_dir = fcntl::open(
-                &blit_target,
-                OFlag::O_DIRECTORY | OFlag::O_RDONLY,
-                Mode::empty(),
-            )?;
+            let root_dir = fcntl::open(&blit_target, OFlag::O_DIRECTORY | OFlag::O_RDONLY, Mode::empty())?;
 
             if let Element::Directory(_, _, children) = root {
                 for child in children {
@@ -580,20 +525,12 @@ impl Client {
     }
 
     /// Process the raw layout entry.
-    fn blit_element_item(
-        &self,
-        parent: RawFd,
-        cache: RawFd,
-        subpath: &str,
-        item: PendingFile,
-    ) -> Result<(), Error> {
+    fn blit_element_item(&self, parent: RawFd, cache: RawFd, subpath: &str, item: PendingFile) -> Result<(), Error> {
         match item.layout.entry {
             layout::Entry::Regular(id, _) => {
                 let hash = format!("{:02x}", id);
                 let directory = if hash.len() >= 10 {
-                    PathBuf::from(&hash[..2])
-                        .join(&hash[2..4])
-                        .join(&hash[4..6])
+                    PathBuf::from(&hash[..2]).join(&hash[2..4]).join(&hash[4..6])
                 } else {
                     "".into()
                 };
@@ -652,10 +589,7 @@ async fn create_root_links(root: &Path) -> Result<(), io::Error> {
             remove_file(&staging_target).await?;
         }
 
-        if final_target.exists()
-            && final_target.is_symlink()
-            && final_target.read_link()?.to_string_lossy() == source
-        {
+        if final_target.exists() && final_target.is_symlink() && final_target.read_link()?.to_string_lossy() == source {
             continue 'linker;
         }
         symlink(source, &staging_target).await?;
@@ -786,10 +720,7 @@ async fn build_registry(
     let mut registry = Registry::default();
 
     registry.add_plugin(Plugin::Cobble(plugin::Cobble::default()));
-    registry.add_plugin(Plugin::Active(plugin::Active::new(
-        state,
-        installdb.clone(),
-    )));
+    registry.add_plugin(Plugin::Active(plugin::Active::new(state, installdb.clone())));
 
     for repo in repositories.active() {
         registry.add_plugin(Plugin::Repository(plugin::Repository::new(repo)));

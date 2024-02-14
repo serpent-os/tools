@@ -45,11 +45,7 @@ impl<W: Write> Writer<W, ()> {
         Ok(())
     }
 
-    pub fn with_content<B>(
-        self,
-        buffer: B,
-        pledged_size: Option<u64>,
-    ) -> Result<Writer<W, Content<B>>, Error> {
+    pub fn with_content<B>(self, buffer: B, pledged_size: Option<u64>) -> Result<Writer<W, Content<B>>, Error> {
         let mut encoder = zstd::Encoder::new()?;
         encoder.set_pledged_size(pledged_size)?;
 
@@ -105,10 +101,8 @@ where
         // Bytes -> index digest -> compression -> buffer checksum -> buffer
         let mut payload_checksum_writer =
             digest::Writer::new(&mut self.content.buffer, &mut self.content.buffer_hasher);
-        let mut zstd_writer =
-            zstd::Writer::new(&mut payload_checksum_writer, &mut self.content.encoder);
-        let mut index_digest_writer =
-            digest::Writer::new(&mut zstd_writer, &mut self.content.index_hasher);
+        let mut zstd_writer = zstd::Writer::new(&mut payload_checksum_writer, &mut self.content.encoder);
+        let mut index_digest_writer = digest::Writer::new(&mut zstd_writer, &mut self.content.index_hasher);
 
         io::copy(content, &mut index_digest_writer)?;
 
@@ -135,8 +129,7 @@ where
     pub fn finalize(mut self) -> Result<(), Error> {
         // Finish frame & get content payload checksum
         let checksum = {
-            let mut writer =
-                digest::Writer::new(&mut self.content.buffer, &mut self.content.buffer_hasher);
+            let mut writer = digest::Writer::new(&mut self.content.buffer, &mut self.content.buffer_hasher);
             self.content.encoder.finish(&mut writer)?;
             writer.flush()?;
             self.content.stored_size += writer.bytes as u64;

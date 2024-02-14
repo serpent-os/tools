@@ -128,11 +128,7 @@ pub struct TuningGroup {
     #[serde(flatten, default)]
     pub root: TuningOption,
     pub default: Option<String>,
-    #[serde(
-        default,
-        rename = "options",
-        deserialize_with = "sequence_of_key_value"
-    )]
+    #[serde(default, rename = "options", deserialize_with = "sequence_of_key_value")]
     pub choices: Vec<KeyValue<TuningOption>>,
 }
 

@@ -78,11 +78,7 @@ impl<T: BlitFile> Tree<T> {
     }
 
     /// Add a child to the given parent node
-    fn add_child_to_node(
-        &mut self,
-        node_id: NodeId,
-        parent: impl Into<PathBuf>,
-    ) -> Result<(), Error> {
+    fn add_child_to_node(&mut self, node_id: NodeId, parent: impl Into<PathBuf>) -> Result<(), Error> {
         let parent = parent.into();
         let node = self.arena.get(node_id).unwrap();
         if let Some(parent_node) = self.map.get(&parent) {
@@ -108,11 +104,7 @@ impl<T: BlitFile> Tree<T> {
                 // Report duplicate and skip for now
                 eprintln!(
                     "error: {}",
-                    Error::Duplicate(
-                        node.get().path(),
-                        node.get().id(),
-                        others.first().unwrap().id(),
-                    )
+                    Error::Duplicate(node.get().path(), node.get().id(), others.first().unwrap().id(),)
                 );
 
                 Ok(())
@@ -132,11 +124,7 @@ impl<T: BlitFile> Tree<T> {
 
     /// For all descendents of the given source tree, return a set of the reparented nodes,
     /// and remove the originals from the tree
-    fn reparent(
-        &mut self,
-        source_tree: impl Into<PathBuf>,
-        target_tree: impl Into<PathBuf>,
-    ) -> Result<(), Error> {
+    fn reparent(&mut self, source_tree: impl Into<PathBuf>, target_tree: impl Into<PathBuf>) -> Result<(), Error> {
         let source_path = source_tree.into();
         let target_path = target_tree.into();
         let mut mutations = vec![];
@@ -150,8 +138,7 @@ impl<T: BlitFile> Tree<T> {
 
             for i in mutations {
                 let original = self.arena.get(i).unwrap().get();
-                let relapath =
-                    target_path.join(original.path().strip_prefix(&source_path).unwrap());
+                let relapath = target_path.join(original.path().strip_prefix(&source_path).unwrap());
                 orphans.push(original.cloned_to(relapath));
             }
 
@@ -187,8 +174,7 @@ impl<T: BlitFile> Tree<T> {
 
     /// Return structured view beginning at `/`
     pub fn structured(&self) -> Option<Element<T>> {
-        self.resolve_node("/")
-            .map(|root| self.structured_children(root))
+        self.resolve_node("/").map(|root| self.structured_children(root))
     }
 
     /// For the given node, recursively convert to Element::Directory of Child

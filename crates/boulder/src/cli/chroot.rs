@@ -19,9 +19,7 @@ pub struct Command {
 }
 
 pub fn handle(command: Command, env: Env) -> Result<(), Error> {
-    let Command {
-        recipe: recipe_path,
-    } = command;
+    let Command { recipe: recipe_path } = command;
 
     if !recipe_path.exists() {
         return Err(Error::MissingRecipe(recipe_path));

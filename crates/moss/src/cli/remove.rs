@@ -42,15 +42,8 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     // Grab a client for the target, enumerate packages
     let client = Client::new(environment::NAME, root).await?;
 
-    let installed = client
-        .registry
-        .list_installed(Flags::NONE)
-        .collect::<Vec<_>>()
-        .await;
-    let installed_ids = installed
-        .iter()
-        .map(|p| p.id.clone())
-        .collect::<HashSet<_>>();
+    let installed = client.registry.list_installed(Flags::NONE).collect::<Vec<_>>().await;
+    let installed_ids = installed.iter().map(|p| p.id.clone()).collect::<HashSet<_>>();
 
     // Separate packages between installed / not installed (or invalid)
     let (for_removal, not_installed): (Vec<_>, Vec<_>) = pkgs.iter().partition_map(|provider| {
@@ -81,9 +74,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     let finalized = transaction.finalize().cloned().collect::<HashSet<_>>();
 
     // Resolve all removed packages, where removed is (installed - finalized)
-    let removed = client
-        .resolve_packages(installed_ids.difference(&finalized))
-        .await?;
+    let removed = client.resolve_packages(installed_ids.difference(&finalized)).await?;
 
     println!("The following package(s) will be removed:");
     println!();
@@ -104,11 +95,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
 
     // Print each package to stdout
     for package in removed {
-        println!(
-            "{} {}",
-            "Removed".red(),
-            package.meta.name.to_string().bold(),
-        );
+        println!("{} {}", "Removed".red(), package.meta.name.to_string().bold(),);
     }
 
     // Map finalized state to a [`Selection`] by referencing

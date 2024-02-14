@@ -68,11 +68,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     let pkgs = client.registry.list(filter_flags).collect::<Vec<_>>().await;
 
     let sync_available = if sync.is_some() {
-        client
-            .registry
-            .list(Flags::AVAILABLE)
-            .collect::<Vec<_>>()
-            .await
+        client.registry.list(Flags::AVAILABLE).collect::<Vec<_>>().await
     } else {
         vec![]
     };
@@ -118,13 +114,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
                 sync,
             }
         })
-        .filter(|item| {
-            if sync.is_some() {
-                item.sync.is_some()
-            } else {
-                true
-            }
-        })
+        .filter(|item| if sync.is_some() { item.sync.is_some() } else { true })
         .collect_vec();
 
     // Thanks to priorities, first in list is the winning candidate in list available.
@@ -180,9 +170,7 @@ struct Format {
 
 impl Format {
     fn size(&self) -> usize {
-        self.name.len()
-            + self.revision.size()
-            + self.sync.as_ref().map(Revision::size).unwrap_or_default()
+        self.name.len() + self.revision.size() + self.sync.as_ref().map(Revision::size).unwrap_or_default()
     }
 }
 

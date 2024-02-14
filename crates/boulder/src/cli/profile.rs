@@ -130,15 +130,10 @@ pub async fn add<'a>(
     Ok(())
 }
 
-pub async fn update<'a>(
-    env: &'a Env,
-    manager: profile::Manager<'a>,
-    profile: &profile::Id,
-) -> Result<(), Error> {
+pub async fn update<'a>(env: &'a Env, manager: profile::Manager<'a>, profile: &profile::Id) -> Result<(), Error> {
     let repos = manager.repositories(profile)?.clone();
 
-    let mut moss_client =
-        moss::Client::with_explicit_repositories("boulder", &env.moss_dir, repos).await?;
+    let mut moss_client = moss::Client::with_explicit_repositories("boulder", &env.moss_dir, repos).await?;
     moss_client.refresh_repositories().await?;
 
     println!("Profile {profile} updated");

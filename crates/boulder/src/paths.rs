@@ -27,18 +27,10 @@ pub struct Paths {
 }
 
 impl Paths {
-    pub fn new(
-        recipe: &Recipe,
-        host_root: impl Into<PathBuf>,
-        guest_root: impl Into<PathBuf>,
-    ) -> io::Result<Self> {
+    pub fn new(recipe: &Recipe, host_root: impl Into<PathBuf>, guest_root: impl Into<PathBuf>) -> io::Result<Self> {
         let id = Id::new(recipe);
 
-        let recipe_dir = recipe
-            .path
-            .parent()
-            .unwrap_or(&PathBuf::default())
-            .canonicalize()?;
+        let recipe_dir = recipe.path.parent().unwrap_or(&PathBuf::default()).canonicalize()?;
 
         let job = Self {
             id,

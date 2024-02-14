@@ -103,17 +103,13 @@ pub async fn prune(
 
         // Increment each package
         state.selections.iter().for_each(|selection| {
-            *packages_counts
-                .entry(selection.package.clone())
-                .or_default() += 1;
+            *packages_counts.entry(selection.package.clone()).or_default() += 1;
         });
 
         // Decrement if removal
         if status.is_removal() {
             state.selections.iter().for_each(|selection| {
-                *packages_counts
-                    .entry(selection.package.clone())
-                    .or_default() -= 1;
+                *packages_counts.entry(selection.package.clone()).or_default() -= 1;
             });
             removals.push(state);
         }
@@ -130,23 +126,11 @@ pub async fn prune(
     // Print out the states to be removed to the user
     println!("The following state(s) will be removed:");
     println!();
-    print_to_columns(
-        &removals
-            .iter()
-            .map(state::ColumnDisplay)
-            .collect::<Vec<_>>(),
-    );
+    print_to_columns(&removals.iter().map(state::ColumnDisplay).collect::<Vec<_>>());
     println!();
 
     // Prune these states / packages from all dbs
-    prune_databases(
-        &removals,
-        &package_removals,
-        state_db,
-        install_db,
-        layout_db,
-    )
-    .await?;
+    prune_databases(&removals, &package_removals, state_db, install_db, layout_db).await?;
 
     // Remove orphaned downloads
     remove_orphaned_files(
@@ -181,11 +165,7 @@ async fn prune_databases(
     install_db: &db::meta::Database,
     layout_db: &db::layout::Database,
 ) -> Result<(), Error> {
-    for chunk in &states
-        .iter()
-        .map(|state| &state.id)
-        .chunks(environment::DB_BATCH_SIZE)
-    {
+    for chunk in &states.iter().map(|state| &state.id).chunks(environment::DB_BATCH_SIZE) {
         // Remove db states
         state_db.batch_remove(chunk).await?;
     }
@@ -281,18 +261,14 @@ async fn enumerate_files(root: impl Into<PathBuf>) -> Result<Vec<PathBuf>, io::E
         let nested_files = dirs
             .par_iter()
             .map(recurse)
-            .try_reduce(Vec::new, |acc, files| {
-                Ok(acc.into_iter().chain(files).collect())
-            })?;
+            .try_reduce(Vec::new, |acc, files| Ok(acc.into_iter().chain(files).collect()))?;
 
         Ok(files.into_iter().chain(nested_files).collect())
     }
 
     let root = root.into();
 
-    task::spawn_blocking(|| recurse(root))
-        .await
-        .expect("join handle")
+    task::spawn_blocking(|| recurse(root)).await.expect("join handle")
 }
 
 /// Remove all empty folders from `starting` and moving up until `root`

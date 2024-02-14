@@ -35,9 +35,7 @@ impl Database {
 
         sqlx::migrate!("src/db/state/migrations").run(&pool).await?;
 
-        Ok(Self {
-            pool: Mutex::new(pool),
-        })
+        Ok(Self { pool: Mutex::new(pool) })
     }
 
     pub async fn list_ids(&self) -> Result<Vec<(Id, DateTime<Utc>)>, Error> {
@@ -52,10 +50,7 @@ impl Database {
         .fetch_all(&*pool)
         .await?;
 
-        Ok(states
-            .into_iter()
-            .map(|state| (state.id.0, state.created))
-            .collect())
+        Ok(states.into_iter().map(|state| (state.id.0, state.created)).collect())
     }
 
     pub async fn get(&self, id: &Id) -> Result<State, Error> {
@@ -155,10 +150,7 @@ impl Database {
         self.batch_remove(Some(state)).await
     }
 
-    pub async fn batch_remove(
-        &self,
-        states: impl IntoIterator<Item = &state::Id>,
-    ) -> Result<(), Error> {
+    pub async fn batch_remove(&self, states: impl IntoIterator<Item = &state::Id>) -> Result<(), Error> {
         let pool = self.pool.lock().await;
 
         let mut query = sqlx::QueryBuilder::new(
@@ -235,10 +227,9 @@ mod test {
 
     #[tokio::test]
     async fn create_insert_select() {
-        let database =
-            Database::connect(SqliteConnectOptions::from_str("sqlite::memory:").unwrap())
-                .await
-                .unwrap();
+        let database = Database::connect(SqliteConnectOptions::from_str("sqlite::memory:").unwrap())
+            .await
+            .unwrap();
 
         let selections = vec![
             Selection::explicit(package::Id::from("pkg a".to_string())),
@@ -247,11 +238,7 @@ mod test {
         ];
 
         let state = database
-            .add(
-                &selections,
-                Some("test".to_string()),
-                Some("test".to_string()),
-            )
+            .add(&selections, Some("test".to_string()), Some("test".to_string()))
             .await
             .unwrap();
 

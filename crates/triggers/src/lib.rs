@@ -48,14 +48,10 @@ impl<'a> Collection<'a> {
             for (p, def) in trigger.paths.iter() {
                 for used_handler in def.handlers.iter() {
                     // Ensure we have a corresponding handler
-                    let handler =
-                        trigger
-                            .handlers
-                            .get(used_handler)
-                            .ok_or(Error::MissingHandler(
-                                trigger.name.clone(),
-                                used_handler.clone(),
-                            ))?;
+                    let handler = trigger
+                        .handlers
+                        .get(used_handler)
+                        .ok_or(Error::MissingHandler(trigger.name.clone(), used_handler.clone()))?;
                     handlers.push(ExtractedHandler {
                         id: trigger.name.clone(),
                         pattern: p.clone(),
@@ -75,11 +71,9 @@ impl<'a> Collection<'a> {
     /// Process a batch set of paths and record the "hit"
     pub fn process_paths(&mut self, paths: impl Iterator<Item = String>) {
         let results = paths.into_iter().flat_map(|p| {
-            self.handlers.iter().filter_map(move |h| {
-                h.pattern
-                    .match_path(&p)
-                    .map(|m| (h.id.clone(), m, h.handler.clone()))
-            })
+            self.handlers
+                .iter()
+                .filter_map(move |h| h.pattern.match_path(&p).map(|m| (h.id.clone(), m, h.handler.clone())))
         });
         self.hits.extend(results);
     }

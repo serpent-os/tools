@@ -51,9 +51,7 @@ impl Cobble {
     pub fn package(&self, id: &package::Id) -> Option<Package> {
         let meta_id = meta::Id::from(id.clone());
 
-        self.packages
-            .get(&meta_id)
-            .map(|state| state.package(id.clone()))
+        self.packages.get(&meta_id).map(|state| state.package(id.clone()))
     }
 
     fn query(&self, flags: package::Flags, filter: impl Fn(&Meta) -> bool) -> Vec<Package> {

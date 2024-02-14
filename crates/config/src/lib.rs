@@ -71,11 +71,7 @@ impl Manager {
         configs
     }
 
-    pub async fn save<T: Config + Serialize>(
-        &self,
-        name: impl fmt::Display,
-        config: &T,
-    ) -> Result<(), SaveError> {
+    pub async fn save<T: Config + Serialize>(&self, name: impl fmt::Display, config: &T) -> Result<(), SaveError> {
         let domain = T::domain();
 
         let dir = self.scope.save_dir(&domain);
@@ -138,10 +134,7 @@ async fn enumerate_paths(entry: Entry, resolve: Resolve<'_>, domain: &str) -> Ve
                     .filter_map(|entry| async {
                         let entry = entry.ok()?;
                         let path = entry.path();
-                        let extension = path
-                            .extension()
-                            .and_then(|ext| ext.to_str())
-                            .unwrap_or_default();
+                        let extension = path.extension().and_then(|ext| ext.to_str()).unwrap_or_default();
 
                         if path.exists() && extension == EXTENSION {
                             Some(path)
@@ -307,11 +300,7 @@ enum Resolve<'a> {
 impl<'a> Resolve<'a> {
     fn config_dir(&self) -> PathBuf {
         match self {
-            Resolve::System {
-                root,
-                base,
-                program,
-            } => root.join(base.path()).join(program),
+            Resolve::System { root, base, program } => root.join(base.path()).join(program),
             Resolve::User { config, program } => config.join(program),
             Resolve::Custom(dir) => dir.to_path_buf(),
         }
