@@ -67,8 +67,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     //
     // By resolving only explicit first, this ensures any "orphaned" transitive deps
     // are naturally dropped from the final state.
-    let first_pass =
-        resolve_with_sync(&client, Resolution::Explicit, upgrade_only, &installed).await?;
+    let first_pass = resolve_with_sync(&client, Resolution::Explicit, upgrade_only, &installed).await?;
     let finalized = resolve_with_sync(&client, Resolution::All, upgrade_only, &first_pass).await?;
 
     // Synced are packages are:
@@ -214,8 +213,7 @@ async fn resolve_with_sync(
 
     // Build a new tx from this sync'd package set
     let mut tx = client.registry.transaction()?;
-    tx.add(with_sync.iter().map(|p| p.id.clone()).collect())
-        .await?;
+    tx.add(with_sync.iter().map(|p| p.id.clone()).collect()).await?;
 
     // Resolve the tx
     Ok(client.resolve_packages(tx.finalize()).await?)

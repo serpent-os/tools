@@ -207,32 +207,17 @@ mod test {
             ],
         )));
 
-        let installed = registry
-            .list_installed(package::Flags::NONE)
-            .collect()
-            .await;
-        let available = registry
-            .list_available(package::Flags::NONE)
-            .collect()
-            .await;
-        let installed_source = registry
-            .list_installed(package::Flags::SOURCE)
-            .collect()
-            .await;
-        let available_source = registry
-            .list_available(package::Flags::SOURCE)
-            .collect()
-            .await;
+        let installed = registry.list_installed(package::Flags::NONE).collect().await;
+        let available = registry.list_available(package::Flags::NONE).collect().await;
+        let installed_source = registry.list_installed(package::Flags::SOURCE).collect().await;
+        let available_source = registry.list_available(package::Flags::SOURCE).collect().await;
 
         fn matches(actual: Vec<Package>, expected: &[&'static str]) -> bool {
             let actual = actual
                 .into_iter()
                 .map(|p| String::from(p.meta.name))
                 .collect::<HashSet<_>>();
-            let expected = expected
-                .iter()
-                .map(|s| s.to_string())
-                .collect::<HashSet<_>>();
+            let expected = expected.iter().map(|s| s.to_string()).collect::<HashSet<_>>();
 
             actual == expected
         }

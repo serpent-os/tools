@@ -36,9 +36,7 @@ impl Updater {
     pub fn apply(&self, input: impl ToString) -> String {
         self.operations
             .iter()
-            .fold(input.to_string(), |input, operation| {
-                operation.apply(&input)
-            })
+            .fold(input.to_string(), |input, operation| operation.apply(&input))
     }
 }
 
@@ -55,12 +53,7 @@ impl ops::Div<usize> for Path {
     type Output = Self;
 
     fn div(self, rhs: usize) -> Self::Output {
-        Self(
-            self.0
-                .into_iter()
-                .chain(Some(Segment::Sequence(rhs)))
-                .collect(),
-        )
+        Self(self.0.into_iter().chain(Some(Segment::Sequence(rhs))).collect())
     }
 }
 
@@ -68,12 +61,7 @@ impl<'a> ops::Div<&'a str> for Path {
     type Output = Self;
 
     fn div(self, rhs: &'a str) -> Self::Output {
-        Self(
-            self.0
-                .into_iter()
-                .chain(Some(Segment::Map(rhs.to_string())))
-                .collect(),
-        )
+        Self(self.0.into_iter().chain(Some(Segment::Map(rhs.to_string()))).collect())
     }
 }
 
@@ -131,11 +119,9 @@ fn map_key_scalar(line: &str) -> Option<Substr> {
     // End is first non-whitespace character from the right
     // before `: ` or ending `:`
     let end = start
-        + line[start..].find(": ").or_else(|| {
-            line[start..]
-                .ends_with(':')
-                .then_some(line[start..].len() - 1)
-        })?;
+        + line[start..]
+            .find(": ")
+            .or_else(|| line[start..].ends_with(':').then_some(line[start..].len() - 1))?;
     let end = start + line[start..end].rfind(|c: char| !c.is_whitespace())?;
 
     Some(Substr { start, end })
@@ -221,9 +207,7 @@ impl Operation {
                             if key_substr.value(line) == key {
                                 if is_last_segment {
                                     match self.update {
-                                        Update::Key(_) => {
-                                            matched_substr = Some((current_line, key_substr))
-                                        }
+                                        Update::Key(_) => matched_substr = Some((current_line, key_substr)),
                                         Update::Value(_) => {
                                             if let Some(value_substr) = map_value_scalar(line) {
                                                 matched_substr = Some((current_line, value_substr));

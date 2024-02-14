@@ -131,9 +131,7 @@ impl Record for Layout {
                 sanitize(reader.read_string(source_length as u64)?),
                 sanitize(reader.read_string(target_length as u64)?),
             ),
-            FileType::Directory => {
-                Entry::Directory(sanitize(reader.read_string(target_length as u64)?))
-            }
+            FileType::Directory => Entry::Directory(sanitize(reader.read_string(target_length as u64)?)),
             _ => {
                 if source_length > 0 {
                     let _ = reader.read_vec(source_length as usize);

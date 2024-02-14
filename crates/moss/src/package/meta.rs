@@ -83,9 +83,7 @@ pub struct Meta {
 }
 
 impl Meta {
-    pub fn from_stone_payload(
-        payload: &[stone::payload::Meta],
-    ) -> Result<Self, MissingMetaFieldError> {
+    pub fn from_stone_payload(payload: &[stone::payload::Meta]) -> Result<Self, MissingMetaFieldError> {
         let name = find_meta_string(payload, payload::meta::Tag::Name)?;
         let version_identifier = find_meta_string(payload, payload::meta::Tag::Version)?;
         let source_release = find_meta_u64(payload, payload::meta::Tag::Release)?;
@@ -150,10 +148,7 @@ impl Meta {
         .into_iter()
         .chain(self.uri.map(|uri| (Tag::PackageURI, Kind::String(uri))))
         .chain(self.hash.map(|hash| (Tag::PackageHash, Kind::String(hash))))
-        .chain(
-            self.download_size
-                .map(|size| (Tag::PackageSize, Kind::Uint64(size))),
-        )
+        .chain(self.download_size.map(|size| (Tag::PackageSize, Kind::Uint64(size))))
         .chain(
             self.licenses
                 .into_iter()
@@ -169,12 +164,7 @@ impl Meta {
                 .into_iter()
                 // We re-add this on ingestion / it's implied
                 .filter(|provider| provider.kind != dependency::Kind::PackageName)
-                .map(|provider| {
-                    (
-                        Tag::Provides,
-                        Kind::Provider(provider.kind.into(), provider.name),
-                    )
-                }),
+                .map(|provider| (Tag::Provides, Kind::Provider(provider.kind.into(), provider.name))),
         )
         .map(|(tag, kind)| payload::Meta { tag, kind })
         .collect()
@@ -189,19 +179,13 @@ impl Meta {
     }
 }
 
-fn find_meta_string(
-    meta: &[payload::Meta],
-    tag: payload::meta::Tag,
-) -> Result<String, MissingMetaFieldError> {
+fn find_meta_string(meta: &[payload::Meta], tag: payload::meta::Tag) -> Result<String, MissingMetaFieldError> {
     meta.iter()
         .find_map(|meta| meta_string(meta, tag))
         .ok_or(MissingMetaFieldError(tag))
 }
 
-fn find_meta_u64(
-    meta: &[payload::Meta],
-    tag: payload::meta::Tag,
-) -> Result<u64, MissingMetaFieldError> {
+fn find_meta_u64(meta: &[payload::Meta], tag: payload::meta::Tag) -> Result<u64, MissingMetaFieldError> {
     meta.iter()
         .find_map(|meta| meta_u64(meta, tag))
         .ok_or(MissingMetaFieldError(tag))

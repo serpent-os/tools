@@ -10,19 +10,11 @@ use thiserror::Error;
 
 use crate::Paths;
 
-pub fn exec(
-    paths: &Paths,
-    networking: bool,
-    f: impl FnMut() -> Result<(), ExecError>,
-) -> Result<(), Error> {
+pub fn exec(paths: &Paths, networking: bool, f: impl FnMut() -> Result<(), ExecError>) -> Result<(), Error> {
     run(paths, networking, f)
 }
 
-fn run(
-    paths: &Paths,
-    networking: bool,
-    f: impl FnMut() -> Result<(), ExecError>,
-) -> Result<(), Error> {
+fn run(paths: &Paths, networking: bool, f: impl FnMut() -> Result<(), ExecError>) -> Result<(), Error> {
     let rootfs = paths.rootfs().host;
     let artefacts = paths.artefacts();
     let build = paths.build();

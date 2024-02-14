@@ -10,9 +10,7 @@ pub struct Runtime(runtime::Runtime);
 
 impl Runtime {
     pub fn new() -> io::Result<Self> {
-        Ok(Self(
-            runtime::Builder::new_multi_thread().enable_all().build()?,
-        ))
+        Ok(Self(runtime::Builder::new_multi_thread().enable_all().build()?))
     }
 
     pub fn block_on<T, F>(&self, task: F) -> T

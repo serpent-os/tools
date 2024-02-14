@@ -38,11 +38,7 @@ pub struct Recipe {
     pub options: Options,
     #[serde(default, deserialize_with = "sequence_of_key_value")]
     pub profiles: Vec<KeyValue<Build>>,
-    #[serde(
-        default,
-        rename = "packages",
-        deserialize_with = "sequence_of_key_value"
-    )]
+    #[serde(default, rename = "packages", deserialize_with = "sequence_of_key_value")]
     pub sub_packages: Vec<KeyValue<Package>>,
     #[serde(default)]
     pub upstreams: Vec<Upstream>,
@@ -231,12 +227,12 @@ impl<'de> Deserialize<'de> for Upstream {
                 clone_dir,
                 staging,
             }),
-            Some((Uri::Plain(_), Outer::Inner(Inner::Git { .. }))) => Err(
-                serde::de::Error::custom("found git payload but missing 'git|' prefixed URI"),
-            ),
-            Some((Uri::Git(_), Outer::Inner(Inner::Plain { .. }))) => Err(
-                serde::de::Error::custom("found git URI but plain payload fields"),
-            ),
+            Some((Uri::Plain(_), Outer::Inner(Inner::Git { .. }))) => Err(serde::de::Error::custom(
+                "found git payload but missing 'git|' prefixed URI",
+            )),
+            Some((Uri::Git(_), Outer::Inner(Inner::Plain { .. }))) => {
+                Err(serde::de::Error::custom("found git URI but plain payload fields"))
+            }
             // unreachable?
             None => Err(serde::de::Error::custom("missing upstream entry")),
         }
@@ -321,11 +317,7 @@ where
 
     Ok(sequence.into_iter().fold(vec![], |acc, next| {
         acc.into_iter()
-            .chain(
-                next.into_iter()
-                    .next()
-                    .map(|(key, value)| KeyValue { key, value }),
-            )
+            .chain(next.into_iter().next().map(|(key, value)| KeyValue { key, value }))
             .collect()
     }))
 }
@@ -345,14 +337,9 @@ where
         Inner::Bool(bool) => Ok(bool),
         // Really yaml...
         Inner::String(s) => match s.as_str() {
-            "y" | "Y" | "yes" | "Yes" | "YES" | "true" | "True" | "TRUE" | "on" | "On" | "ON" => {
-                Ok(true)
-            }
-            "n" | "N" | "no" | "No" | "NO" | "false" | "False" | "FALSE" | "off" | "Off"
-            | "OFF" => Ok(false),
-            _ => Err(serde::de::Error::custom(
-                "invalid boolean: expected true or false",
-            )),
+            "y" | "Y" | "yes" | "Yes" | "YES" | "true" | "True" | "TRUE" | "on" | "On" | "ON" => Ok(true),
+            "n" | "N" | "no" | "No" | "NO" | "false" | "False" | "FALSE" | "off" | "Off" | "OFF" => Ok(false),
+            _ => Err(serde::de::Error::custom("invalid boolean: expected true or false")),
         },
     }
 }

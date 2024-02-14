@@ -26,10 +26,7 @@ pub fn command() -> Command {
 }
 
 pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
-    let dir = args
-        .get_one::<PathBuf>("INDEX_DIR")
-        .unwrap()
-        .canonicalize()?;
+    let dir = args.get_one::<PathBuf>("INDEX_DIR").unwrap().canonicalize()?;
 
     let stone_files = enumerate_stone_files(&dir).await?;
 
@@ -65,10 +62,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
                 match (entry.get().source_release, meta.source_release) {
                     // Error if dupe is same version
                     (prev, curr) if prev == curr => {
-                        return Err(Error::DuplicateRelease(
-                            meta.name.clone(),
-                            meta.source_release,
-                        ));
+                        return Err(Error::DuplicateRelease(meta.name.clone(), meta.source_release));
                     }
                     // Update if dupe is newer version
                     (prev, curr) if prev < curr => {
@@ -85,10 +79,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
 
     multi_progress.clear()?;
 
-    println!(
-        "\nIndex file written to {:?}",
-        dir.join("stone.index").display()
-    );
+    println!("\nIndex file written to {:?}", dir.join("stone.index").display());
 
     Ok(())
 }
@@ -141,11 +132,7 @@ async fn get_meta(
 
     let (size, hash) = stat_file(path, &relative_path, &progress).await?;
 
-    progress.set_message(format!(
-        "{} {}",
-        "Indexing".yellow(),
-        relative_path.clone().bold(),
-    ));
+    progress.set_message(format!("{} {}", "Indexing".yellow(), relative_path.clone().bold(),));
     progress.set_style(
         ProgressStyle::with_template(" {spinner} {wide_msg}")
             .unwrap()
@@ -174,11 +161,7 @@ async fn get_meta(
     Ok(meta)
 }
 
-async fn stat_file(
-    path: &Path,
-    relative_path: &str,
-    progress: &ProgressBar,
-) -> Result<(u64, String), Error> {
+async fn stat_file(path: &Path, relative_path: &str, progress: &ProgressBar) -> Result<(u64, String), Error> {
     use std::fs::File;
 
     let path = path.to_path_buf();
@@ -192,11 +175,9 @@ async fn stat_file(
         progress.set_length(size);
         progress.set_message(format!("{} {}", "Hashing".blue(), relative_path.bold()));
         progress.set_style(
-            ProgressStyle::with_template(
-                " {spinner} |{percent:>3}%| {wide_msg} {binary_bytes_per_sec:>.dim} ",
-            )
-            .unwrap()
-            .tick_chars("--=≡■≡=--"),
+            ProgressStyle::with_template(" {spinner} |{percent:>3}%| {wide_msg} {binary_bytes_per_sec:>.dim} ")
+                .unwrap()
+                .tick_chars("--=≡■≡=--"),
         );
 
         let mut hasher = Sha256::new();

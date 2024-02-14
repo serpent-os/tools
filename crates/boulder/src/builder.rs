@@ -44,12 +44,7 @@ pub struct Target {
 }
 
 impl Builder {
-    pub fn new(
-        recipe_path: &Path,
-        env: Env,
-        profile: profile::Id,
-        ccache: bool,
-    ) -> Result<Self, Error> {
+    pub fn new(recipe_path: &Path, env: Env, profile: profile::Id, ccache: bool) -> Result<Self, Error> {
         let recipe = Recipe::load(recipe_path)?;
 
         let macros = Macros::load(&env)?;
@@ -170,23 +165,14 @@ impl Builder {
 
                         let build_dir = &job.build_dir;
                         let work_dir = &job.work_dir;
-                        let current_dir = if work_dir.exists() {
-                            &work_dir
-                        } else {
-                            &build_dir
-                        };
+                        let current_dir = if work_dir.exists() { &work_dir } else { &build_dir };
 
                         for command in &script.commands {
                             match command {
                                 script::Command::Break(breakpoint) => {
-                                    let line_num = breakpoint_line(
-                                        breakpoint,
-                                        &self.recipe,
-                                        job.target,
-                                        *step,
-                                    )
-                                    .map(|line_num| format!(" at line {line_num}"))
-                                    .unwrap_or_default();
+                                    let line_num = breakpoint_line(breakpoint, &self.recipe, job.target, *step)
+                                        .map(|line_num| format!(" at line {line_num}"))
+                                        .unwrap_or_default();
 
                                     println!(
                                         "\n{}{} {}",
@@ -200,10 +186,7 @@ impl Builder {
                                     );
 
                                     // Write env to $HOME/.profile
-                                    std::fs::write(
-                                        build_dir.join(".profile"),
-                                        build_profile(script),
-                                    )?;
+                                    std::fs::write(build_dir.join(".profile"), build_profile(script))?;
 
                                     let mut command = process::Command::new("/bin/bash")
                                         .arg("--login")
@@ -323,17 +306,13 @@ pub fn build_profile(script: &Script) -> String {
         .as_deref()
         .unwrap_or_default()
         .lines()
-        .filter(|line| {
-            !line.starts_with("#!") && !line.starts_with("set -") && !line.starts_with("TERM=")
-        })
+        .filter(|line| !line.starts_with("#!") && !line.starts_with("set -") && !line.starts_with("TERM="))
         .join("\n");
 
     let action_functions = script
         .resolved_actions
         .iter()
-        .map(|(identifier, command)| {
-            format!("a_{identifier}() {{\n{command}\n}}\nexport -f a_{identifier}")
-        })
+        .map(|(identifier, command)| format!("a_{identifier}() {{\n{command}\n}}\nexport -f a_{identifier}"))
         .join("\n");
 
     let definition_vars = script
@@ -345,12 +324,7 @@ pub fn build_profile(script: &Script) -> String {
     format!("{env}\n{action_functions}\n{definition_vars}")
 }
 
-fn breakpoint_line(
-    breakpoint: &Breakpoint,
-    recipe: &Recipe,
-    build_target: BuildTarget,
-    step: Step,
-) -> Option<usize> {
+fn breakpoint_line(breakpoint: &Breakpoint, recipe: &Recipe, build_target: BuildTarget, step: Step) -> Option<usize> {
     let profile = recipe.build_target_profile_key(build_target);
 
     let has_key = |line: &str, key: &str| {

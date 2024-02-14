@@ -63,12 +63,7 @@ impl Ord for Package {
             .source_release
             .cmp(&other.meta.source_release)
             .reverse()
-            .then_with(|| {
-                self.meta
-                    .build_release
-                    .cmp(&other.meta.build_release)
-                    .reverse()
-            })
+            .then_with(|| self.meta.build_release.cmp(&other.meta.build_release).reverse())
     }
 }
 

@@ -43,8 +43,7 @@ impl Parser {
     }
 
     pub fn add_definition(&mut self, identifier: impl ToString, definition: impl ToString) {
-        self.definitions
-            .insert(identifier.to_string(), definition.to_string());
+        self.definitions.insert(identifier.to_string(), definition.to_string());
     }
 
     pub fn add_macros(&mut self, macros: Macros) {
@@ -71,13 +70,8 @@ impl Parser {
             .actions
             .iter()
             .filter_map(|(identifier, action)| {
-                let result = parse_content_only(
-                    &action.command,
-                    &self.actions,
-                    &self.definitions,
-                    &mut HashSet::new(),
-                )
-                .transpose()?;
+                let result = parse_content_only(&action.command, &self.actions, &self.definitions, &mut HashSet::new())
+                    .transpose()?;
 
                 Some(result.map(|resolved| (identifier.clone(), resolved)))
             })
@@ -86,13 +80,8 @@ impl Parser {
             .definitions
             .iter()
             .filter_map(|(identifier, definition)| {
-                let result = parse_content_only(
-                    definition,
-                    &self.actions,
-                    &self.definitions,
-                    &mut HashSet::new(),
-                )
-                .transpose()?;
+                let result = parse_content_only(definition, &self.actions, &self.definitions, &mut HashSet::new())
+                    .transpose()?;
 
                 Some(result.map(|resolved| (identifier.clone(), resolved)))
             })
@@ -159,9 +148,7 @@ fn parse(
     let prepend_env = |content: &str| {
         format!(
             "{}{content}",
-            env.as_ref()
-                .map(|env| format!("{env}\n"))
-                .unwrap_or_default()
+            env.as_ref().map(|env| format!("{env}\n")).unwrap_or_default()
         )
         .trim()
         .to_string()
@@ -175,9 +162,7 @@ fn parse(
                     .ok_or(Error::UnknownAction(identifier.to_string()))?;
                 dependencies.extend(action.dependencies.clone());
 
-                if let Some(nested) =
-                    parse_content_only(&action.command, actions, definitions, dependencies)?
-                {
+                if let Some(nested) = parse_content_only(&action.command, actions, definitions, dependencies)? {
                     content.push_str(&nested);
                 }
             }
@@ -186,9 +171,7 @@ fn parse(
                     .get(identifier)
                     .ok_or(Error::UnknownDefinition(identifier.to_string()))?;
 
-                if let Some(nested) =
-                    parse_content_only(definition, actions, definitions, dependencies)?
-                {
+                if let Some(nested) = parse_content_only(definition, actions, definitions, dependencies)? {
                     content.push_str(&nested);
                 }
             }
@@ -251,8 +234,7 @@ fn tokens(input: &str, f: impl FnMut(Token) -> Result<(), Error>) -> Result<(), 
     // %identifier
     let action = |input| preceded(char('%'), identifier)(input);
     // %(identifier)
-    let definition =
-        |input| preceded(char('%'), delimited(char('('), identifier, char(')')))(input);
+    let definition = |input| preceded(char('%'), delimited(char('('), identifier, char(')')))(input);
     // action or definition
     let macro_ = alt((action, definition));
     // %% -> %
@@ -260,10 +242,7 @@ fn tokens(input: &str, f: impl FnMut(Token) -> Result<(), Error>) -> Result<(), 
     // Escaped or any char until newline, escape, next macro or EOF
     let plain = alt((
         escaped,
-        recognize(many_till(
-            anychar,
-            peek(alt((recognize(newline), escaped, macro_))),
-        )),
+        recognize(many_till(anychar, peek(alt((recognize(newline), escaped, macro_))))),
         recognize(terminated(many1(anychar), eof)),
     ));
 
@@ -287,9 +266,7 @@ fn tokens(input: &str, f: impl FnMut(Token) -> Result<(), Error>) -> Result<(), 
     Ok(())
 }
 
-fn convert_error(
-    err: nom::Err<(&str, nom::error::ErrorKind)>,
-) -> nom::Err<nom::error::Error<String>> {
+fn convert_error(err: nom::Err<(&str, nom::error::ErrorKind)>) -> nom::Err<nom::error::Error<String>> {
     err.to_owned().map(|(i, e)| nom::error::Error::new(i, e))
 }
 
@@ -346,8 +323,7 @@ mod test {
                     line_num: 3
                 }),
                 Command::Content(
-                    "/mason/pkg/0001-deps-analysis-elves-In-absence-of-soname.-make-one-u.patch"
-                        .to_string()
+                    "/mason/pkg/0001-deps-analysis-elves-In-absence-of-soname.-make-one-u.patch".to_string()
                 )
             ]
         );

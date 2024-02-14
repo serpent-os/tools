@@ -28,10 +28,7 @@ pub async fn recreate_dir(path: &Path) -> Result<(), io::Error> {
     Ok(())
 }
 
-pub fn copy_dir<'a>(
-    source_dir: &'a Path,
-    out_dir: &'a Path,
-) -> BoxFuture<'a, Result<(), io::Error>> {
+pub fn copy_dir<'a>(source_dir: &'a Path, out_dir: &'a Path) -> BoxFuture<'a, Result<(), io::Error>> {
     async move {
         recreate_dir(out_dir).await?;
 

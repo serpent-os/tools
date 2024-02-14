@@ -65,11 +65,7 @@ impl Plugin {
     }
 
     /// Returns a list of packages with matching `provider` and `flags`
-    pub async fn query_provider(
-        &self,
-        provider: &Provider,
-        flags: package::Flags,
-    ) -> package::Sorted<Vec<Package>> {
+    pub async fn query_provider(&self, provider: &Provider, flags: package::Flags) -> package::Sorted<Vec<Package>> {
         package::Sorted::new(match self {
             Plugin::Active(plugin) => plugin.query_provider(provider, flags).await,
             Plugin::Cobble(plugin) => plugin.query_provider(provider, flags),
@@ -161,11 +157,7 @@ pub mod test {
                 .collect()
         }
 
-        pub fn query_name(
-            &self,
-            package_name: &package::Name,
-            flags: package::Flags,
-        ) -> Vec<Package> {
+        pub fn query_name(&self, package_name: &package::Name, flags: package::Flags) -> Vec<Package> {
             self.packages
                 .iter()
                 .filter(|p| p.meta.name == *package_name && p.flags.contains(flags))

@@ -96,24 +96,12 @@ fn print_package(pkg: &Package) {
     print_paragraph(&pkg.meta.description);
     if !pkg.meta.dependencies.is_empty() {
         print_titled("Dependencies");
-        let deps = pkg
-            .meta
-            .dependencies
-            .iter()
-            .map(|d| d.to_string())
-            .sorted()
-            .join("\n");
+        let deps = pkg.meta.dependencies.iter().map(|d| d.to_string()).sorted().join("\n");
         print_paragraph(&deps);
     }
     if !pkg.meta.providers.is_empty() {
         print_titled("Providers");
-        let provs = pkg
-            .meta
-            .providers
-            .iter()
-            .map(|p| p.to_string())
-            .sorted()
-            .join("\n");
+        let provs = pkg.meta.providers.iter().map(|p| p.to_string()).sorted().join("\n");
         print_paragraph(&provs);
     }
 }

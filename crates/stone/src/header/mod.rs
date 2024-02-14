@@ -45,11 +45,7 @@ impl AgnosticHeader {
         let data = reader.read_array()?;
         let version = reader.read_array()?;
 
-        Ok(Self {
-            magic,
-            data,
-            version,
-        })
+        Ok(Self { magic, data, version })
     }
 
     fn encode<W: Write>(&self, writer: &mut W) -> Result<(), io::Error> {

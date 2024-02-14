@@ -36,10 +36,7 @@ pub fn print_to_columns<T: ColumnDisplay>(items: &[T]) {
     let terminal_width = term_size().width;
 
     // Figure render constraints
-    let largest_element = items
-        .iter()
-        .max_by_key(|p| p.get_display_width() + 3)
-        .unwrap();
+    let largest_element = items.iter().max_by_key(|p| p.get_display_width() + 3).unwrap();
     let largest_width = largest_element.get_display_width() + 6;
     let num_columns = max(1, terminal_width / largest_width);
     let height = ((items.len() as f32) / (num_columns as f32)).ceil() as usize;
@@ -58,11 +55,7 @@ pub fn print_to_columns<T: ColumnDisplay>(items: &[T]) {
                 } else {
                     Column::Nth(x)
                 };
-                state.display_column(
-                    &mut stdout,
-                    column,
-                    largest_width - state.get_display_width(),
-                );
+                state.display_column(&mut stdout, column, largest_width - state.get_display_width());
             }
         }
         println!();

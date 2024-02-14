@@ -29,24 +29,8 @@ pub fn calculate(builder: &Builder) -> Vec<&str> {
         packages.push(CCACHE_PACKAGE);
     }
 
-    packages.extend(
-        builder
-            .recipe
-            .parsed
-            .build
-            .build_deps
-            .iter()
-            .map(String::as_str),
-    );
-    packages.extend(
-        builder
-            .recipe
-            .parsed
-            .build
-            .check_deps
-            .iter()
-            .map(String::as_str),
-    );
+    packages.extend(builder.recipe.parsed.build.build_deps.iter().map(String::as_str));
+    packages.extend(builder.recipe.parsed.build.check_deps.iter().map(String::as_str));
 
     for upstream in &builder.recipe.parsed.upstreams {
         if let Upstream::Plain { uri, .. } = upstream {

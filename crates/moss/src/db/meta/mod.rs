@@ -338,11 +338,7 @@ impl Database {
         let mut transaction = pool.begin().await?;
 
         // Remove package (other tables cascade)
-        batch_remove_impl(
-            packages.iter().map(|(id, _)| id),
-            transaction.acquire().await?,
-        )
-        .await?;
+        batch_remove_impl(packages.iter().map(|(id, _)| id), transaction.acquire().await?).await?;
 
         // Create entry
         sqlx::QueryBuilder::new(
@@ -421,11 +417,7 @@ impl Database {
         // Dependencies
         let dependencies = packages
             .iter()
-            .flat_map(|(id, meta)| {
-                meta.dependencies
-                    .iter()
-                    .map(move |dependency| (id, dependency))
-            })
+            .flat_map(|(id, meta)| meta.dependencies.iter().map(move |dependency| (id, dependency)))
             .collect::<Vec<_>>();
         if !dependencies.is_empty() {
             sqlx::QueryBuilder::new(
@@ -469,10 +461,7 @@ impl Database {
         self.batch_remove(Some(package)).await
     }
 
-    pub async fn batch_remove(
-        &self,
-        packages: impl IntoIterator<Item = &package::Id>,
-    ) -> Result<(), Error> {
+    pub async fn batch_remove(&self, packages: impl IntoIterator<Item = &package::Id>) -> Result<(), Error> {
         let pool = self.pool.lock().await;
         batch_remove_impl(packages, &*pool).await
     }
@@ -582,21 +571,15 @@ mod test {
 
     #[tokio::test]
     async fn create_insert_select() {
-        let database =
-            Database::connect(SqliteConnectOptions::from_str("sqlite::memory:").unwrap())
-                .await
-                .unwrap();
+        let database = Database::connect(SqliteConnectOptions::from_str("sqlite::memory:").unwrap())
+            .await
+            .unwrap();
 
-        let bash_completion =
-            include_bytes!("../../../../../test/bash-completion-2.11-1-1-x86_64.stone");
+        let bash_completion = include_bytes!("../../../../../test/bash-completion-2.11-1-1-x86_64.stone");
 
         let mut stone = stone::read_bytes(bash_completion).unwrap();
 
-        let payloads = stone
-            .payloads()
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
+        let payloads = stone.payloads().unwrap().collect::<Result<Vec<_>, _>>().unwrap();
         let meta_payload = payloads.iter().find_map(PayloadKind::meta).unwrap();
         let meta = Meta::from_stone_payload(&meta_payload.body).unwrap();
 
@@ -614,9 +597,7 @@ mod test {
         let fetched = database.query(Some(lookup)).await.unwrap();
         assert_eq!(fetched.len(), 1);
 
-        batch_remove_impl([&id], &*database.pool.lock().await)
-            .await
-            .unwrap();
+        batch_remove_impl([&id], &*database.pool.lock().await).await.unwrap();
 
         let result = database.get(&id).await;
 

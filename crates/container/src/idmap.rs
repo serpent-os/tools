@@ -10,9 +10,7 @@ use thiserror::Error;
 pub fn idmap(pid: Pid) -> Result<(), Error> {
     let uid = getuid();
     let gid = getgid();
-    let username = User::from_uid(uid)?
-        .map(|user| user.name)
-        .unwrap_or_default();
+    let username = User::from_uid(uid)?.map(|user| user.name).unwrap_or_default();
 
     let subuid_mappings = load_sub_mappings(Kind::User, uid.as_raw(), &username)?;
     let subgid_mappings = load_sub_mappings(Kind::Group, gid.as_raw(), &username)?;

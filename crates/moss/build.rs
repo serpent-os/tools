@@ -7,8 +7,6 @@ fn main() {
 }
 
 fn git_hash() -> Result<String, Box<dyn std::error::Error>> {
-    let output = Command::new("git")
-        .args(["rev-parse", "--short", "HEAD"])
-        .output()?;
+    let output = Command::new("git").args(["rev-parse", "--short", "HEAD"]).output()?;
     Ok(String::from_utf8(output.stdout)?)
 }

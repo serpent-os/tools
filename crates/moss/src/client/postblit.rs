@@ -66,14 +66,12 @@ pub(super) async fn triggers<'a>(
 
     // Load appropriate triggers from their locations and convert back to a vec of Trigger
     let triggers = match scope {
-        TriggerScope::Transaction(install) => {
-            config::Manager::custom(install.staging_dir().join(trigger_root))
-                .load::<TransactionTrigger>()
-                .await
-                .into_iter()
-                .map(|t| t.0)
-                .collect_vec()
-        }
+        TriggerScope::Transaction(install) => config::Manager::custom(install.staging_dir().join(trigger_root))
+            .load::<TransactionTrigger>()
+            .await
+            .into_iter()
+            .map(|t| t.0)
+            .collect_vec(),
         TriggerScope::System(install) => config::Manager::custom(install.root.join(trigger_root))
             .load::<SystemTrigger>()
             .await
@@ -129,10 +127,7 @@ impl<'a> TriggerRunner<'a> {
 fn execute_trigger_directly(trigger: &TriggerCommand) -> Result<(), Error> {
     match &trigger.handler {
         Handler::Run { run, args } => {
-            let cmd = process::Command::new(run)
-                .args(args)
-                .current_dir("/")
-                .output()?;
+            let cmd = process::Command::new(run).args(args).current_dir("/").output()?;
 
             if let Some(code) = cmd.status.code() {
                 if code != 0 {

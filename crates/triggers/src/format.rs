@@ -44,9 +44,7 @@ impl Handler {
                     .collect();
                 Handler::Run { run, args }
             }
-            Handler::Delete { delete } => Handler::Delete {
-                delete: delete.clone(),
-            },
+            Handler::Delete { delete } => Handler::Delete { delete: delete.clone() },
         }
     }
 }
@@ -97,17 +95,13 @@ mod tests {
 
     #[test]
     fn test_trigger_file() {
-        let trigger: Trigger =
-            serde_yaml::from_str(include_str!("../../../test/trigger.yml")).unwrap();
+        let trigger: Trigger = serde_yaml::from_str(include_str!("../../../test/trigger.yml")).unwrap();
 
         let (pattern, _) = trigger.paths.iter().next().expect("Missing path entry");
         let result = pattern
             .match_path("/usr/lib/modules/6.6.7-267.current/kernel")
             .expect("Couldn't match path");
-        let version = result
-            .variables
-            .get("version")
-            .expect("Missing kernel version");
+        let version = result.variables.get("version").expect("Missing kernel version");
         assert_eq!(version, "6.6.7-267.current", "Wrong kernel version match");
         eprintln!("trigger: {trigger:?}");
         eprintln!("match: {result:?}");

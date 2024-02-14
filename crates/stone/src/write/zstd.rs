@@ -50,11 +50,7 @@ impl<'a, W: Write> Write for Writer<'a, W> {
             let remaining = self
                 .encoder
                 .context
-                .compress_stream2(
-                    &mut output_buffer,
-                    &mut input,
-                    ZSTD_EndDirective::ZSTD_e_continue,
-                )
+                .compress_stream2(&mut output_buffer, &mut input, ZSTD_EndDirective::ZSTD_e_continue)
                 .map_err(map_error_code)?;
 
             self.writer.write_all(output_buffer.as_slice())?;
@@ -126,9 +122,7 @@ impl Encoder {
         self.context
             .reset(ResetDirective::SessionOnly)
             .map_err(map_error_code)?;
-        self.context
-            .set_pledged_src_size(None)
-            .map_err(map_error_code)?;
+        self.context.set_pledged_src_size(None).map_err(map_error_code)?;
 
         Ok(())
     }

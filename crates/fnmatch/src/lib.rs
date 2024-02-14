@@ -62,9 +62,7 @@ impl<'a> Iterator for StringWalker<'a> {
             None
         } else {
             self.index += 1;
-            self.data
-                .get(self.index - 1..self.index)
-                .and_then(|s| s.chars().nth(0))
+            self.data.get(self.index - 1..self.index).and_then(|s| s.chars().nth(0))
         }
     }
 }
@@ -316,8 +314,7 @@ pub mod path_tests {
         assert!(version.is_some());
         assert_eq!(version.unwrap(), "6.2.6");
 
-        let wide =
-            k.match_path("/usr/lib/modules/6.6.67-51.kvm/kernel/net/netfilter/nft_hash.ko.zst");
+        let wide = k.match_path("/usr/lib/modules/6.6.67-51.kvm/kernel/net/netfilter/nft_hash.ko.zst");
         assert!(wide.is_none());
     }
 }

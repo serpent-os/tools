@@ -35,9 +35,7 @@ pub struct Reader<R> {
 }
 
 impl<R: Read + Seek> Reader<R> {
-    pub fn payloads(
-        &mut self,
-    ) -> Result<impl Iterator<Item = Result<PayloadKind, Error>> + '_, Error> {
+    pub fn payloads(&mut self) -> Result<impl Iterator<Item = Result<PayloadKind, Error>> + '_, Error> {
         if self.reader.stream_position()? != Header::SIZE as u64 {
             // Rewind to start of payloads
             self.reader.seek(SeekFrom::Start(Header::SIZE as u64))?;
@@ -47,11 +45,7 @@ impl<R: Read + Seek> Reader<R> {
             .flat_map(|_| PayloadKind::decode(&mut self.reader, &mut self.hasher).transpose()))
     }
 
-    pub fn unpack_content<W: Write>(
-        &mut self,
-        content: &Payload<Content>,
-        writer: &mut W,
-    ) -> Result<(), Error>
+    pub fn unpack_content<W: Write>(&mut self, content: &Payload<Content>, writer: &mut W) -> Result<(), Error>
     where
         W: Write,
     {
@@ -109,10 +103,7 @@ pub enum PayloadKind {
 }
 
 impl PayloadKind {
-    fn decode<R: Read + Seek>(
-        mut reader: R,
-        hasher: &mut digest::Hasher,
-    ) -> Result<Option<Self>, Error> {
+    fn decode<R: Read + Seek>(mut reader: R, hasher: &mut digest::Hasher) -> Result<Option<Self>, Error> {
         match payload::Header::decode(&mut reader) {
             Ok(header) => {
                 hasher.reset();
@@ -169,11 +160,7 @@ impl PayloadKind {
 
                 Ok(Some(payload))
             }
-            Err(payload::DecodeError::Io(error))
-                if error.kind() == io::ErrorKind::UnexpectedEof =>
-            {
-                Ok(None)
-            }
+            Err(payload::DecodeError::Io(error)) if error.kind() == io::ErrorKind::UnexpectedEof => Ok(None),
             Err(error) => Err(Error::PayloadDecode(error)),
         }
     }
@@ -254,8 +241,8 @@ mod test {
 
     /// Header for bash completion stone archive
     const BASH_TEST_STONE: [u8; 32] = [
-        0x0, 0x6d, 0x6f, 0x73, 0x0, 0x4, 0x0, 0x0, 0x1, 0x0, 0x0, 0x2, 0x0, 0x0, 0x3, 0x0, 0x0,
-        0x4, 0x0, 0x0, 0x5, 0x0, 0x0, 0x6, 0x0, 0x0, 0x7, 0x1, 0x0, 0x0, 0x0, 0x1,
+        0x0, 0x6d, 0x6f, 0x73, 0x0, 0x4, 0x0, 0x0, 0x1, 0x0, 0x0, 0x2, 0x0, 0x0, 0x3, 0x0, 0x0, 0x4, 0x0, 0x0, 0x5,
+        0x0, 0x0, 0x6, 0x0, 0x0, 0x7, 0x1, 0x0, 0x0, 0x0, 0x1,
     ];
 
     #[test]
@@ -266,10 +253,8 @@ mod test {
 
     #[test]
     fn read_bash_completion() {
-        let mut stone = read_bytes(include_bytes!(
-            "../../../../test/bash-completion-2.11-1-1-x86_64.stone"
-        ))
-        .expect("valid stone");
+        let mut stone =
+            read_bytes(include_bytes!("../../../../test/bash-completion-2.11-1-1-x86_64.stone")).expect("valid stone");
         assert_eq!(stone.header.version(), header::Version::V1);
 
         let payloads = stone
@@ -285,11 +270,7 @@ mod test {
                 .unpack_content(content, &mut unpacked_content)
                 .expect("valid content");
 
-            for index in payloads
-                .iter()
-                .filter_map(PayloadKind::index)
-                .flat_map(|p| &p.body)
-            {
+            for index in payloads.iter().filter_map(PayloadKind::index).flat_map(|p| &p.body) {
                 let content = &unpacked_content[index.start as usize..index.end as usize];
                 let digest = xxh3_128(content);
                 assert_eq!(digest, index.digest);

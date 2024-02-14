@@ -17,10 +17,9 @@ pub async fn populate(builder: &Builder, repositories: repository::Map) -> Resul
     // Recreate root
     util::recreate_dir(&rootfs).await?;
 
-    let mut moss_client =
-        moss::Client::with_explicit_repositories("boulder", &builder.env.moss_dir, repositories)
-            .await?
-            .ephemeral(&rootfs)?;
+    let mut moss_client = moss::Client::with_explicit_repositories("boulder", &builder.env.moss_dir, repositories)
+        .await?
+        .ephemeral(&rootfs)?;
 
     moss_client.install(&packages, true).await?;
 

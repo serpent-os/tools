@@ -111,10 +111,7 @@ pub trait Record: Sized {
     fn size(&self) -> usize;
 }
 
-pub fn decode_records<T: Record, R: Read>(
-    mut reader: R,
-    num_records: usize,
-) -> Result<Vec<T>, DecodeError> {
+pub fn decode_records<T: Record, R: Read>(mut reader: R, num_records: usize) -> Result<Vec<T>, DecodeError> {
     let mut records = Vec::with_capacity(num_records);
 
     for _ in 0..num_records {
@@ -124,10 +121,7 @@ pub fn decode_records<T: Record, R: Read>(
     Ok(records)
 }
 
-pub fn encode_records<T: Record, W: Write>(
-    writer: &mut W,
-    records: &[T],
-) -> Result<(), EncodeError> {
+pub fn encode_records<T: Record, W: Write>(writer: &mut W, records: &[T]) -> Result<(), EncodeError> {
     for record in records {
         record.encode(writer)?;
     }

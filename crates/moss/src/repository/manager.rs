@@ -18,10 +18,7 @@ use crate::repository::{self, Repository};
 
 enum Source {
     System(config::Manager),
-    Explicit {
-        identifier: String,
-        repos: repository::Map,
-    },
+    Explicit { identifier: String, repos: repository::Map },
 }
 
 impl Source {
@@ -46,10 +43,7 @@ impl Manager {
     }
 
     /// Create a [`Manager`] for the supplied [`Installation`] using system configurations
-    pub async fn system(
-        config: config::Manager,
-        installation: Installation,
-    ) -> Result<Self, Error> {
+    pub async fn system(config: config::Manager, installation: Installation) -> Result<Self, Error> {
         Self::new(Source::System(config), installation).await
     }
 
@@ -87,15 +81,14 @@ impl Manager {
         };
 
         // Open all repo meta dbs and collect into hash map
-        let repositories =
-            future::try_join_all(configs.into_iter().map(|(id, repository)| async {
-                let db = open_meta_db(source.identifier(), &repository, &installation).await?;
+        let repositories = future::try_join_all(configs.into_iter().map(|(id, repository)| async {
+            let db = open_meta_db(source.identifier(), &repository, &installation).await?;
 
-                Ok::<_, Error>((id.clone(), repository::Active { id, repository, db }))
-            }))
-            .await?
-            .into_iter()
-            .collect();
+            Ok::<_, Error>((id.clone(), repository::Active { id, repository, db }))
+        }))
+        .await?
+        .into_iter()
+        .collect();
 
         Ok(Self {
             source,
@@ -105,11 +98,7 @@ impl Manager {
     }
 
     /// Add a [`Repository`]
-    pub async fn add_repository(
-        &mut self,
-        id: repository::Id,
-        repository: Repository,
-    ) -> Result<(), Error> {
+    pub async fn add_repository(&mut self, id: repository::Id, repository: Repository) -> Result<(), Error> {
         let Source::System(config) = &self.source else {
             return Err(Error::ExplicitUnsupported);
         };
@@ -136,9 +125,9 @@ impl Manager {
     pub async fn refresh_all(&mut self) -> Result<(), Error> {
         // Fetch index file + add to meta_db
         future::try_join_all(
-            self.repositories.iter().map(|(id, state)| {
-                refresh_index(self.source.identifier(), state, &self.installation)
-            }),
+            self.repositories
+                .iter()
+                .map(|(id, state)| refresh_index(self.source.identifier(), state, &self.installation)),
         )
         .await?;
 
@@ -162,12 +151,8 @@ impl Manager {
     pub async fn ensure_all_initialized(&mut self) -> Result<(), Error> {
         let initialized = stream::iter(&self.repositories)
             .filter(|(id, state)| async {
-                let index_file = cache_dir(
-                    self.source.identifier(),
-                    &state.repository,
-                    &self.installation,
-                )
-                .join("stone.index");
+                let index_file =
+                    cache_dir(self.source.identifier(), &state.repository, &self.installation).join("stone.index");
 
                 !index_file.exists()
             })
@@ -204,17 +189,11 @@ impl Manager {
             return Ok(Removal::NotFound);
         };
 
-        let cache_dir = cache_dir(
-            self.source.identifier(),
-            &repo.repository,
-            &self.installation,
-        );
+        let cache_dir = cache_dir(self.source.identifier(), &repo.repository, &self.installation);
 
         // Remove cache
         if cache_dir.exists() {
-            fs::remove_dir_all(&cache_dir)
-                .await
-                .map_err(Error::RemoveDir)?;
+            fs::remove_dir_all(&cache_dir).await.map_err(Error::RemoveDir)?;
         }
 
         // Delete config, only succeeds for configs that live in their
@@ -228,18 +207,13 @@ impl Manager {
 
     /// List all of the known repositories
     pub fn list(&self) -> impl ExactSizeIterator<Item = (&repository::Id, &Repository)> {
-        self.repositories
-            .iter()
-            .map(|(id, state)| (id, &state.repository))
+        self.repositories.iter().map(|(id, state)| (id, &state.repository))
     }
 }
 
 /// Directory for the repo cached data (db & stone index), hashed by identifier & repo URI
 fn cache_dir(identifier: &str, repo: &Repository, installation: &Installation) -> PathBuf {
-    let hash = format!(
-        "{:02x}",
-        xxh3_64(format!("{}-{}", identifier, repo.uri).as_bytes())
-    );
+    let hash = format!("{:02x}", xxh3_64(format!("{}-{}", identifier, repo.uri).as_bytes()));
     installation.repo_path(hash)
 }
 
@@ -262,16 +236,10 @@ async fn open_meta_db(
 /// Fetches a stone index file from the repository URL,
 /// saves it to the repo installation path, then
 /// loads it's metadata into the meta db
-async fn refresh_index(
-    identifier: &str,
-    state: &repository::Active,
-    installation: &Installation,
-) -> Result<(), Error> {
+async fn refresh_index(identifier: &str, state: &repository::Active, installation: &Installation) -> Result<(), Error> {
     let out_dir = cache_dir(identifier, &state.repository, installation);
 
-    fs::create_dir_all(&out_dir)
-        .await
-        .map_err(Error::CreateDir)?;
+    fs::create_dir_all(&out_dir).await.map_err(Error::CreateDir)?;
 
     let out_path = out_dir.join("stone.index");
 
@@ -306,9 +274,10 @@ async fn refresh_index(
                     let meta = package::Meta::from_stone_payload(&payload.body)?;
 
                     // Create id from hash of meta
-                    let hash = meta.hash.clone().ok_or(Error::MissingMetaField(
-                        stone::payload::meta::Tag::PackageHash,
-                    ))?;
+                    let hash = meta
+                        .hash
+                        .clone()
+                        .ok_or(Error::MissingMetaField(stone::payload::meta::Tag::PackageHash))?;
                     let id = package::Id::from(hash);
 
                     Ok((id, meta))
