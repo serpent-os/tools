@@ -4,10 +4,12 @@
 
 use std::collections::HashSet;
 use std::path::Path;
+use std::sync::Arc;
 
 use sqlx::{sqlite::SqliteConnectOptions, Acquire, Pool, Sqlite};
 use sqlx::{Executor, QueryBuilder};
 use thiserror::Error;
+use tokio::sync::Mutex;
 
 use crate::db::Encoding;
 use crate::package::{self, Meta};
@@ -100,7 +102,7 @@ impl Filter {
 
 #[derive(Debug, Clone)]
 pub struct Database {
-    pool: Pool<Sqlite>,
+    pool: Arc<Mutex<Pool<Sqlite>>>,
 }
 
 impl Database {
@@ -119,16 +121,21 @@ impl Database {
 
         sqlx::migrate!("src/db/meta/migrations").run(&pool).await?;
 
-        Ok(Self { pool })
+        Ok(Self {
+            pool: Arc::new(Mutex::new(pool)),
+        })
     }
 
     pub async fn wipe(&self) -> Result<(), Error> {
+        let pool = self.pool.lock().await;
         // Other tables cascade delete so we only need to truncate `meta`
-        sqlx::query("DELETE FROM meta;").execute(&self.pool).await?;
+        sqlx::query("DELETE FROM meta;").execute(&*pool).await?;
         Ok(())
     }
 
     pub async fn query(&self, filter: Option<Filter>) -> Result<Vec<(package::Id, Meta)>, Error> {
+        let pool = self.pool.lock().await;
+
         let mut entry_query = sqlx::QueryBuilder::new(
             "
             SELECT package,
@@ -176,20 +183,22 @@ impl Database {
             filter.append(Table::Providers, &mut providers_query);
         }
 
-        let (entries, licenses, dependencies, providers) = futures::try_join!(
-            entry_query
-                .build_query_as::<encoding::Entry>()
-                .fetch_all(&self.pool),
-            licenses_query
-                .build_query_as::<encoding::License>()
-                .fetch_all(&self.pool),
-            dependencies_query
-                .build_query_as::<encoding::Dependency>()
-                .fetch_all(&self.pool),
-            providers_query
-                .build_query_as::<encoding::Provider>()
-                .fetch_all(&self.pool),
-        )?;
+        let entries = entry_query
+            .build_query_as::<encoding::Entry>()
+            .fetch_all(&*pool)
+            .await?;
+        let licenses = licenses_query
+            .build_query_as::<encoding::License>()
+            .fetch_all(&*pool)
+            .await?;
+        let dependencies = dependencies_query
+            .build_query_as::<encoding::Dependency>()
+            .fetch_all(&*pool)
+            .await?;
+        let providers = providers_query
+            .build_query_as::<encoding::Provider>()
+            .fetch_all(&*pool)
+            .await?;
 
         Ok(entries
             .into_iter()
@@ -231,6 +240,8 @@ impl Database {
     }
 
     pub async fn get(&self, package: &package::Id) -> Result<Meta, Error> {
+        let pool = self.pool.lock().await;
+
         let entry_query = sqlx::query_as::<_, encoding::Entry>(
             "
             SELECT package, 
@@ -279,12 +290,10 @@ impl Database {
         )
         .bind(package.encode());
 
-        let (entry, licenses, dependencies, providers) = futures::try_join!(
-            entry_query.fetch_one(&self.pool),
-            licenses_query.fetch_all(&self.pool),
-            dependencies_query.fetch_all(&self.pool),
-            providers_query.fetch_all(&self.pool),
-        )?;
+        let entry = entry_query.fetch_one(&*pool).await?;
+        let licenses = licenses_query.fetch_all(&*pool).await?;
+        let dependencies = dependencies_query.fetch_all(&*pool).await?;
+        let providers = providers_query.fetch_all(&*pool).await?;
 
         Ok(Meta {
             name: entry.name.0,
@@ -306,6 +315,7 @@ impl Database {
     }
 
     pub async fn file_hashes(&self) -> Result<HashSet<String>, Error> {
+        let pool = self.pool.lock().await;
         let hashes = sqlx::query_as::<_, (String,)>(
             "
             SELECT DISTINCT hash
@@ -313,7 +323,7 @@ impl Database {
             WHERE hash IS NOT NULL;
             ",
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&*pool)
         .await?;
 
         Ok(hashes.into_iter().map(|(hash,)| hash).collect())
@@ -324,7 +334,8 @@ impl Database {
     }
 
     pub async fn batch_add(&self, packages: Vec<(package::Id, Meta)>) -> Result<(), Error> {
-        let mut transaction = self.pool.begin().await?;
+        let pool = self.pool.lock().await;
+        let mut transaction = pool.begin().await?;
 
         // Remove package (other tables cascade)
         batch_remove_impl(
@@ -462,7 +473,8 @@ impl Database {
         &self,
         packages: impl IntoIterator<Item = &package::Id>,
     ) -> Result<(), Error> {
-        batch_remove_impl(packages, &self.pool).await
+        let pool = self.pool.lock().await;
+        batch_remove_impl(packages, &*pool).await
     }
 }
 
@@ -602,7 +614,9 @@ mod test {
         let fetched = database.query(Some(lookup)).await.unwrap();
         assert_eq!(fetched.len(), 1);
 
-        batch_remove_impl([&id], &database.pool).await.unwrap();
+        batch_remove_impl([&id], &*database.pool.lock().await)
+            .await
+            .unwrap();
 
         let result = database.get(&id).await;
 
