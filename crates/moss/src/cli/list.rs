@@ -34,7 +34,7 @@ pub fn command() -> Command {
         .subcommand(
             Command::new("sync")
                 .about("List packages with sync changes")
-                .visible_alias("ls")
+                .visible_aliases(["ls", "lu"])
                 .arg(arg!(--"upgrade-only" "Only sync packages that have a version upgrade")),
         )
 }

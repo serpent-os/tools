@@ -24,6 +24,7 @@ use tui::pretty::print_to_columns;
 
 pub fn command() -> Command {
     Command::new("sync")
+        .visible_alias("up")
         .about("Sync packages")
         .long_about("Sync package selections with candidates from the highest priority repository")
         .arg(arg!(--"upgrade-only" "Only sync packages that have a version upgrade"))

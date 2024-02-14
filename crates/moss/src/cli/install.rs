@@ -11,6 +11,7 @@ pub use moss::client::install::Error;
 
 pub fn command() -> Command {
     Command::new("install")
+        .visible_alias("it")
         .about("Install packages")
         .long_about("Install the requested software to the local system")
         .arg(arg!(<NAME> ... "packages to install").value_parser(value_parser!(String)))

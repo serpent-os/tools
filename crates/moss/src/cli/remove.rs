@@ -24,6 +24,7 @@ use tui::{
 
 pub fn command() -> Command {
     Command::new("remove")
+        .visible_alias("rm")
         .about("Remove packages")
         .long_about("Remove packages by name")
         .arg(arg!(<NAME> ... "packages to install").value_parser(clap::value_parser!(String)))
