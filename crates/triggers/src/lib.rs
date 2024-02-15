@@ -82,6 +82,11 @@ impl<'a> Collection<'a> {
     pub fn bake(&self) -> Result<Vec<TriggerCommand>, Error> {
         let mut graph: dag::Dag<String> = dag::Dag::new();
 
+        // install first..
+        for (id, _, _) in self.hits.iter() {
+            let _ = graph.add_node_or_get_index(id.clone());
+        }
+
         // OK, now lets order by deps..
         for (id, _, _) in self.hits.iter() {
             let lookup = self
@@ -98,7 +103,7 @@ impl<'a> Collection<'a> {
                 .and_then(|b| self.triggers.get(b))
                 .map(|f| graph.add_node_or_get_index(f.name.clone()))
             {
-                graph.add_edge(before, node);
+                graph.add_edge(node, before);
             }
 
             // This runs *after* A
@@ -108,17 +113,18 @@ impl<'a> Collection<'a> {
                 .and_then(|a| self.triggers.get(a))
                 .map(|f| graph.add_node_or_get_index(f.name.clone()))
             {
-                graph.add_edge(node, after);
+                graph.add_edge(after, node);
             }
         }
 
         // Recollect in dependency order
         let built_triggers = graph
             .topo()
-            .flat_map(|i| self.hits.iter().filter(move |(id, _, _)| i == id));
+            .flat_map(|i| self.hits.iter().filter(move |(id, _, _)| i == id))
+            .collect::<Vec<_>>();
 
         let mut runnables: BTreeMap<format::Handler, TriggerCommand> = BTreeMap::new();
-        for (_, hit, handler) in built_triggers {
+        for (_, hit, handler) in built_triggers.iter() {
             let handler = handler.substituted(hit);
 
             if let Some(store) = runnables.get_mut(&handler) {
@@ -134,6 +140,11 @@ impl<'a> Collection<'a> {
             }
         }
 
-        Ok(runnables.values().cloned().collect::<Vec<_>>())
+        let dep_preserved = built_triggers
+            .into_iter()
+            .filter_map(|(_, _, h)| runnables.remove(h))
+            .collect::<Vec<_>>();
+
+        Ok(dep_preserved)
     }
 }
