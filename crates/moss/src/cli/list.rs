@@ -24,7 +24,8 @@ pub fn command() -> Command {
         .subcommand(
             Command::new("installed")
                 .about("List all installed packages")
-                .visible_alias("li"),
+                .visible_alias("li")
+                .arg(arg!(-e --"explicit" "List explicit packages only")),
         )
         .subcommand(
             Command::new("available")
@@ -50,7 +51,14 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
 
     let (filter_flags, sync) = match args.subcommand() {
         Some(("available", _)) => (Flags::AVAILABLE, None),
-        Some(("installed", _)) => (Flags::INSTALLED, None),
+        Some(("installed", args)) => {
+            let flags = if *args.get_one::<bool>("explicit").unwrap() {
+                Flags::INSTALLED | Flags::EXPLICIT
+            } else {
+                Flags::INSTALLED
+            };
+            (flags, None)
+        }
         Some(("sync", args)) => {
             let sync = if *args.get_one::<bool>("upgrade-only").unwrap() {
                 Sync::Upgrades
