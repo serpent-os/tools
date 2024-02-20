@@ -12,7 +12,8 @@ use stone_recipe::{script, tuning, Script, Upstream};
 use thiserror::Error;
 
 pub use self::step::Step;
-use crate::{architecture::BuildTarget, pgo, util, Macros, Paths, Recipe};
+use crate::build::pgo;
+use crate::{architecture::BuildTarget, util, Macros, Paths, Recipe};
 
 mod step;
 

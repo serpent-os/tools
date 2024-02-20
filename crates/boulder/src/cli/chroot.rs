@@ -6,7 +6,7 @@ use std::{fs, io, path::PathBuf, process};
 
 use boulder::{
     architecture::{self, BuildTarget},
-    builder, container, job, macros, recipe, Env, Macros, Paths, Recipe,
+    build, container, macros, recipe, Env, Macros, Paths, Recipe,
 };
 use clap::Parser;
 use thiserror::Error;
@@ -43,7 +43,7 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
     // The step doesn't matter, but we use `prepare`
     // since it uses hardcoded content that's always
     // available to create a script from
-    let script = job::Step::Prepare
+    let script = build::job::Step::Prepare
         .script(
             BuildTarget::Native(architecture::host()),
             None,
@@ -54,7 +54,7 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
         )
         .map_err(Error::BuildScript)?
         .expect("script always available for prepare step");
-    let profile = &builder::build_profile(&script);
+    let profile = &build::format_profile(&script);
 
     let home = &paths.build().guest;
 
@@ -88,7 +88,7 @@ pub enum Error {
     #[error("macros")]
     Macros(#[from] macros::Error),
     #[error("build script")]
-    BuildScript(#[source] job::Error),
+    BuildScript(#[source] build::job::Error),
     #[error("recipe")]
     Recipe(#[from] recipe::Error),
     #[error("io")]

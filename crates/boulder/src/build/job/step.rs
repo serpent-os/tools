@@ -14,7 +14,8 @@ use stone_recipe::{
 use tui::Stylize;
 
 use super::{work_dir, Error};
-use crate::{architecture::BuildTarget, pgo, util, Macros, Paths, Recipe};
+use crate::build::pgo;
+use crate::{architecture::BuildTarget, util, Macros, Paths, Recipe};
 
 pub fn list(pgo_stage: Option<pgo::Stage>) -> Vec<Step> {
     if matches!(pgo_stage, Some(pgo::Stage::One | pgo::Stage::Two)) {

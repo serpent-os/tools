@@ -95,6 +95,11 @@ impl Parser {
             resolved_definitions,
         })
     }
+
+    pub fn parse_content(&self, input: &str) -> Result<String, Error> {
+        parse_content_only(input, &self.actions, &self.definitions, &mut Default::default())
+            .map(Option::unwrap_or_default)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -15,6 +15,7 @@ yaml = { path = "../yaml" }
 
 clap.workspace = true
 dirs.workspace = true
+glob.workspace = true
 futures.workspace = true
 hex.workspace = true
 itertools.workspace = true

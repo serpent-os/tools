@@ -21,11 +21,18 @@ use stone_recipe::{
 use thiserror::Error;
 use tui::Stylize;
 
+pub mod job;
+mod pgo;
+mod root;
+mod upstream;
+
+use self::job::Job;
 use crate::{
     architecture::BuildTarget,
     container::{self, ExecError},
-    job::{self, Step},
-    macros, pgo, profile, recipe, root, upstream, util, Env, Job, Macros, Paths, Recipe, Runtime,
+    macros,
+    package::{self, Packager},
+    profile, recipe, util, Env, Macros, Paths, Recipe, Runtime,
 };
 
 pub struct Builder {
@@ -113,7 +120,7 @@ impl Builder {
         Ok(())
     }
 
-    pub fn build(self) -> Result<(), Error> {
+    pub fn build(self) -> Result<Packager, Error> {
         container::exec(&self.paths, self.recipe.parsed.options.networking, || {
             // We're now in the container =)
 
@@ -186,7 +193,7 @@ impl Builder {
                                     );
 
                                     // Write env to $HOME/.profile
-                                    std::fs::write(build_dir.join(".profile"), build_profile(script))?;
+                                    std::fs::write(build_dir.join(".profile"), format_profile(script))?;
 
                                     let mut command = process::Command::new("/bin/bash")
                                         .arg("--login")
@@ -247,12 +254,15 @@ impl Builder {
 
             Ok(())
         })?;
-        Ok(())
+
+        let packager = Packager::new(self.recipe, self.macros, self.targets)?;
+
+        Ok(packager)
     }
 }
 
 fn logged(
-    step: Step,
+    step: job::Step,
     is_pgo: bool,
     command: &str,
     f: impl FnOnce(&mut process::Command) -> &mut process::Command,
@@ -281,7 +291,7 @@ fn logged(
     Ok(result)
 }
 
-fn log<R>(step: Step, is_pgo: bool, pipe: R) -> thread::JoinHandle<()>
+fn log<R>(step: job::Step, is_pgo: bool, pipe: R) -> thread::JoinHandle<()>
 where
     R: io::Read + Send + 'static,
 {
@@ -300,7 +310,7 @@ where
     })
 }
 
-pub fn build_profile(script: &Script) -> String {
+pub fn format_profile(script: &Script) -> String {
     let env = script
         .env
         .as_deref()
@@ -324,7 +334,12 @@ pub fn build_profile(script: &Script) -> String {
     format!("{env}\n{action_functions}\n{definition_vars}")
 }
 
-fn breakpoint_line(breakpoint: &Breakpoint, recipe: &Recipe, build_target: BuildTarget, step: Step) -> Option<usize> {
+fn breakpoint_line(
+    breakpoint: &Breakpoint,
+    recipe: &Recipe,
+    build_target: BuildTarget,
+    step: job::Step,
+) -> Option<usize> {
     let profile = recipe.build_target_profile_key(build_target);
 
     let has_key = |line: &str, key: &str| {
@@ -359,12 +374,12 @@ fn breakpoint_line(breakpoint: &Breakpoint, recipe: &Recipe, build_target: Build
 
     let step = match step {
         // Internal step, no breakpoint will occur
-        Step::Prepare => return None,
-        Step::Setup => "setup",
-        Step::Build => "build",
-        Step::Install => "install",
-        Step::Check => "check",
-        Step::Workload => "workload",
+        job::Step::Prepare => return None,
+        job::Step::Setup => "setup",
+        job::Step::Build => "build",
+        job::Step::Install => "install",
+        job::Step::Check => "check",
+        job::Step::Workload => "workload",
     };
 
     lines.find_map(|(mut line_num, line)| {
@@ -404,6 +419,8 @@ pub enum Error {
     Container(#[from] container::Error),
     #[error("recipe")]
     Recipe(#[from] recipe::Error),
+    #[error("create packager")]
+    Package(#[from] package::Error),
     #[error("io")]
     Io(#[from] io::Error),
 }
