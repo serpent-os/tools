@@ -148,11 +148,6 @@ impl Step {
         parser.add_definition("buildroot", build_dir.display());
         parser.add_definition("workdir", work_dir.display());
 
-        // TODO: Remaining definitions & tune flags
-        parser.add_definition("cflags", "");
-        parser.add_definition("cxxflags", "");
-        parser.add_definition("ldflags", "");
-
         parser.add_definition("compiler_cache", "/mason/ccache");
 
         let path = if ccache {
@@ -170,6 +165,7 @@ impl Step {
             parser.add_definition("compiler_cpp", "clang -E -");
             parser.add_definition("compiler_objcpp", "clang -E -");
             parser.add_definition("compiler_objcxxcpp", "clang++ -E");
+            parser.add_definition("compiler_d", "ldc2");
             parser.add_definition("compiler_ar", "llvm-ar");
             parser.add_definition("compiler_ld", "ld.lld");
             parser.add_definition("compiler_objcopy", "llvm-objcopy");
@@ -185,6 +181,7 @@ impl Step {
             parser.add_definition("compiler_cpp", "gcc -E");
             parser.add_definition("compiler_objcpp", "gcc -E");
             parser.add_definition("compiler_objcxxcpp", "g++ -E");
+            parser.add_definition("compiler_d", "ldc2"); // FIXME: GDC
             parser.add_definition("compiler_ar", "gcc-ar");
             parser.add_definition("compiler_ld", "ld.bfd");
             parser.add_definition("compiler_objcopy", "objcopy");
@@ -342,10 +339,16 @@ fn add_tuning(
             .iter()
             .filter_map(|flag| flag.get(tuning::CompilerFlag::Ld, toolchain)),
     );
+    let dflags = fmt_flags(
+        flags
+            .iter()
+            .filter_map(|flag| flag.get(tuning::CompilerFlag::D, toolchain)),
+    );
 
     parser.add_definition("cflags", cflags);
     parser.add_definition("cxxflags", cxxflags);
     parser.add_definition("ldflags", ldflags);
+    parser.add_definition("dflags", dflags);
 
     Ok(())
 }
