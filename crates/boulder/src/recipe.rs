@@ -10,6 +10,7 @@ use crate::architecture::{self, BuildTarget};
 
 pub type Parsed = stone_recipe::Recipe;
 
+#[derive(Debug)]
 pub struct Recipe {
     pub path: PathBuf,
     pub source: String,

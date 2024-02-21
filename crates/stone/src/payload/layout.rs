@@ -60,15 +60,15 @@ impl Entry {
         }
     }
 
-    fn target(&self) -> Vec<u8> {
+    pub fn target(&self) -> &str {
         match self {
-            Entry::Regular(_, target) => target.as_bytes().to_vec(),
-            Entry::Symlink(_, target) => target.as_bytes().to_vec(),
-            Entry::Directory(target) => target.as_bytes().to_vec(),
-            Entry::CharacterDevice(target) => target.as_bytes().to_vec(),
-            Entry::BlockDevice(target) => target.as_bytes().to_vec(),
-            Entry::Fifo(target) => target.as_bytes().to_vec(),
-            Entry::Socket(target) => target.as_bytes().to_vec(),
+            Entry::Regular(_, target) => target,
+            Entry::Symlink(_, target) => target,
+            Entry::Directory(target) => target,
+            Entry::CharacterDevice(target) => target,
+            Entry::BlockDevice(target) => target,
+            Entry::Fifo(target) => target,
+            Entry::Socket(target) => target,
         }
     }
 
@@ -163,7 +163,7 @@ impl Record for Layout {
         writer.write_u8(self.entry.file_type())?;
         writer.write_array([0; 11])?;
         writer.write_all(&source)?;
-        writer.write_all(&target)?;
+        writer.write_all(target.as_bytes())?;
 
         Ok(())
     }

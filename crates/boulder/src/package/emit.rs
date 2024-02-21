@@ -10,9 +10,13 @@ use itertools::Itertools;
 use moss::{package::Meta, stone, Dependency};
 use thiserror::Error;
 
+use self::manifest::Manifest;
 use super::collect::PathInfo;
-use crate::{architecture, Architecture, Paths};
+use crate::{architecture, Architecture, Paths, Recipe};
 
+mod manifest;
+
+#[derive(Debug)]
 pub struct Package {
     pub name: String,
     pub build_release: u64,
@@ -39,24 +43,65 @@ impl Package {
         }
     }
 
+    pub fn is_dbginfo(&self) -> bool {
+        self.name.ends_with("-dbginfo")
+    }
+
     pub fn filename(&self) -> String {
         format!(
             "{}-{}-{}-{}-{}.stone",
             self.name, self.source.version, self.source.release, self.build_release, self.architecture
         )
     }
+
+    pub fn meta(&self) -> Meta {
+        Meta {
+            name: self.name.clone().into(),
+            version_identifier: self.source.version.clone(),
+            source_release: self.source.release,
+            build_release: self.build_release,
+            architecture: self.architecture.to_string(),
+            summary: self.definition.summary.clone().unwrap_or_default(),
+            description: self.definition.description.clone().unwrap_or_default(),
+            source_id: self.source.name.clone(),
+            homepage: self.source.homepage.clone(),
+            licenses: self.source.license.clone().into_iter().sorted().collect(),
+            // TODO: Deps from analyzer
+            dependencies: self
+                .definition
+                .run_deps
+                .clone()
+                .into_iter()
+                .filter_map(|dep| dep.parse::<Dependency>().ok())
+                .sorted_by_key(|dep| dep.to_string())
+                .collect(),
+            // TODO: Providers from analyzer
+            providers: Default::default(),
+            uri: None,
+            hash: None,
+            download_size: None,
+        }
+    }
 }
 
-// TODO: Add binary & json manifest
-pub fn emit(paths: &Paths, packages: Vec<Package>) -> Result<(), Error> {
+pub fn emit(paths: &Paths, recipe: &Recipe, packages: &[Package]) -> Result<(), Error> {
+    let mut manfiest = Manifest::new(paths, recipe, architecture::host());
+
     for package in packages {
+        if !package.is_dbginfo() {
+            manfiest.add_package(package);
+        }
+
         emit_package(paths, package)?;
     }
+
+    manfiest.write_binary()?;
+    manfiest.write_json()?;
 
     Ok(())
 }
 
-fn emit_package(paths: &Paths, package: Package) -> Result<(), Error> {
+fn emit_package(paths: &Paths, package: &Package) -> Result<(), Error> {
     let filename = package.filename();
 
     // Output file to artefacts directory
@@ -71,32 +116,8 @@ fn emit_package(paths: &Paths, package: Package) -> Result<(), Error> {
 
     // Add metadata
     {
-        let metadata = Meta {
-            name: package.name.into(),
-            version_identifier: package.source.version,
-            source_release: package.source.release,
-            build_release: package.build_release,
-            architecture: package.architecture.to_string(),
-            summary: package.definition.summary.unwrap_or_default(),
-            description: package.definition.description.unwrap_or_default(),
-            source_id: package.source.name,
-            homepage: package.source.homepage,
-            licenses: package.source.license.into_iter().sorted().collect(),
-            // TODO: Deps from analyzer
-            dependencies: package
-                .definition
-                .run_deps
-                .into_iter()
-                .filter_map(|dep| dep.parse::<Dependency>().ok())
-                .sorted_by_key(|dep| dep.to_string())
-                .collect(),
-            // TODO: Providers from analyzer
-            providers: Default::default(),
-            uri: None,
-            hash: None,
-            download_size: None,
-        };
-        writer.add_payload(metadata.to_stone_payload().as_slice())?;
+        let meta = package.meta();
+        writer.add_payload(meta.to_stone_payload().as_slice())?;
     }
 
     // Add layouts
@@ -116,7 +137,7 @@ fn emit_package(paths: &Paths, package: Package) -> Result<(), Error> {
     // Sort all files by size, largest to smallest
     let files = package
         .paths
-        .into_iter()
+        .iter()
         .filter(|p| p.is_file())
         .sorted_by(|a, b| a.size.cmp(&b.size).reverse())
         .collect::<Vec<_>>();
@@ -127,7 +148,7 @@ fn emit_package(paths: &Paths, package: Package) -> Result<(), Error> {
 
     // Add each file content
     for info in files {
-        let mut file = File::open(info.path)?;
+        let mut file = File::open(&info.path)?;
 
         writer.add_content(&mut file)?;
     }
@@ -146,6 +167,8 @@ fn emit_package(paths: &Paths, package: Package) -> Result<(), Error> {
 pub enum Error {
     #[error("stone binary writer")]
     StoneBinaryWriter(#[from] stone::write::Error),
+    #[error("manifest")]
+    Manifest(#[from] manifest::Error),
     #[error("io")]
     Io(#[from] io::Error),
 }

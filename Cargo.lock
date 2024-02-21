@@ -205,6 +205,7 @@ dependencies = [
  "moss",
  "nix",
  "serde",
+ "serde_json",
  "serde_yaml",
  "sha2",
  "stone_recipe",

@@ -84,9 +84,9 @@ impl Packager {
                         paths,
                     ))
                 })
-                .collect();
+                .collect::<Vec<_>>();
 
-            emit(&self.paths, packages_to_emit).map_err(Error::Emit)?;
+            emit(&self.paths, &self.recipe, &packages_to_emit).map_err(Error::Emit)?;
 
             Ok(()) as Result<(), Error>
         })?;
