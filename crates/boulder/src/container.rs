@@ -2,19 +2,22 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::io;
-
 use container::Container;
-use nix::sys::signal::Signal;
 use thiserror::Error;
 
 use crate::Paths;
 
-pub fn exec(paths: &Paths, networking: bool, f: impl FnMut() -> Result<(), ExecError>) -> Result<(), Error> {
+pub fn exec<E>(paths: &Paths, networking: bool, f: impl FnMut() -> Result<(), E>) -> Result<(), Error>
+where
+    E: std::error::Error + 'static,
+{
     run(paths, networking, f)
 }
 
-fn run(paths: &Paths, networking: bool, f: impl FnMut() -> Result<(), ExecError>) -> Result<(), Error> {
+fn run<E>(paths: &Paths, networking: bool, f: impl FnMut() -> Result<(), E>) -> Result<(), Error>
+where
+    E: std::error::Error + 'static,
+{
     let rootfs = paths.rootfs().host;
     let artefacts = paths.artefacts();
     let build = paths.build();
@@ -30,7 +33,7 @@ fn run(paths: &Paths, networking: bool, f: impl FnMut() -> Result<(), ExecError>
         .bind_rw(&build.host, &build.guest)
         .bind_rw(&compiler.host, &compiler.guest)
         .bind_ro(&recipe.host, &recipe.guest)
-        .run::<ExecError>(f)?;
+        .run::<E>(f)?;
 
     Ok(())
 }
@@ -39,18 +42,4 @@ fn run(paths: &Paths, networking: bool, f: impl FnMut() -> Result<(), ExecError>
 pub enum Error {
     #[error(transparent)]
     Container(#[from] container::Error),
-}
-
-#[derive(Debug, Error)]
-pub enum ExecError {
-    #[error("failed with status code {0}")]
-    Code(i32),
-    #[error("stopped by signal {}", .0.as_str())]
-    Signal(Signal),
-    #[error("stopped by unknown signal")]
-    UnknownSignal,
-    #[error(transparent)]
-    Nix(#[from] nix::Error),
-    #[error(transparent)]
-    Io(#[from] io::Error),
 }

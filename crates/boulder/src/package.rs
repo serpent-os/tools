@@ -1,23 +1,36 @@
-use std::collections::{hash_map, HashMap};
+// SPDX-FileCopyrightText: Copyright © 2020-2024 Serpent OS Developers
+//
+// SPDX-License-Identifier: MPL-2.0
+use std::{
+    collections::{hash_map, HashMap},
+    fs, io,
+};
 
 use itertools::Itertools;
+use moss::stone::write::digest;
 use stone_recipe::{script, Package};
 use thiserror::Error;
 
-use crate::{build, Macros, Recipe};
+use crate::{build, container, util, Macros, Paths, Recipe};
 
-pub use self::matcher::Matcher;
+use self::collect::Collector;
+use self::emit::emit;
 
-pub mod matcher;
+mod analysis;
+mod collect;
+mod emit;
 
 pub struct Packager {
-    packages: HashMap<String, Package>,
-    matcher: Matcher,
+    paths: Paths,
     recipe: Recipe,
+    packages: HashMap<String, Package>,
+    collector: Collector,
 }
 
 impl Packager {
-    pub fn new(recipe: Recipe, macros: Macros, targets: Vec<build::Target>) -> Result<Self, Error> {
+    pub fn new(paths: Paths, recipe: Recipe, macros: Macros, targets: Vec<build::Target>) -> Result<Self, Error> {
+        let mut collector = Collector::default();
+
         // Arch names used to parse [`Marcos`] for package templates
         //
         // We always use "base" plus whatever build targets we've built
@@ -25,29 +38,59 @@ impl Packager {
             .into_iter()
             .chain(targets.into_iter().map(|target| target.build_target.to_string()));
 
-        // Resolves all package templates from arch macros + recipe file
-        let packages = resolve_packages(arches, &macros, &recipe)?;
-
-        let mut matcher = Matcher::default();
-
-        // Add all package files to the matcher
-        for (name, package) in &packages {
-            for path in &package.paths {
-                matcher.add_rule(matcher::Rule {
-                    pattern: path.path.clone(),
-                    target: name.clone(),
-                });
-            }
-        }
+        // Resolves all package templates from arch macros + recipe file. Also adds
+        // package paths to [`Collector`]
+        let packages = resolve_packages(arches, &macros, &recipe, &mut collector)?;
 
         Ok(Self {
-            matcher,
-            packages,
+            paths,
             recipe,
+            collector,
+            packages,
         })
     }
 
-    pub fn package(self) -> Result<(), Error> {
+    pub fn package(mut self) -> Result<(), Error> {
+        // Executed in guest container since file permissions may be borked
+        // for host if run rootless
+        container::exec(&self.paths, false, || {
+            let root = self.paths.install().guest;
+
+            // Hasher used for calculating file digests
+            let mut hasher = digest::Hasher::new();
+
+            // Collect all paths under install root and group them by
+            // the package template they match against
+            let paths = self
+                .collector
+                .paths(&root, None, &mut hasher)
+                .map_err(Error::CollectPaths)?
+                .into_iter()
+                .into_group_map();
+
+            // Combine paths per package with the package definition
+            let packages_to_emit = paths
+                .into_iter()
+                .filter_map(|(name, paths)| {
+                    let definition = self.packages.remove(&name)?;
+
+                    Some(emit::Package::new(
+                        name,
+                        self.recipe.parsed.source.clone(),
+                        definition,
+                        paths,
+                    ))
+                })
+                .collect();
+
+            emit(&self.paths, packages_to_emit).map_err(Error::Emit)?;
+
+            Ok(()) as Result<(), Error>
+        })?;
+
+        // We've exited container, sync artefacts to host
+        sync_artefacts(&self.paths).map_err(Error::SyncArtefacts)?;
+
         Ok(())
     }
 }
@@ -59,6 +102,7 @@ fn resolve_packages(
     arches: impl IntoIterator<Item = String>,
     macros: &Macros,
     recipe: &Recipe,
+    collector: &mut Collector,
 ) -> Result<HashMap<String, Package>, Error> {
     let mut parser = script::Parser::new();
     parser.add_definition("name", &recipe.parsed.source.name);
@@ -95,6 +139,14 @@ fn resolve_packages(
                 Ok(path)
             })
             .collect::<Result<_, Error>>()?;
+
+        // Add each path to collector
+        for path in &package.paths {
+            collector.add_rule(collect::Rule {
+                pattern: path.path.clone(),
+                package: name.clone(),
+            });
+        }
 
         match packages.entry(name.clone()) {
             hash_map::Entry::Vacant(entry) => {
@@ -140,8 +192,31 @@ fn resolve_packages(
     Ok(packages)
 }
 
+fn sync_artefacts(paths: &Paths) -> Result<(), io::Error> {
+    for path in util::sync::enumerate_files(&paths.artefacts().host, |_| true)? {
+        let filename = path.file_name().and_then(|p| p.to_str()).unwrap_or_default();
+
+        let target = paths.recipe().host.join(filename);
+
+        if target.exists() {
+            fs::remove_file(&target)?;
+        }
+
+        util::sync::hardlink_or_copy(&path, &target)?;
+    }
+    Ok(())
+}
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("script")]
     Script(#[from] script::Error),
+    #[error("collect install paths")]
+    CollectPaths(#[source] io::Error),
+    #[error("sync artefacts")]
+    SyncArtefacts(#[source] io::Error),
+    #[error("emit packages")]
+    Emit(#[from] emit::Error),
+    #[error("container")]
+    Container(#[from] container::Error),
 }

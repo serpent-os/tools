@@ -71,7 +71,7 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
 
         child.wait()?;
 
-        Ok(())
+        Ok(()) as Result<_, io::Error>
     })?;
 
     Ok(())

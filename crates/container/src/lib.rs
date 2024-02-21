@@ -137,7 +137,7 @@ impl Container {
                     Ok(_) => 0,
                     // Write error back to parent process
                     Err(error) => {
-                        let error = error.to_string();
+                        let error = format_error(error);
                         let mut pos = 0;
 
                         while pos < error.len() {
@@ -385,6 +385,21 @@ pub fn forward_sigint(pid: Pid) -> Result<(), nix::Error> {
     unsafe { sigaction(Signal::SIGINT, &action)? };
 
     Ok(())
+}
+
+fn format_error(error: impl std::error::Error) -> String {
+    let sources = sources(&error);
+    sources.join(": ")
+}
+
+fn sources(error: &dyn std::error::Error) -> Vec<String> {
+    let mut sources = vec![error.to_string()];
+    let mut source = error.source();
+    while let Some(error) = source.take() {
+        sources.push(error.to_string());
+        source = error.source();
+    }
+    sources
 }
 
 struct Bind {

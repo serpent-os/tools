@@ -11,7 +11,7 @@ use crate::{
     Header,
 };
 
-mod digest;
+pub mod digest;
 mod zstd;
 
 pub struct Writer<W, T = ()> {

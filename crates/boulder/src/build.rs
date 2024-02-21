@@ -29,8 +29,7 @@ mod upstream;
 use self::job::Job;
 use crate::{
     architecture::BuildTarget,
-    container::{self, ExecError},
-    macros,
+    container, macros,
     package::{self, Packager},
     profile, recipe, util, Env, Macros, Paths, Recipe, Runtime,
 };
@@ -255,7 +254,7 @@ impl Builder {
             Ok(())
         })?;
 
-        let packager = Packager::new(self.recipe, self.macros, self.targets)?;
+        let packager = Packager::new(self.paths, self.recipe, self.macros, self.targets)?;
 
         Ok(packager)
     }
@@ -422,5 +421,19 @@ pub enum Error {
     #[error("create packager")]
     Package(#[from] package::Error),
     #[error("io")]
+    Io(#[from] io::Error),
+}
+
+#[derive(Debug, Error)]
+pub enum ExecError {
+    #[error("failed with status code {0}")]
+    Code(i32),
+    #[error("stopped by signal {}", .0.as_str())]
+    Signal(Signal),
+    #[error("stopped by unknown signal")]
+    UnknownSignal,
+    #[error(transparent)]
+    Nix(#[from] nix::Error),
+    #[error(transparent)]
     Io(#[from] io::Error),
 }

@@ -49,7 +49,7 @@ pub fn clean(builder: &Builder) -> Result<(), Error> {
             }
         }
 
-        Ok(())
+        Ok(()) as Result<_, io::Error>
     })?;
 
     Ok(())

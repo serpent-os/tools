@@ -213,6 +213,7 @@ dependencies = [
  "tokio",
  "tui",
  "url",
+ "xxhash-rust",
  "yaml",
 ]
 
