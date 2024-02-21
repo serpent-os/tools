@@ -51,6 +51,9 @@ impl Packager {
     }
 
     pub fn package(mut self) -> Result<(), Error> {
+        // Remove old artifacts
+        util::sync::recreate_dir(&self.paths.artefacts().host).map_err(Error::RecreateArtefactsDir)?;
+
         // Executed in guest container since file permissions may be borked
         // for host if run rootless
         container::exec(&self.paths, false, || {
@@ -213,6 +216,8 @@ pub enum Error {
     Script(#[from] script::Error),
     #[error("collect install paths")]
     CollectPaths(#[source] io::Error),
+    #[error("recreate artefacts dir")]
+    RecreateArtefactsDir(#[source] io::Error),
     #[error("sync artefacts")]
     SyncArtefacts(#[source] io::Error),
     #[error("emit packages")]
