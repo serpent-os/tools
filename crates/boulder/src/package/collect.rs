@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 use std::{
+    ffi::OsStr,
     fs::{self, Metadata},
     io,
     os::unix::fs::{FileTypeExt, MetadataExt},
@@ -12,6 +13,7 @@ use glob::Pattern;
 use moss::stone::payload::{layout, Layout};
 use moss::stone::write::digest;
 use nix::libc::{S_IFDIR, S_IRGRP, S_IROTH, S_IRWXU, S_IXGRP, S_IXOTH};
+use thiserror::Error;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Rule {
@@ -29,19 +31,27 @@ impl Rule {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Collector {
     /// Rules stored in order of
     /// ascending priority
     rules: Vec<Rule>,
+    root: PathBuf,
 }
 
 impl Collector {
+    pub fn new(root: impl Into<PathBuf>) -> Self {
+        Self {
+            rules: vec![],
+            root: root.into(),
+        }
+    }
+
     pub fn add_rule(&mut self, rule: Rule) {
         self.rules.push(rule);
     }
 
-    pub fn matching_package(&self, path: &str) -> Option<&str> {
+    fn matching_package(&self, path: &str) -> Option<&str> {
         // Rev = check highest priority rules first
         self.rules
             .iter()
@@ -49,26 +59,36 @@ impl Collector {
             .find_map(|rule| rule.matches(path).then_some(rule.package.as_str()))
     }
 
-    pub fn paths(
+    /// Produce a [`PathInfo`] from the provided [`Path`]
+    pub fn path(&self, path: &Path, hasher: &mut digest::Hasher) -> Result<PathInfo, Error> {
+        let metadata = fs::metadata(path)?;
+        self.path_with_metadata(path.to_path_buf(), &metadata, hasher)
+    }
+
+    fn path_with_metadata(
         &self,
-        root: &Path,
+        path: PathBuf,
+        metadata: &Metadata,
+        hasher: &mut digest::Hasher,
+    ) -> Result<PathInfo, Error> {
+        let target_path = Path::new("/").join(path.strip_prefix(&self.root).expect("path is ancestor of root"));
+
+        let package = self
+            .matching_package(target_path.to_str().unwrap_or_default())
+            .ok_or(Error::NoMatchingRule)?;
+
+        Ok(PathInfo::new(path, target_path, metadata, hasher, package.to_string())?)
+    }
+
+    /// Enumerates all paths from the filesystem starting at root or subdir of root, if provided
+    pub fn enumerate_paths(
+        &self,
         subdir: Option<(PathBuf, Metadata)>,
         hasher: &mut digest::Hasher,
-    ) -> Result<Vec<(String, PathInfo)>, io::Error> {
+    ) -> Result<Vec<PathInfo>, Error> {
         let mut paths = vec![];
 
-        let add_path =
-            |path: PathBuf, metadata: Metadata, paths: &mut Vec<(String, PathInfo)>, hasher: &mut digest::Hasher| {
-                let target_path = Path::new("/").join(path.strip_prefix(root).expect("path is ancestor of root"));
-
-                if let Some(package) = self.matching_package(target_path.to_str().unwrap_or_default()) {
-                    paths.push((package.to_string(), PathInfo::new(path, target_path, metadata, hasher)?))
-                }
-
-                Ok(()) as Result<(), io::Error>
-            };
-
-        let dir = subdir.as_ref().map(|t| t.0.as_path()).unwrap_or(root);
+        let dir = subdir.as_ref().map(|t| t.0.as_path()).unwrap_or(&self.root);
         let entries = fs::read_dir(dir)?;
 
         for result in entries {
@@ -78,9 +98,9 @@ impl Collector {
             let host_path = entry.path();
 
             if metadata.is_dir() {
-                paths.extend(self.paths(root, Some((host_path, metadata)), hasher)?);
+                paths.extend(self.enumerate_paths(Some((host_path, metadata)), hasher)?);
             } else {
-                add_path(host_path, metadata, &mut paths, hasher)?;
+                paths.push(self.path_with_metadata(host_path, &metadata, hasher)?);
             }
         }
 
@@ -94,7 +114,7 @@ impl Collector {
             let is_special = meta.mode() != REGULAR_DIR_MODE;
 
             if meta.is_dir() && (paths.is_empty() || is_special) {
-                add_path(dir, meta, &mut paths, hasher)?;
+                paths.push(self.path_with_metadata(dir, &meta, hasher)?);
             }
         }
 
@@ -105,69 +125,111 @@ impl Collector {
 #[derive(Debug)]
 pub struct PathInfo {
     pub path: PathBuf,
+    pub target_path: PathBuf,
     pub layout: Layout,
     pub size: u64,
+    pub package: String,
 }
 
 impl PathInfo {
     pub fn new(
         path: PathBuf,
         target_path: PathBuf,
-        metadata: Metadata,
+        metadata: &Metadata,
         hasher: &mut digest::Hasher,
-    ) -> Result<Self, io::Error> {
-        // Strip /usr prefix
-        let target = target_path
-            .strip_prefix("/usr")
-            .unwrap_or(&target_path)
-            .to_string_lossy()
-            .to_string();
-
-        let file_type = metadata.file_type();
-
-        let layout = Layout {
-            uid: metadata.uid(),
-            gid: metadata.gid(),
-            mode: metadata.mode(),
-            tag: 0,
-            entry: if file_type.is_symlink() {
-                let source = fs::read_link(&path)?;
-
-                layout::Entry::Symlink(source.to_string_lossy().to_string(), target)
-            } else if file_type.is_dir() {
-                layout::Entry::Directory(target)
-            } else if file_type.is_char_device() {
-                layout::Entry::CharacterDevice(target)
-            } else if file_type.is_block_device() {
-                layout::Entry::BlockDevice(target)
-            } else if file_type.is_fifo() {
-                layout::Entry::Fifo(target)
-            } else if file_type.is_socket() {
-                layout::Entry::Socket(target)
-            } else {
-                hasher.reset();
-
-                let mut digest_writer = digest::Writer::new(io::sink(), hasher);
-                let mut file = fs::File::open(&path)?;
-
-                // Copy bytes to null sink so we don't
-                // explode memory
-                io::copy(&mut file, &mut digest_writer)?;
-
-                let hash = hasher.digest128();
-
-                layout::Entry::Regular(hash, target)
-            },
-        };
+        package: String,
+    ) -> Result<Self, Error> {
+        let layout = layout_from_metadata(&path, &target_path, metadata, hasher)?;
 
         Ok(Self {
             path,
+            target_path,
             layout,
             size: metadata.size(),
+            package,
         })
+    }
+
+    pub fn restat(&mut self, hasher: &mut digest::Hasher) -> Result<(), Error> {
+        let metadata = fs::metadata(&self.path)?;
+        self.layout = layout_from_metadata(&self.path, &self.target_path, &metadata, hasher)?;
+        self.size = metadata.size();
+        Ok(())
     }
 
     pub fn is_file(&self) -> bool {
         matches!(self.layout.entry, layout::Entry::Regular(_, _))
     }
+
+    pub fn file_name(&self) -> &str {
+        self.target_path
+            .file_name()
+            .and_then(|p| p.to_str())
+            .unwrap_or_default()
+    }
+
+    pub fn has_component(&self, component: &str) -> bool {
+        self.target_path
+            .components()
+            .any(|c| c.as_os_str() == OsStr::new(component))
+    }
+}
+
+fn layout_from_metadata(
+    path: &Path,
+    target_path: &Path,
+    metadata: &Metadata,
+    hasher: &mut digest::Hasher,
+) -> Result<Layout, Error> {
+    // Strip /usr
+    let target = target_path
+        .strip_prefix("/usr")
+        .unwrap_or(target_path)
+        .to_string_lossy()
+        .to_string();
+
+    let file_type = metadata.file_type();
+
+    Ok(Layout {
+        uid: metadata.uid(),
+        gid: metadata.gid(),
+        mode: metadata.mode(),
+        tag: 0,
+        entry: if file_type.is_symlink() {
+            let source = fs::read_link(path)?;
+
+            layout::Entry::Symlink(source.to_string_lossy().to_string(), target)
+        } else if file_type.is_dir() {
+            layout::Entry::Directory(target)
+        } else if file_type.is_char_device() {
+            layout::Entry::CharacterDevice(target)
+        } else if file_type.is_block_device() {
+            layout::Entry::BlockDevice(target)
+        } else if file_type.is_fifo() {
+            layout::Entry::Fifo(target)
+        } else if file_type.is_socket() {
+            layout::Entry::Socket(target)
+        } else {
+            hasher.reset();
+
+            let mut digest_writer = digest::Writer::new(io::sink(), hasher);
+            let mut file = fs::File::open(path)?;
+
+            // Copy bytes to null sink so we don't
+            // explode memory
+            io::copy(&mut file, &mut digest_writer)?;
+
+            let hash = hasher.digest128();
+
+            layout::Entry::Regular(hash, target)
+        },
+    })
+}
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("no matching path rule")]
+    NoMatchingRule,
+    #[error("io")]
+    Io(#[from] io::Error),
 }

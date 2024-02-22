@@ -11,27 +11,27 @@ use moss::{package::Meta, stone, Dependency};
 use thiserror::Error;
 
 use self::manifest::Manifest;
-use super::collect::PathInfo;
+use super::analysis;
 use crate::{architecture, Architecture, Paths, Recipe};
 
 mod manifest;
 
 #[derive(Debug)]
-pub struct Package {
-    pub name: String,
+pub struct Package<'a> {
+    pub name: &'a str,
     pub build_release: u64,
     pub architecture: Architecture,
-    pub source: stone_recipe::Source,
-    pub definition: stone_recipe::Package,
-    pub paths: Vec<PathInfo>,
+    pub source: &'a stone_recipe::Source,
+    pub definition: &'a stone_recipe::Package,
+    pub analysis: analysis::Bucket,
 }
 
-impl Package {
+impl<'a> Package<'a> {
     pub fn new(
-        name: String,
-        source: stone_recipe::Source,
-        template: stone_recipe::Package,
-        paths: Vec<PathInfo>,
+        name: &'a str,
+        source: &'a stone_recipe::Source,
+        template: &'a stone_recipe::Package,
+        analysis: analysis::Bucket,
     ) -> Self {
         Self {
             name,
@@ -39,7 +39,7 @@ impl Package {
             architecture: architecture::host(),
             source,
             definition: template,
-            paths,
+            analysis,
         }
     }
 
@@ -56,7 +56,7 @@ impl Package {
 
     pub fn meta(&self) -> Meta {
         Meta {
-            name: self.name.clone().into(),
+            name: self.name.to_string().into(),
             version_identifier: self.source.version.clone(),
             source_release: self.source.release,
             build_release: self.build_release,
@@ -66,17 +66,19 @@ impl Package {
             source_id: self.source.name.clone(),
             homepage: self.source.homepage.clone(),
             licenses: self.source.license.clone().into_iter().sorted().collect(),
-            // TODO: Deps from analyzer
             dependencies: self
-                .definition
-                .run_deps
+                .analysis
+                .dependencies
                 .clone()
                 .into_iter()
-                .filter_map(|dep| dep.parse::<Dependency>().ok())
-                .sorted_by_key(|dep| dep.to_string())
+                .chain(
+                    self.definition
+                        .run_deps
+                        .iter()
+                        .filter_map(|name| Dependency::from_name(name).ok()),
+                )
                 .collect(),
-            // TODO: Providers from analyzer
-            providers: Default::default(),
+            providers: self.analysis.providers.clone(),
             uri: None,
             hash: None,
             download_size: None,
@@ -122,7 +124,12 @@ fn emit_package(paths: &Paths, package: &Package) -> Result<(), Error> {
 
     // Add layouts
     {
-        let layouts = package.paths.iter().map(|p| p.layout.clone()).collect::<Vec<_>>();
+        let layouts = package
+            .analysis
+            .paths
+            .iter()
+            .map(|p| p.layout.clone())
+            .collect::<Vec<_>>();
         writer.add_payload(layouts.as_slice())?;
     }
 
@@ -136,6 +143,7 @@ fn emit_package(paths: &Paths, package: &Package) -> Result<(), Error> {
 
     // Sort all files by size, largest to smallest
     let files = package
+        .analysis
         .paths
         .iter()
         .filter(|p| p.is_file())

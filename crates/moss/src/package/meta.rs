@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{collections::HashSet, fmt};
+use std::{collections::BTreeSet, fmt};
 
 use stone::payload;
 use thiserror::Error;
@@ -71,9 +71,9 @@ pub struct Meta {
     /// Licenses this is available under
     pub licenses: Vec<String>,
     /// All dependencies
-    pub dependencies: HashSet<Dependency>,
+    pub dependencies: BTreeSet<Dependency>,
     /// All providers, including name()
-    pub providers: HashSet<Provider>,
+    pub providers: BTreeSet<Provider>,
     /// If relevant: uri to fetch from
     pub uri: Option<String>,
     /// If relevant: hash for the download

@@ -118,6 +118,19 @@ pub struct Dependency {
     pub name: String,
 }
 
+impl Dependency {
+    pub fn from_name(name: &str) -> Result<Self, ParseError> {
+        if name.contains('(') {
+            Dependency::from_str(name)
+        } else {
+            Ok(Dependency {
+                kind: Kind::PackageName,
+                name: name.to_owned(),
+            })
+        }
+    }
+}
+
 impl PartialOrd for Dependency {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))

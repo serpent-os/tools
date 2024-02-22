@@ -27,8 +27,20 @@ pub fn write(
             let name = package.name.to_string();
 
             let build_depends = build_deps.iter().cloned().collect();
+            let mut depends = package
+                .analysis
+                .dependencies
+                .iter()
+                .map(ToString::to_string)
+                .chain(package.definition.run_deps.clone())
+                .collect::<Vec<_>>();
+            depends.sort();
+            depends.dedup();
+
+            let provides = package.analysis.providers.iter().map(ToString::to_string).collect();
 
             let files = package
+                .analysis
                 .paths
                 .iter()
                 .map(|p| format!("/usr/{}", p.layout.entry.target()))
@@ -37,12 +49,10 @@ pub fn write(
 
             let package = Package {
                 build_depends,
-                // TODO
-                depends: vec![],
+                depends,
                 files,
                 name: name.clone(),
-                // TODO
-                provides: vec![],
+                provides,
             };
 
             (name, package)

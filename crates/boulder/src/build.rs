@@ -251,6 +251,8 @@ impl Builder {
                 }
             }
 
+            println!();
+
             Ok(())
         })?;
 

@@ -5,7 +5,6 @@
 use std::{collections::BTreeSet, fs::File, path::Path};
 
 use moss::{
-    dependency,
     stone::{
         self,
         header::v1::FileType,
@@ -28,15 +27,12 @@ pub fn write(path: &Path, packages: &[&Package], build_deps: &BTreeSet<String>) 
 
         // Add build deps
         for name in build_deps {
-            let dep = name.parse::<Dependency>().unwrap_or_else(|_| Dependency {
-                kind: dependency::Kind::PackageName,
-                name: name.to_string(),
-            });
-
-            payload.push(payload::Meta {
-                tag: meta::Tag::BuildDepends,
-                kind: meta::Kind::Dependency(dep.kind.into(), dep.name),
-            });
+            if let Ok(dep) = Dependency::from_name(name) {
+                payload.push(payload::Meta {
+                    tag: meta::Tag::BuildDepends,
+                    kind: meta::Kind::Dependency(dep.kind.into(), dep.name),
+                });
+            }
         }
 
         writer.add_payload(payload.as_slice())?;

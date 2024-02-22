@@ -29,7 +29,7 @@ pub struct Packager {
 
 impl Packager {
     pub fn new(paths: Paths, recipe: Recipe, macros: Macros, targets: Vec<build::Target>) -> Result<Self, Error> {
-        let mut collector = Collector::default();
+        let mut collector = Collector::new(paths.install().guest);
 
         // Arch names used to parse [`Marcos`] for package templates
         //
@@ -50,43 +50,45 @@ impl Packager {
         })
     }
 
-    pub fn package(mut self) -> Result<(), Error> {
+    pub fn package(self) -> Result<(), Error> {
         // Remove old artifacts
         util::sync::recreate_dir(&self.paths.artefacts().host).map_err(Error::RecreateArtefactsDir)?;
 
         // Executed in guest container since file permissions may be borked
         // for host if run rootless
         container::exec(&self.paths, false, || {
-            let root = self.paths.install().guest;
-
             // Hasher used for calculating file digests
             let mut hasher = digest::Hasher::new();
 
-            // Collect all paths under install root and group them by
-            // the package template they match against
+            // Collect all paths under install root
             let paths = self
                 .collector
-                .paths(&root, None, &mut hasher)
-                .map_err(Error::CollectPaths)?
-                .into_iter()
-                .into_group_map();
+                .enumerate_paths(None, &mut hasher)
+                .map_err(Error::CollectPaths)?;
 
-            // Combine paths per package with the package definition
-            let packages_to_emit = paths
-                .into_iter()
-                .filter_map(|(name, paths)| {
-                    let definition = self.packages.remove(&name)?;
+            // Process all paths with the analysis chain
+            // This will determine which files get included
+            // and what deps / provides they produce
+            let mut analysis = analysis::Chain::new();
+            analysis.process(paths).map_err(Error::Analysis)?;
 
-                    Some(emit::Package::new(
-                        name,
-                        self.recipe.parsed.source.clone(),
-                        definition,
-                        paths,
-                    ))
+            // Combine the package definition with the analysis results
+            // for that package. We will use this to emit the package stones & manifests.
+            //
+            // If no bucket exists, that means no paths matched this package so we can
+            // safely filter it out
+            let packages = self
+                .packages
+                .iter()
+                .filter_map(|(name, package)| {
+                    let bucket = analysis.buckets.remove(name)?;
+
+                    Some(emit::Package::new(name, &self.recipe.parsed.source, package, bucket))
                 })
                 .collect::<Vec<_>>();
 
-            emit(&self.paths, &self.recipe, &packages_to_emit).map_err(Error::Emit)?;
+            // Emit package stones and manifest files to artefact directory
+            emit(&self.paths, &self.recipe, &packages).map_err(Error::Emit)?;
 
             Ok(()) as Result<(), Error>
         })?;
@@ -215,11 +217,13 @@ pub enum Error {
     #[error("script")]
     Script(#[from] script::Error),
     #[error("collect install paths")]
-    CollectPaths(#[source] io::Error),
+    CollectPaths(#[source] collect::Error),
     #[error("recreate artefacts dir")]
     RecreateArtefactsDir(#[source] io::Error),
     #[error("sync artefacts")]
     SyncArtefacts(#[source] io::Error),
+    #[error("analyzing paths")]
+    Analysis(#[source] analysis::BoxError),
     #[error("emit packages")]
     Emit(#[from] emit::Error),
     #[error("container")]

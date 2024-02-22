@@ -20,7 +20,7 @@ pub struct Manifest<'a> {
     arch: Architecture,
     output_dir: PathBuf,
     build_deps: BTreeSet<String>,
-    packages: Vec<&'a Package>,
+    packages: Vec<&'a Package<'a>>,
 }
 
 impl<'a> Manifest<'a> {

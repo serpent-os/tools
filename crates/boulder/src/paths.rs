@@ -18,7 +18,7 @@ impl Id {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Paths {
     id: Id,
     host_root: PathBuf,
