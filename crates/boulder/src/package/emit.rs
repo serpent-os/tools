@@ -88,20 +88,20 @@ impl<'a> Package<'a> {
 }
 
 pub fn emit(paths: &Paths, recipe: &Recipe, packages: &[Package]) -> Result<(), Error> {
-    let mut manfiest = Manifest::new(paths, recipe, architecture::host());
+    let mut manifest = Manifest::new(paths, recipe, architecture::host());
 
     println!("Emitting packages\n");
 
     for package in packages {
         if !package.is_dbginfo() {
-            manfiest.add_package(package);
+            manifest.add_package(package);
         }
 
         emit_package(paths, package)?;
     }
 
-    manfiest.write_binary()?;
-    manfiest.write_json()?;
+    manifest.write_binary()?;
+    manifest.write_json()?;
 
     Ok(())
 }
