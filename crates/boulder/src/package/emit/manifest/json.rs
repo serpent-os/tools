@@ -29,15 +29,14 @@ pub fn write(
             let build_depends = build_deps.iter().cloned().collect();
             let mut depends = package
                 .analysis
-                .dependencies
-                .iter()
+                .dependencies()
                 .map(ToString::to_string)
                 .chain(package.definition.run_deps.clone())
                 .collect::<Vec<_>>();
             depends.sort();
             depends.dedup();
 
-            let provides = package.analysis.providers.iter().map(ToString::to_string).collect();
+            let provides = package.analysis.providers().map(ToString::to_string).collect();
 
             let files = package
                 .analysis

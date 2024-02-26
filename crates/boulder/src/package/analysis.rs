@@ -99,9 +99,22 @@ impl<'a> Chain<'a> {
 
 #[derive(Debug, Default)]
 pub struct Bucket {
-    pub providers: BTreeSet<Provider>,
-    pub dependencies: BTreeSet<Dependency>,
+    providers: BTreeSet<Provider>,
+    dependencies: BTreeSet<Dependency>,
     pub paths: Vec<PathInfo>,
+}
+
+impl Bucket {
+    pub fn providers(&self) -> impl Iterator<Item = &Provider> {
+        self.providers.iter()
+    }
+
+    pub fn dependencies(&self) -> impl Iterator<Item = &Dependency> {
+        // We shouldn't self depend on things we provide
+        self.dependencies
+            .iter()
+            .filter(|d| !self.providers.iter().any(|p| p.kind == d.kind && p.name == d.name))
+    }
 }
 
 pub struct BucketMut<'a> {

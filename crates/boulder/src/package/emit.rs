@@ -68,9 +68,8 @@ impl<'a> Package<'a> {
             licenses: self.source.license.clone().into_iter().sorted().collect(),
             dependencies: self
                 .analysis
-                .dependencies
-                .clone()
-                .into_iter()
+                .dependencies()
+                .cloned()
                 .chain(
                     self.definition
                         .run_deps
@@ -78,7 +77,7 @@ impl<'a> Package<'a> {
                         .filter_map(|name| Dependency::from_name(name).ok()),
                 )
                 .collect(),
-            providers: self.analysis.providers.clone(),
+            providers: self.analysis.providers().cloned().collect(),
             uri: None,
             hash: None,
             download_size: None,
