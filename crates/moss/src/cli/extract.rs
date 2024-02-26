@@ -4,7 +4,7 @@
 
 use std::{
     fs::{create_dir_all, hard_link, remove_dir_all, remove_file, File},
-    io::{copy, Read, Seek, SeekFrom, Write},
+    io::{copy, Read, Seek, SeekFrom},
     os::unix::fs::symlink,
     path::PathBuf,
 };
@@ -15,7 +15,7 @@ use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use stone::{payload::layout, read::PayloadKind};
 use thiserror::{self, Error};
 use tokio::task;
-use tui::{ProgressBar, ProgressStyle};
+use tui::{ProgressBar, ProgressStyle, ProgressWriter};
 
 pub fn command() -> Command {
     Command::new("extract")
@@ -162,38 +162,4 @@ pub enum Error {
 
     #[error("stone format")]
     Format(#[from] stone::read::Error),
-}
-
-struct ProgressWriter<W> {
-    writer: W,
-    total: u64,
-    written: u64,
-    progress: ProgressBar,
-}
-
-impl<W> ProgressWriter<W> {
-    pub fn new(writer: W, total: u64, progress: ProgressBar) -> Self {
-        Self {
-            writer,
-            total,
-            written: 0,
-            progress,
-        }
-    }
-}
-
-impl<W: Write> Write for ProgressWriter<W> {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let bytes = self.writer.write(buf)?;
-
-        self.written += bytes as u64;
-        self.progress
-            .set_position((self.written as f64 / self.total as f64 * 1000.0) as u64);
-
-        Ok(bytes)
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.writer.flush()
-    }
 }

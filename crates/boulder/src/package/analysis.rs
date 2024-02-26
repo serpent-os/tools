@@ -8,7 +8,7 @@ use std::{
 };
 
 use moss::{stone::write::digest, Dependency, Provider};
-use tui::Stylize;
+use tui::{ProgressBar, ProgressStyle, Stylize};
 
 use super::collect::{Collector, PathInfo};
 use crate::{Paths, Recipe};
@@ -47,10 +47,23 @@ impl<'a> Chain<'a> {
     }
 
     pub fn process(&mut self, paths: impl IntoIterator<Item = PathInfo>) -> Result<(), BoxError> {
+        println!("Analyzing artefacts\n");
+
         let mut queue = paths.into_iter().collect::<VecDeque<_>>();
+
+        let pb = ProgressBar::new(queue.len() as u64)
+            .with_message("Analyzing")
+            .with_style(
+                ProgressStyle::with_template("\n|{bar:20.red/blue}| {pos}/{len} {wide_msg}")
+                    .unwrap()
+                    .progress_chars("■≡=- "),
+            );
+        pb.tick();
 
         'paths: while let Some(mut path) = queue.pop_front() {
             let bucket = self.buckets.entry(path.package.clone()).or_default();
+
+            pb.set_message(format!("Analyzing {}", path.target_path.display()));
 
             'handlers: for handler in &self.handlers {
                 // Only give handlers ability to update
@@ -76,22 +89,27 @@ impl<'a> Chain<'a> {
                 match response.decision {
                     Decision::NextHandler => continue 'handlers,
                     Decision::IgnoreFile { reason } => {
-                        // TODO: Proper logging so we can log from various places
-                        // and have consistent output
-                        eprintln!(
-                            "[analysis] {} - {reason}, ignoring {}",
-                            "WARN".yellow(),
-                            path.target_path.display()
-                        );
+                        pb.println(format!(
+                            "{} {}{}",
+                            "Ignored ".yellow(),
+                            path.target_path.display(),
+                            format!(" ({reason})").dim()
+                        ));
+                        pb.inc(1);
                         continue 'paths;
                     }
                     Decision::IncludeFile => {
+                        pb.println(format!("{} {}", "Included".green(), path.target_path.display()));
+                        pb.inc(1);
                         bucket.paths.push(path);
                         continue 'paths;
                     }
                 }
             }
         }
+
+        pb.finish_and_clear();
+        println!();
 
         Ok(())
     }

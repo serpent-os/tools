@@ -4,11 +4,13 @@
 use std::{
     fs::{self, File},
     io::{self, Write},
+    time::Duration,
 };
 
 use itertools::Itertools;
 use moss::{package::Meta, stone, Dependency};
 use thiserror::Error;
+use tui::{ProgressBar, ProgressReader, ProgressStyle, Stylize};
 
 use self::manifest::Manifest;
 use super::analysis;
@@ -88,6 +90,8 @@ impl<'a> Package<'a> {
 pub fn emit(paths: &Paths, recipe: &Recipe, packages: &[Package]) -> Result<(), Error> {
     let mut manfiest = Manifest::new(paths, recipe, architecture::host());
 
+    println!("Emitting packages\n");
+
     for package in packages {
         if !package.is_dbginfo() {
             manfiest.add_package(package);
@@ -104,6 +108,25 @@ pub fn emit(paths: &Paths, recipe: &Recipe, packages: &[Package]) -> Result<(), 
 
 fn emit_package(paths: &Paths, package: &Package) -> Result<(), Error> {
     let filename = package.filename();
+
+    // Sort all files by size, largest to smallest
+    let sorted_files = package
+        .analysis
+        .paths
+        .iter()
+        .filter(|p| p.is_file())
+        .sorted_by(|a, b| a.size.cmp(&b.size).reverse())
+        .collect::<Vec<_>>();
+    let total_file_size = sorted_files.iter().map(|p| p.size).sum();
+
+    let pb = ProgressBar::new(total_file_size)
+        .with_message(format!("Generating {filename}"))
+        .with_style(
+            ProgressStyle::with_template(" {spinner} |{percent:>3}%| {wide_msg} {binary_bytes_per_sec:>.dim} ")
+                .unwrap()
+                .tick_chars("--=≡■≡=--"),
+        );
+    pb.enable_steady_tick(Duration::from_millis(150));
 
     // Output file to artefacts directory
     let out_path = paths.artefacts().guest.join(&filename);
@@ -140,24 +163,24 @@ fn emit_package(paths: &Paths, package: &Package) -> Result<(), Error> {
         .create(true)
         .open(&temp_content_path)?;
 
-    // Sort all files by size, largest to smallest
-    let files = package
-        .analysis
-        .paths
-        .iter()
-        .filter(|p| p.is_file())
-        .sorted_by(|a, b| a.size.cmp(&b.size).reverse())
-        .collect::<Vec<_>>();
-
     // Convert to content writer using pledged size = total size of all files
-    let pledged_size = files.iter().map(|p| p.size).sum();
-    let mut writer = writer.with_content(&mut temp_content, Some(pledged_size))?;
+    let mut writer = writer.with_content(&mut temp_content, Some(total_file_size))?;
+
+    let mut total_read = 0;
 
     // Add each file content
-    for info in files {
-        let mut file = File::open(&info.path)?;
+    for file in sorted_files {
+        let mut file = File::open(&file.path)?;
+        let mut progress_reader = ProgressReader {
+            reader: &mut file,
+            total: total_file_size,
+            read: total_read,
+            progress: pb.clone(),
+        };
 
-        writer.add_content(&mut file)?;
+        writer.add_content(&mut progress_reader)?;
+
+        total_read = progress_reader.read;
     }
 
     // Finalize & flush
@@ -166,6 +189,9 @@ fn emit_package(paths: &Paths, package: &Package) -> Result<(), Error> {
 
     // Remove temp content file
     fs::remove_file(temp_content_path)?;
+
+    pb.println(format!("{} {filename}", "Emitted".green()));
+    pb.finish_and_clear();
 
     Ok(())
 }
