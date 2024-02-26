@@ -1,4 +1,5 @@
 use std::{
+    ffi::CStr,
     fs::File,
     path::{Path, PathBuf},
     process::Command,
@@ -42,7 +43,8 @@ pub fn elf(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Response, BoxE
         .to_lowercase();
     let bit_size = elf.ehdr.class;
 
-    parse_dynamic_section(&mut elf, bucket, &machine_isa, file_name);
+    parse_dynamic_section(&mut elf, bucket, &machine_isa, bit_size, info, file_name);
+    parse_interp_section(&mut elf, bucket, &machine_isa);
 
     let build_id = parse_build_id(&mut elf);
 
@@ -50,9 +52,9 @@ pub fn elf(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Response, BoxE
 
     if let Some(build_id) = build_id {
         match split_debug(bucket, info, bit_size, &build_id) {
-            Ok(Some(path)) => {
+            Ok(Some(debug_path)) => {
                 // Add new split file to be analyzed
-                generated_paths.push(path);
+                generated_paths.push(debug_path);
             }
             Ok(None) => {}
             // TODO: Error logging
@@ -85,6 +87,8 @@ fn parse_dynamic_section(
     elf: &mut elf::ElfStream<AnyEndian, File>,
     bucket: &mut BucketMut,
     machine_isa: &str,
+    bit_size: Class,
+    info: &PathInfo,
     file_name: &str,
 ) {
     let mut needed_offsets = vec![];
@@ -120,23 +124,70 @@ fn parse_dynamic_section(
 
         // soname exposed, let's share it
         if file_name.contains(".so") {
-            let mut name = "";
+            let mut soname = "";
 
             if let Some(offset) = soname_offset {
                 if let Ok(val) = strtab.get(offset) {
-                    name = val;
+                    soname = val;
                 }
             }
 
-            if name.is_empty() {
-                name = file_name;
+            if soname.is_empty() {
+                soname = file_name;
             }
 
             bucket.providers.insert(Provider {
                 kind: dependency::Kind::SharedLibary,
-                name: format!("{name}({machine_isa})"),
+                name: format!("{soname}({machine_isa})"),
             });
+
+            // Do we possibly have an Interpeter? This is a .dynamic library ..
+            if soname.starts_with("ld-") && info.target_path.starts_with("/usr/bin") {
+                let interp_paths = if matches!(bit_size, Class::ELF64) {
+                    [
+                        format!("/usr/lib64/{soname}({machine_isa})"),
+                        format!("/lib64/{soname}({machine_isa})"),
+                        format!("/lib/{soname}({machine_isa})"),
+                        format!("{}({machine_isa})", info.target_path.display()),
+                    ]
+                } else {
+                    [
+                        format!("/usr/lib/{soname}({machine_isa})"),
+                        format!("/lib32/{soname}({machine_isa})"),
+                        format!("/lib/{soname}({machine_isa})"),
+                        format!("{}({machine_isa})", info.target_path.display()),
+                    ]
+                };
+
+                for path in interp_paths {
+                    bucket.providers.insert(Provider {
+                        kind: dependency::Kind::Interpreter,
+                        name: path.clone(),
+                    });
+                    bucket.providers.insert(Provider {
+                        kind: dependency::Kind::SharedLibary,
+                        name: path,
+                    });
+                }
+            }
         }
+    }
+}
+
+fn parse_interp_section(elf: &mut elf::ElfStream<AnyEndian, File>, bucket: &mut BucketMut, machine_isa: &str) {
+    let Some(section) = elf.section_header_by_name(".interp").ok().flatten().copied() else {
+        return;
+    };
+
+    let Ok((data, _)) = elf.section_data(&section) else {
+        return;
+    };
+
+    if let Some(content) = CStr::from_bytes_until_nul(data).ok().and_then(|s| s.to_str().ok()) {
+        bucket.dependencies.insert(Dependency {
+            kind: dependency::Kind::Interpreter,
+            name: format!("{content}({machine_isa})"),
+        });
     }
 }
 
