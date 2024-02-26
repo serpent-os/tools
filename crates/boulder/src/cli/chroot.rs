@@ -40,10 +40,10 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
     // to the container environment with all actions
     // and definitions
     //
-    // The step doesn't matter, but we use `prepare`
+    // The phase doesn't matter, but we use `prepare`
     // since it uses hardcoded content that's always
     // available to create a script from
-    let script = build::job::Step::Prepare
+    let script = build::job::Phase::Prepare
         .script(
             BuildTarget::Native(architecture::host()),
             None,
@@ -53,7 +53,7 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
             false,
         )
         .map_err(Error::BuildScript)?
-        .expect("script always available for prepare step");
+        .expect("script always available for prepare phase");
     let profile = &build::format_profile(&script);
 
     let home = &paths.build().guest;

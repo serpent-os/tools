@@ -93,7 +93,7 @@ impl Builder {
     pub fn extra_deps(&self) -> impl Iterator<Item = &str> {
         self.targets.iter().flat_map(|target| {
             target.jobs.iter().flat_map(|job| {
-                job.steps
+                job.phases
                     .values()
                     .flat_map(|script| script.dependencies.iter().map(String::as_str))
             })
@@ -157,7 +157,7 @@ impl Builder {
                         println!("{}", format!("│pgo-{stage}").dim());
                     }
 
-                    for (i, (step, script)) in job.steps.iter().enumerate() {
+                    for (i, (phase, script)) in job.phases.iter().enumerate() {
                         let pipes = if job.pgo_stage.is_some() {
                             "││".dim()
                         } else {
@@ -167,7 +167,7 @@ impl Builder {
                         if i > 0 {
                             println!("{pipes}");
                         }
-                        println!("{pipes}{}", step.styled(format!("{step}")));
+                        println!("{pipes}{}", phase.styled(format!("{phase}")));
 
                         let build_dir = &job.build_dir;
                         let work_dir = &job.work_dir;
@@ -176,7 +176,7 @@ impl Builder {
                         for command in &script.commands {
                             match command {
                                 script::Command::Break(breakpoint) => {
-                                    let line_num = breakpoint_line(breakpoint, &self.recipe, job.target, *step)
+                                    let line_num = breakpoint_line(breakpoint, &self.recipe, job.target, *phase)
                                         .map(|line_num| format!(" at line {line_num}"))
                                         .unwrap_or_default();
 
@@ -217,7 +217,7 @@ impl Builder {
                                     let script_path = "/tmp/script";
                                     std::fs::write(script_path, content).unwrap();
 
-                                    let result = logged(*step, is_pgo, "/bin/sh", |command| {
+                                    let result = logged(*phase, is_pgo, "/bin/sh", |command| {
                                         command
                                             .arg(script_path)
                                             .env_clear()
@@ -263,7 +263,7 @@ impl Builder {
 }
 
 fn logged(
-    step: job::Step,
+    phase: job::Phase,
     is_pgo: bool,
     command: &str,
     f: impl FnOnce(&mut process::Command) -> &mut process::Command,
@@ -278,8 +278,8 @@ fn logged(
         .spawn()?;
 
     // Log stdout and stderr
-    let stdout_log = log(step, is_pgo, child.stdout.take().unwrap());
-    let stderr_log = log(step, is_pgo, child.stderr.take().unwrap());
+    let stdout_log = log(phase, is_pgo, child.stdout.take().unwrap());
+    let stderr_log = log(phase, is_pgo, child.stderr.take().unwrap());
 
     // Forward SIGINT to this process
     ::container::forward_sigint(Pid::from_raw(child.id() as i32))?;
@@ -292,7 +292,7 @@ fn logged(
     Ok(result)
 }
 
-fn log<R>(step: job::Step, is_pgo: bool, pipe: R) -> thread::JoinHandle<()>
+fn log<R>(phase: job::Phase, is_pgo: bool, pipe: R) -> thread::JoinHandle<()>
 where
     R: io::Read + Send + 'static,
 {
@@ -300,7 +300,7 @@ where
 
     thread::spawn(move || {
         let pgo = is_pgo.then_some("│").unwrap_or_default().dim();
-        let kind = step.styled(format!("{}│", step.abbrev()));
+        let kind = phase.styled(format!("{}│", phase.abbrev()));
         let tag = format!("{}{pgo}{kind}", "│".dim());
 
         let mut lines = io::BufReader::new(pipe).lines();
@@ -339,7 +339,7 @@ fn breakpoint_line(
     breakpoint: &Breakpoint,
     recipe: &Recipe,
     build_target: BuildTarget,
-    step: job::Step,
+    phase: job::Phase,
 ) -> Option<usize> {
     let profile = recipe.build_target_profile_key(build_target);
 
@@ -373,18 +373,18 @@ fn breakpoint_line(
             }
         });
 
-    let step = match step {
-        // Internal step, no breakpoint will occur
-        job::Step::Prepare => return None,
-        job::Step::Setup => "setup",
-        job::Step::Build => "build",
-        job::Step::Install => "install",
-        job::Step::Check => "check",
-        job::Step::Workload => "workload",
+    let phase = match phase {
+        // Internal phase, no breakpoint will occur
+        job::Phase::Prepare => return None,
+        job::Phase::Setup => "setup",
+        job::Phase::Build => "build",
+        job::Phase::Install => "install",
+        job::Phase::Check => "check",
+        job::Phase::Workload => "workload",
     };
 
     lines.find_map(|(mut line_num, line)| {
-        if has_key(line, step) {
+        if has_key(line, phase) {
             // 0 based to 1 based
             line_num += 1;
 

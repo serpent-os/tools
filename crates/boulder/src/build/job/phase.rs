@@ -17,16 +17,16 @@ use super::{work_dir, Error};
 use crate::build::pgo;
 use crate::{architecture::BuildTarget, util, Macros, Paths, Recipe};
 
-pub fn list(pgo_stage: Option<pgo::Stage>) -> Vec<Step> {
+pub fn list(pgo_stage: Option<pgo::Stage>) -> Vec<Phase> {
     if matches!(pgo_stage, Some(pgo::Stage::One | pgo::Stage::Two)) {
-        Step::WORKLOAD.to_vec()
+        Phase::WORKLOAD.to_vec()
     } else {
-        Step::NORMAL.to_vec()
+        Phase::NORMAL.to_vec()
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, strum::Display)]
-pub enum Step {
+pub enum Phase {
     Prepare,
     Setup,
     Build,
@@ -35,18 +35,18 @@ pub enum Step {
     Workload,
 }
 
-impl Step {
-    const NORMAL: &'static [Self] = &[Step::Prepare, Step::Setup, Step::Build, Step::Install, Step::Check];
-    const WORKLOAD: &'static [Self] = &[Step::Prepare, Step::Setup, Step::Build, Step::Workload];
+impl Phase {
+    const NORMAL: &'static [Self] = &[Phase::Prepare, Phase::Setup, Phase::Build, Phase::Install, Phase::Check];
+    const WORKLOAD: &'static [Self] = &[Phase::Prepare, Phase::Setup, Phase::Build, Phase::Workload];
 
     pub fn abbrev(&self) -> &str {
         match self {
-            Step::Prepare => "P",
-            Step::Setup => "S",
-            Step::Build => "B",
-            Step::Install => "I",
-            Step::Check => "C",
-            Step::Workload => "W",
+            Phase::Prepare => "P",
+            Phase::Setup => "S",
+            Phase::Build => "B",
+            Phase::Install => "I",
+            Phase::Check => "C",
+            Phase::Workload => "W",
         }
     }
 
@@ -55,12 +55,12 @@ impl Step {
         // Taste the rainbow
         // TODO: Ikey plz make pretty
         match self {
-            Step::Prepare => s.grey(),
-            Step::Setup => s.cyan(),
-            Step::Build => s.blue(),
-            Step::Check => s.yellow(),
-            Step::Install => s.green(),
-            Step::Workload => s.magenta(),
+            Phase::Prepare => s.grey(),
+            Phase::Setup => s.cyan(),
+            Phase::Build => s.blue(),
+            Phase::Check => s.yellow(),
+            Phase::Install => s.green(),
+            Phase::Workload => s.magenta(),
         }
         .dim()
         .to_string()
@@ -78,12 +78,12 @@ impl Step {
         let build = recipe.build_target_definition(target);
 
         let Some(content) = (match self {
-            Step::Prepare => Some(prepare_script(&recipe.parsed.upstreams)),
-            Step::Setup => build.setup.clone(),
-            Step::Build => build.build.clone(),
-            Step::Check => build.check.clone(),
-            Step::Install => build.install.clone(),
-            Step::Workload => match build.workload.clone() {
+            Phase::Prepare => Some(prepare_script(&recipe.parsed.upstreams)),
+            Phase::Setup => build.setup.clone(),
+            Phase::Build => build.build.clone(),
+            Phase::Check => build.check.clone(),
+            Phase::Install => build.install.clone(),
+            Phase::Workload => match build.workload.clone() {
                 Some(mut content) => {
                     if matches!(recipe.parsed.options.toolchain, Toolchain::Llvm) {
                         if matches!(pgo_stage, Some(pgo::Stage::One)) {
@@ -108,7 +108,7 @@ impl Step {
         let mut env = build
             .environment
             .as_deref()
-            .filter(|env| *env != "(null)" && !env.is_empty() && !matches!(self, Step::Prepare))
+            .filter(|env| *env != "(null)" && !env.is_empty() && !matches!(self, Phase::Prepare))
             .unwrap_or_default()
             .to_string();
         env = format!("%scriptBase\n{env}\n");
@@ -117,7 +117,7 @@ impl Step {
 
         let build_target = target.to_string();
         let build_dir = paths.build().guest.join(&build_target);
-        let work_dir = if matches!(self, Step::Prepare) {
+        let work_dir = if matches!(self, Phase::Prepare) {
             build_dir.clone()
         } else {
             work_dir(&build_dir, &recipe.parsed.upstreams)
