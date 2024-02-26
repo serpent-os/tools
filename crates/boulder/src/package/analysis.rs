@@ -2,24 +2,32 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::collections::{BTreeSet, HashMap, VecDeque};
+use std::{
+    collections::{BTreeSet, HashMap, VecDeque},
+    path::PathBuf,
+};
 
-use moss::{Dependency, Provider};
+use moss::{stone::write::digest, Dependency, Provider};
 use tui::Stylize;
 
-use super::collect::PathInfo;
+use super::collect::{Collector, PathInfo};
+use crate::{Paths, Recipe};
 
 mod handler;
 
 pub type BoxError = Box<dyn std::error::Error>;
 
-pub struct Chain {
+pub struct Chain<'a> {
     handlers: Vec<Box<dyn Handler>>,
+    recipe: &'a Recipe,
+    paths: &'a Paths,
+    collector: &'a Collector,
+    hasher: &'a mut digest::Hasher,
     pub buckets: HashMap<String, Bucket>,
 }
 
-impl Chain {
-    pub fn new() -> Self {
+impl<'a> Chain<'a> {
+    pub fn new(paths: &'a Paths, recipe: &'a Recipe, collector: &'a Collector, hasher: &'a mut digest::Hasher) -> Self {
         Self {
             handlers: vec![
                 Box::new(handler::ignore_blocked),
@@ -30,6 +38,10 @@ impl Chain {
                 // Catch-all if not excluded
                 Box::new(handler::include_any),
             ],
+            paths,
+            recipe,
+            collector,
+            hasher,
             buckets: Default::default(),
         }
     }
@@ -46,14 +58,20 @@ impl Chain {
                 let mut bucket_mut = BucketMut {
                     providers: &mut bucket.providers,
                     dependencies: &mut bucket.dependencies,
+                    hasher: self.hasher,
+                    recipe: self.recipe,
+                    paths: self.paths,
                 };
 
                 let response = handler.handle(&mut bucket_mut, &mut path)?;
 
-                response
-                    .generated_paths
-                    .into_iter()
-                    .for_each(|path| queue.push_back(path));
+                response.generated_paths.into_iter().try_for_each(|path| {
+                    let info = self.collector.path(&path, self.hasher)?;
+
+                    queue.push_back(info);
+
+                    Ok(()) as Result<(), BoxError>
+                })?;
 
                 match response.decision {
                     Decision::NextHandler => continue 'handlers,
@@ -86,15 +104,17 @@ pub struct Bucket {
     pub paths: Vec<PathInfo>,
 }
 
-#[derive(Debug)]
 pub struct BucketMut<'a> {
     pub providers: &'a mut BTreeSet<Provider>,
     pub dependencies: &'a mut BTreeSet<Dependency>,
+    pub hasher: &'a mut digest::Hasher,
+    pub recipe: &'a Recipe,
+    pub paths: &'a Paths,
 }
 
 pub struct Response {
     pub decision: Decision,
-    pub generated_paths: Vec<PathInfo>,
+    pub generated_paths: Vec<PathBuf>,
 }
 
 pub enum Decision {

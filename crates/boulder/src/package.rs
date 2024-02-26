@@ -69,7 +69,7 @@ impl Packager {
             // Process all paths with the analysis chain
             // This will determine which files get included
             // and what deps / provides they produce
-            let mut analysis = analysis::Chain::new();
+            let mut analysis = analysis::Chain::new(&self.paths, &self.recipe, &self.collector, &mut hasher);
             analysis.process(paths).map_err(Error::Analysis)?;
 
             // Combine the package definition with the analysis results
