@@ -10,7 +10,6 @@ stone = { path = "../crates/stone" }
 tui = { path = "../crates/tui" }
 vfs = { path = "../crates/vfs" }
 
-bitflags.workspace = true
 bytes.workspace = true
 chrono.workspace = true
 clap.workspace = true

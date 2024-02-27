@@ -54,7 +54,7 @@ impl Cobble {
     }
 
     fn query(&self, flags: package::Flags, filter: impl Fn(&Meta) -> bool) -> Vec<Package> {
-        if flags.contains(package::Flags::AVAILABLE) {
+        if flags.available {
             self.packages
                 .iter()
                 .filter(|(_, state)| filter(&state.meta))
@@ -94,7 +94,7 @@ impl State {
             id,
             meta: self.meta.clone(),
             // TODO: Is this correct flag?
-            flags: package::Flags::AVAILABLE,
+            flags: package::Flags::new().with_available(),
         }
     }
 }

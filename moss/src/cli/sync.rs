@@ -11,7 +11,7 @@ use moss::registry::transaction;
 use moss::state::Selection;
 use moss::{
     client::{self, Client},
-    package::{self, Flags},
+    package::{self},
     Package,
 };
 use moss::{environment, runtime};
@@ -50,7 +50,10 @@ pub fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     }
 
     // Grab all the existing installed packages
-    let installed = client.registry.list_installed(package::Flags::NONE).collect::<Vec<_>>();
+    let installed = client
+        .registry
+        .list_installed(package::Flags::default())
+        .collect::<Vec<_>>();
     if installed.is_empty() {
         return Err(Error::NoInstall);
     }
@@ -175,12 +178,16 @@ fn resolve_with_sync(
     let with_sync = packages
         .iter()
         .filter(|p| match resolution {
-            Resolution::Explicit => p.flags.contains(Flags::EXPLICIT),
+            Resolution::Explicit => p.flags.explicit,
             Resolution::All => true,
         })
         .map(|p| {
             // Get first available = use highest priority
-            if let Some(lookup) = client.registry.by_name(&p.meta.name, package::Flags::AVAILABLE).next() {
+            if let Some(lookup) = client
+                .registry
+                .by_name(&p.meta.name, package::Flags::new().with_available())
+                .next()
+            {
                 let upgrade_check = if upgrade_only {
                     lookup.meta.source_release > p.meta.source_release
                 } else {

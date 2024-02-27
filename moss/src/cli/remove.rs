@@ -42,7 +42,7 @@ pub fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     // Grab a client for the target, enumerate packages
     let client = Client::new(environment::NAME, root)?;
 
-    let installed = client.registry.list_installed(Flags::NONE).collect::<Vec<_>>();
+    let installed = client.registry.list_installed(Flags::default()).collect::<Vec<_>>();
     let installed_ids = installed.iter().map(|p| p.id.clone()).collect::<HashSet<_>>();
 
     // Separate packages between installed / not installed (or invalid)

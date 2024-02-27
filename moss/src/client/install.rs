@@ -30,7 +30,7 @@ pub fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<(), Erro
     let resolved = client.resolve_packages(tx.finalize())?;
 
     // Get installed packages to check against
-    let installed = client.registry.list_installed(Flags::NONE).collect::<Vec<_>>();
+    let installed = client.registry.list_installed(Flags::default()).collect::<Vec<_>>();
     let is_installed = |p: &Package| installed.iter().any(|i| i.meta.name == p.meta.name);
 
     // Get missing packages that are:
@@ -126,7 +126,10 @@ fn resolve_input(pkgs: &[&str], client: &Client) -> Result<Vec<package::Id>, Err
 /// Resolve a package name to the first package
 fn find_packages(id: &str, client: &Client) -> (String, Option<Package>) {
     let provider = Provider::from_name(id).unwrap();
-    let result = client.registry.by_provider(&provider, Flags::AVAILABLE).next();
+    let result = client
+        .registry
+        .by_provider(&provider, Flags::new().with_available())
+        .next();
 
     // First only, pre-sorted
     (id.into(), result)

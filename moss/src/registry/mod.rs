@@ -72,12 +72,12 @@ impl Registry {
 
     /// Return a sorted stream of installed [`Package`]
     pub fn list_installed(&self, flags: package::Flags) -> impl Iterator<Item = Package> + '_ {
-        self.list(flags | package::Flags::INSTALLED)
+        self.list(flags.with_installed())
     }
 
     /// Return a sorted stream of available [`Package`]
     pub fn list_available(&self, flags: package::Flags) -> impl Iterator<Item = Package> + '_ {
-        self.list(flags | package::Flags::AVAILABLE)
+        self.list(flags.with_available())
     }
 
     /// Return a new transaction for this registry
@@ -122,7 +122,7 @@ mod test {
                 hash: Default::default(),
                 download_size: Default::default(),
             },
-            flags: package::Flags::NONE,
+            flags: package::Flags::default(),
         };
 
         registry.add_plugin(Plugin::Test(plugin::Test::new(
@@ -137,7 +137,7 @@ mod test {
             vec![package("c", 50), package("d", 1)],
         )));
 
-        let query = registry.list(package::Flags::NONE);
+        let query = registry.list(package::Flags::default());
 
         // Packages are sorted by plugin priority, desc -> release number, desc
         for (idx, package) in query.enumerate() {
@@ -181,18 +181,18 @@ mod test {
         registry.add_plugin(Plugin::Test(plugin::test::Test::new(
             1,
             vec![
-                package("a", package::Flags::INSTALLED),
-                package("b", package::Flags::AVAILABLE),
-                package("c", package::Flags::SOURCE),
-                package("d", package::Flags::SOURCE | package::Flags::INSTALLED),
-                package("e", package::Flags::SOURCE | package::Flags::AVAILABLE),
+                package("a", package::Flags::new().with_installed()),
+                package("b", package::Flags::new().with_available()),
+                package("c", package::Flags::new().with_source()),
+                package("d", package::Flags::new().with_source().with_installed()),
+                package("e", package::Flags::new().with_source().with_available()),
             ],
         )));
 
-        let installed = registry.list_installed(package::Flags::NONE).collect();
-        let available = registry.list_available(package::Flags::NONE).collect();
-        let installed_source = registry.list_installed(package::Flags::SOURCE).collect();
-        let available_source = registry.list_available(package::Flags::SOURCE).collect();
+        let installed = registry.list_installed(package::Flags::default()).collect();
+        let available = registry.list_available(package::Flags::default()).collect();
+        let installed_source = registry.list_installed(package::Flags::new().with_source()).collect();
+        let available_source = registry.list_available(package::Flags::new().with_source()).collect();
 
         fn matches(actual: Vec<Package>, expected: &[&'static str]) -> bool {
             let actual = actual

@@ -41,7 +41,7 @@ impl Active {
 
     /// Query, restricted to state
     fn query(&self, flags: package::Flags, filter: Option<db::meta::Filter>) -> Vec<Package> {
-        if flags.contains(package::Flags::INSTALLED) || flags == package::Flags::NONE {
+        if flags.installed || flags == package::Flags::default() {
             // TODO: Error handling
             let packages = match self.db.query(filter) {
                 Ok(packages) => packages,
@@ -55,13 +55,7 @@ impl Active {
                 .into_iter()
                 .filter_map(|(id, meta)| self.installed_package(id, meta))
                 // Filter for explicit only packages, if applicable
-                .filter(|package| {
-                    if flags.contains(package::Flags::EXPLICIT) {
-                        package.flags.contains(package::Flags::EXPLICIT)
-                    } else {
-                        true
-                    }
-                })
+                .filter(|package| if flags.explicit { package.flags.explicit } else { true })
                 .collect()
         } else {
             vec![]
@@ -97,9 +91,9 @@ impl Active {
                     id,
                     meta,
                     flags: if selection.explicit {
-                        package::Flags::INSTALLED | package::Flags::EXPLICIT
+                        package::Flags::new().with_installed().with_explicit()
                     } else {
-                        package::Flags::INSTALLED
+                        package::Flags::new().with_installed()
                     },
                 }),
             None => None,
