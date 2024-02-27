@@ -6,14 +6,12 @@ use std::collections::HashSet;
 
 use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::{Pool, Sqlite};
-use stone::payload::{self};
+use stone::payload;
 use thiserror::Error;
 use tokio::sync::Mutex;
 
 use crate::package;
 use crate::Installation;
-
-use super::Encoding;
 
 #[derive(Debug)]
 pub struct Database {
@@ -76,7 +74,7 @@ impl Database {
                 let entry = encoding::decode_entry(entry_type, entry_value1, entry_value2)?;
 
                 Some((
-                    package_id.0,
+                    package_id,
                     payload::Layout {
                         uid,
                         gid,
@@ -140,7 +138,7 @@ impl Database {
 
             let (entry_type, entry_value1, entry_value2) = encoding::encode_entry(entry);
 
-            b.push_bind(id.encode().to_owned())
+            b.push_bind(id.to_string())
                 .push_bind(uid)
                 .push_bind(gid)
                 .push_bind(mode)
@@ -172,7 +170,7 @@ impl Database {
 
         let mut separated = query.separated(", ");
         packages.into_iter().for_each(|pkg| {
-            separated.push_bind(pkg.encode());
+            separated.push_bind(pkg.to_string());
         });
         separated.push_unseparated(");");
 
@@ -196,7 +194,7 @@ impl Database {
                    entry_value2
             FROM layout WHERE package_id = ?",
         )
-        .bind(package.encode());
+        .bind(package.to_string());
 
         let layouts = query.fetch_all(&*pool).await?;
 
@@ -240,11 +238,12 @@ mod encoding {
     use sqlx::FromRow;
     use stone::payload;
 
-    use crate::{db::Decoder, package};
+    use crate::package;
 
     #[derive(FromRow)]
     pub struct Layout {
-        pub package_id: Decoder<package::Id>,
+        #[sqlx(try_from = "String")]
+        pub package_id: package::Id,
         pub uid: u32,
         pub gid: u32,
         pub mode: u32,

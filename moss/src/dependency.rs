@@ -160,6 +160,14 @@ impl FromStr for Dependency {
     }
 }
 
+impl<'a> TryFrom<&'a str> for Dependency {
+    type Error = ParseError;
+
+    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+        Self::from_str(value)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Provider {
     pub kind: Kind,
@@ -204,6 +212,14 @@ impl FromStr for Provider {
         let (kind, name) = parse(s)?;
 
         Ok(Self { kind, name })
+    }
+}
+
+impl<'a> TryFrom<&'a str> for Provider {
+    type Error = ParseError;
+
+    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+        Self::from_str(value)
     }
 }
 

@@ -8,7 +8,6 @@ use sqlx::{Acquire, Executor, Pool, Sqlite};
 use thiserror::Error;
 use tokio::sync::Mutex;
 
-use crate::db::Encoding;
 use crate::state::{self, Id, Selection};
 use crate::{Installation, State};
 
@@ -50,7 +49,7 @@ impl Database {
         .fetch_all(&*pool)
         .await?;
 
-        Ok(states.into_iter().map(|state| (state.id.0, state.created)).collect())
+        Ok(states.into_iter().map(|state| (state.id, state.created)).collect())
     }
 
     pub async fn get(&self, id: &Id) -> Result<State, Error> {
@@ -63,7 +62,7 @@ impl Database {
             WHERE id = ?;
             ",
         )
-        .bind(id.encode());
+        .bind(i64::from(*id));
         let selections_query = sqlx::query_as::<_, encoding::Selection>(
             "
             SELECT package_id,
@@ -73,7 +72,7 @@ impl Database {
             WHERE state_id = ?;
             ",
         )
-        .bind(id.encode());
+        .bind(i64::from(*id));
 
         let state = state_query.fetch_one(&*pool).await?;
         let selections_rows = selections_query.fetch_all(&*pool).await?;
@@ -81,19 +80,19 @@ impl Database {
         let selections = selections_rows
             .into_iter()
             .map(|row| Selection {
-                package: row.package_id.0,
+                package: row.package_id,
                 explicit: row.explicit,
                 reason: row.reason,
             })
             .collect();
 
         Ok(State {
-            id: state.id.0,
+            id: state.id,
             summary: state.summary,
             description: state.description,
             selections,
             created: state.created,
-            kind: state.kind.0,
+            kind: state.kind,
         })
     }
 
@@ -113,7 +112,7 @@ impl Database {
             RETURNING id;
             ",
         )
-        .bind(state::Kind::Transaction.encode())
+        .bind(state::Kind::Transaction.to_string())
         .bind(summary)
         .bind(description)
         .fetch_one(transaction.acquire().await?)
@@ -128,8 +127,8 @@ impl Database {
                     ",
                     )
                     .push_values(selections, |mut b, selection| {
-                        b.push_bind(id.0.encode())
-                            .push_bind(selection.package.encode())
+                        b.push_bind(i64::from(id))
+                            .push_bind(selection.package.to_string())
                             .push_bind(selection.explicit)
                             .push_bind(selection.reason.as_ref());
                     })
@@ -141,7 +140,7 @@ impl Database {
         transaction.commit().await?;
         drop(pool);
 
-        let state = self.get(&id.0).await?;
+        let state = self.get(&id).await?;
 
         Ok(state)
     }
@@ -162,7 +161,7 @@ impl Database {
 
         let mut separated = query.separated(", ");
         states.into_iter().for_each(|id| {
-            separated.push_bind(id.encode());
+            separated.push_bind(i64::from(*id));
         });
         separated.push_unseparated(");");
 
@@ -184,20 +183,22 @@ mod encoding {
     use chrono::{DateTime, Utc};
     use sqlx::FromRow;
 
-    use super::{state, Id};
-    use crate::{db::Decoder, package};
+    use crate::package;
+    use crate::state::{self, Id};
 
     #[derive(FromRow)]
     pub struct Created {
-        pub id: Decoder<Id>,
+        #[sqlx(try_from = "i64")]
+        pub id: Id,
         pub created: DateTime<Utc>,
     }
 
     #[derive(FromRow)]
     pub struct State {
-        pub id: Decoder<Id>,
-        #[sqlx(rename = "type")]
-        pub kind: Decoder<state::Kind>,
+        #[sqlx(try_from = "i64")]
+        pub id: Id,
+        #[sqlx(rename = "type", try_from = "&'a str")]
+        pub kind: state::Kind,
         pub created: DateTime<Utc>,
         pub summary: Option<String>,
         pub description: Option<String>,
@@ -205,12 +206,14 @@ mod encoding {
 
     #[derive(FromRow)]
     pub struct StateId {
-        pub id: Decoder<Id>,
+        #[sqlx(try_from = "i64")]
+        pub id: Id,
     }
 
     #[derive(FromRow)]
     pub struct Selection {
-        pub package_id: Decoder<package::Id>,
+        #[sqlx(try_from = "String")]
+        pub package_id: package::Id,
         pub explicit: bool,
         pub reason: Option<String>,
     }

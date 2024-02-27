@@ -174,7 +174,7 @@ impl Download {
 
         task::spawn_blocking(move || {
             let content_dir = self.installation.cache_path("content");
-            let content_path = content_dir.join(self.id.as_ref());
+            let content_path = content_dir.join(self.id);
 
             create_dir_all(&content_dir)?;
 
