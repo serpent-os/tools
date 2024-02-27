@@ -197,6 +197,7 @@ dependencies = [
  "clap",
  "config",
  "container",
+ "derive_more",
  "dirs",
  "elf",
  "futures",
@@ -384,6 +385,7 @@ name = "container"
 version = "0.1.0"
 dependencies = [
  "nix",
+ "strum",
  "thiserror",
 ]
 
@@ -2256,6 +2258,7 @@ name = "stone"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "strum",
  "thiserror",
  "xxhash-rust",
  "zstd",

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
-    fmt, fs,
+    fs,
     path::{Path, PathBuf},
 };
 
@@ -13,21 +13,13 @@ use nix::unistd::{access, AccessFlags, Uid};
 use crate::state;
 
 /// System mutability - do we have readwrite?
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display)]
+#[strum(serialize_all = "kebab-case")]
 pub enum Mutability {
     /// We only have readonly access
     ReadOnly,
     /// We have read-write access
     ReadWrite,
-}
-
-impl fmt::Display for Mutability {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Mutability::ReadOnly => "read-only".fmt(f),
-            Mutability::ReadWrite => "read-write".fmt(f),
-        }
-    }
 }
 
 /// An Installation is a general encapsulation pattern for a root filesystem

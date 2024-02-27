@@ -2,9 +2,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{collections::HashMap, fmt, path::Path};
+use std::{collections::HashMap, path::Path};
 
 use config::Config;
+use derive_more::{Display, From, Into};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -21,7 +22,7 @@ pub use self::manager::Manager;
 pub mod manager;
 
 /// A unique [`Repository`] identifier
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, From, Display)]
 #[serde(from = "String")]
 pub struct Id(String);
 
@@ -33,18 +34,6 @@ impl Id {
                 .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '_' })
                 .collect(),
         )
-    }
-}
-
-impl fmt::Display for Id {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-impl From<String> for Id {
-    fn from(value: String) -> Self {
-        Self::new(value)
     }
 }
 
@@ -66,24 +55,12 @@ pub struct Active {
 }
 
 /// The selection priority of a [`Repository`]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Display, Into)]
 pub struct Priority(u64);
 
 impl Priority {
     pub fn new(priority: u64) -> Self {
         Self(priority)
-    }
-}
-
-impl fmt::Display for Priority {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-impl From<Priority> for u64 {
-    fn from(priority: Priority) -> Self {
-        priority.0
     }
 }
 

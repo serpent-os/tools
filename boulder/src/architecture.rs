@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::fmt;
+use derive_more::Display;
 
 pub const fn host() -> Architecture {
     #[cfg(target_arch = "x86_64")]
@@ -37,9 +37,11 @@ impl Architecture {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display)]
 pub enum BuildTarget {
+    #[display(fmt = "{_0}")]
     Native(Architecture),
+    #[display(fmt = "emul32/{_0}")]
     Emul32(Architecture),
 }
 
@@ -52,15 +54,6 @@ impl BuildTarget {
         match self {
             BuildTarget::Native(arch) => *arch,
             BuildTarget::Emul32(arch) => *arch,
-        }
-    }
-}
-
-impl fmt::Display for BuildTarget {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            BuildTarget::Native(arch) => write!(f, "{arch}"),
-            BuildTarget::Emul32(arch) => write!(f, "emul32/{arch}"),
         }
     }
 }

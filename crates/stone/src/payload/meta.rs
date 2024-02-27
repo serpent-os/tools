@@ -2,10 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{
-    fmt::Display,
-    io::{Read, Write},
-};
+use std::io::{Read, Write};
 
 use super::{DecodeError, EncodeError, Record};
 use crate::{ReadExt, WriteExt};
@@ -21,12 +18,15 @@ pub struct Meta {
 }
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display)]
+#[strum(serialize_all = "lowercase")]
 pub enum Dependency {
     /// Just the plain name of a package
+    #[strum(serialize = "name")]
     PackageName = 0,
 
     /// A soname based dependency
+    #[strum(serialize = "soname")]
     SharedLibary,
 
     /// A pkgconfig `.pc` based dependency
@@ -45,27 +45,11 @@ pub enum Dependency {
     Binary,
 
     /// A binary in /usr/sbin
+    #[strum(serialize = "sysbinary")]
     SystemBinary,
 
     /// An emul32-compatible pkgconfig .pc dependency (lib32/*.pc)
     PkgConfig32,
-}
-
-/// Override display for `pkgconfig32(name)` style strings
-impl Display for Dependency {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Dependency::PackageName => write!(f, "name"),
-            Dependency::SharedLibary => write!(f, "soname"),
-            Dependency::PkgConfig => write!(f, "pkgconfig"),
-            Dependency::Interpreter => write!(f, "interpreter"),
-            Dependency::CMake => write!(f, "cmake"),
-            Dependency::Python => write!(f, "python"),
-            Dependency::Binary => write!(f, "binary"),
-            Dependency::SystemBinary => write!(f, "sysbinary"),
-            Dependency::PkgConfig32 => write!(f, "pkgconfig32"),
-        }
-    }
 }
 
 #[repr(u8)]
