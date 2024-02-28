@@ -28,6 +28,14 @@ actions:
         dependencies:
             - ninja
 
+    # Run testsuite with ctest
+    - cmake_test:
+        command: |
+            ninja test -v -j "%(jobs)" -C "%(builddir)"
+        dependencies:
+            - cmake
+            - ninja
+
 definitions:
 
     # Default cmake options as passed to cmake

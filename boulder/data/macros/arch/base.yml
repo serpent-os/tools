@@ -38,6 +38,7 @@ definitions:
     - cpp            : "%(compiler_cpp)"
     - objcpp         : "%(compiler_objcpp)"
     - objcxxcpp      : "%(compiler_objcxxcpp)"
+    - d              : "%(compiler_d)"
     - ar             : "%(compiler_ar)"
     - ld             : "%(compiler_ld)"
     - objcopy        : "%(compiler_objcopy)"
@@ -64,6 +65,7 @@ actions              :
             CGO_CXXFLAGS="%(cxxflags)"; export CGO_CXXFLAGS
             LDFLAGS="%(ldflags)"; export LDFLAGS
             CGO_LDFLAGS="%(ldflags) -Wl,--no-gc-sections"; export CGO_LDFLAGS
+            DFLAGS="%(dflags)"; export DFLAGS
             CC="%(cc)"; export CC
             CXX="%(cxx)"; export CXX
             OBJC="%(objc)"; export OBJC
@@ -286,14 +288,17 @@ flags               :
         c         : "-pipe -Wformat -Wformat-security -Wno-error -fPIC"
         cxx       : "-pipe -Wformat -Wformat-security -Wno-error -fPIC"
         ld        : "-Wl,-O2,--gc-sections"
+        d         : "-release -Hkeep-all-bodies -relocation-model=pic -wi"
 
     - omit-frame-pointer:
         c         : "-fomit-frame-pointer -momit-leaf-frame-pointer"
         cxx       : "-fomit-frame-pointer -momit-leaf-frame-pointer"
+        d         : "-frame-pointer=none"
 
     - no-omit-frame-pointer:
         c         : "-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
         cxx       : "-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
+        d         : "-frame-pointer=all"
 
     # Toggle bindnow (ON)
     - bindnow:
@@ -347,28 +352,35 @@ flags               :
     - optimize-generic:
         c         : "-O2"
         cxx       : "-O2"
+        d         : "-O2"
 
     # Optimize for size (OFF)
     - optimize-size:
         c     : "-Os"
         cxx   : "-Os"
+        d     : "-Os"
 
     # Optimize for speed (OFF)
     - optimize-speed:
         c         : "-O3"
         cxx       : "-O3"
+        d         : "-O3"
 
     # Enable LTO optimisations (OFF)
     - lto-full:
         c         : "-flto"
         cxx       : "-flto"
         ld        : "-flto"
+        llvm:
+            d         : "-flto=full"
+
 
     # Enable Thin-LTO optimisations (OFF)
     - lto-thin:
         llvm:
             c         : "-flto=thin"
             cxx       : "-flto=thin"
+            d         : "-flto=thin"
             ld        : "-flto=thin"
 
     # Enable LTOextra optimisations (OFF)
@@ -406,6 +418,7 @@ flags               :
         llvm:
             c     : "-Xclang -mllvm -Xclang -polly -Xclang -mllvm -Xclang -polly-vectorizer=stripmine"
             cxx   : "-Xclang -mllvm -Xclang -polly -Xclang -mllvm -Xclang -polly-vectorizer=stripmine"
+            d     : "-polly -polly-vectorizer=stripmine"
 
     # Toggle options you want to use with llvm-bolt (OFF)
     - bolt:
@@ -426,14 +439,21 @@ flags               :
         llvm:
             c         : "-gline-tables-only -fasynchronous-unwind-tables"
             cxx       : "-gline-tables-only -fasynchronous-unwind-tables"
+            d         : "-gline-tables-only -gc"
 
     # Toggle debug-std optimisations (ON)
     - debug-std:
-        c         : "-g -feliminate-unused-debug-types -fasynchronous-unwind-tables"
-        cxx       : "-g -feliminate-unused-debug-types -fasynchronous-unwind-tables"
+        d         : "-g -gc -d-debug"
+        gnu:
+            c         : "-g -feliminate-unused-debug-types -fasynchronous-unwind-tables"
+            cxx       : "-g -feliminate-unused-debug-types -fasynchronous-unwind-tables"
+        llvm:
+            c         : "-g -fasynchronous-unwind-tables"
+            cxx       : "-g -fasynchronous-unwind-tables"
 
     # Toggle fast math (OFF)
     - math:
+        d         : "-ffast-math -fp-contract=fast"
         gnu:
             c         : "-fno-math-errno -fno-trapping-math"
             cxx       : "-fno-math-errno -fno-trapping-math"
@@ -445,6 +465,7 @@ flags               :
     - noplt:
         c         : "-fno-plt"
         cxx       : "-fno-plt"
+        d         : "-fno-plt"
 
     # Toggle -fno-semantic-interposition (OFF)
     - nosemantic:
@@ -486,6 +507,7 @@ flags               :
     - visibility-hidden:
         c          : "-fvisibility=hidden"
         cxx        : "-fvisibility-inlines-hidden -fvisibility=hidden"
+        d          : "-fvisibility=hidden"
 
     # Toggle visibility inlines hidden (OFF)
     - visibility-inline:
