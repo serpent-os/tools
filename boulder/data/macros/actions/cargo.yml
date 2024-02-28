@@ -1,0 +1,38 @@
+actions:
+    # Fetch dependencies
+    - cargo_fetch:
+        command: |
+            cargo fetch -v --locked
+        dependencies:
+            - rust
+
+    # Build the rust project
+    - cargo_build:
+        command: |
+            cargo build -v -j "%(jobs)" --frozen --release --target %(target_triple) \
+              --config profile.release.debug=\"full\" \
+              --config profile.release.split-debuginfo=\"off\" \
+              --config profile.release.strip=\"none\"
+        dependencies:
+            - rust
+
+    # Install the built binary
+    - cargo_install:
+        command: |
+            cargo_install(){
+                if [ $# -eq 1 ]; then
+                    %install_bin target/%(target_triple)/release/"$1"
+                else
+                    %install_bin target/%(target_triple)/release/%(name)
+                fi
+            }
+            cargo_install
+        dependencies:
+            - rust
+
+    # Run tests
+    - cargo_test:
+        command: |
+            cargo test -v -j "%(jobs)" --frozen --release --target %(target_triple) --workspace
+        dependencies:
+            - rust
