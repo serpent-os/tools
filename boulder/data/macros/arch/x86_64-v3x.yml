@@ -1,0 +1,20 @@
+# Provides -m64 builds for x86_64-v3x build-hosts
+
+definitions:
+
+    - libsuffix      : ""
+    - build_platform : x86_64-%(vendorID)
+    - host_platform  : x86_64-%(vendorID)
+    - cc             : "%(compiler_c)"
+    - cxx            : "%(compiler_cxx)"
+    - cpp            : "%(compiler_cpp)"
+    - march          : x86-64-v3
+    - mtune          : znver1
+
+flags:
+
+    # Set architecture flags (GCC)
+    - architecture:
+        c         : "-march=x86-64-v3 -mtune=znver1 -maes -mfsgsbase -mpclmul -mrdrnd -maes -mxsaveopt"
+        cxx       : "-march=x86-64-v3 -mtune=znver1 -maes -mfsgsbase -mpclmul -mrdrnd -maes -mxsaveopt"
+

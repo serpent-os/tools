@@ -10,6 +10,7 @@ definitions:
     - cpp            : "%(compiler_cpp) -m64"
     - march          : armv8-a+simd+fp+crypto
     - mtune          : cortex-a72.cortex-a53
+    - target_triple  : "aarch64-unknown-linux-gnu"
 
 flags:
 

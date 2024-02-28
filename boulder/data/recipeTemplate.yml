@@ -1,0 +1,14 @@
+#
+# SPDX-FileCopyrightText: © 2020-2024 Serpent OS Developers
+#
+# SPDX-License-Identifier: MPL-2.0
+#
+name        : %s
+version     : %s
+release     : %s
+homepage    : %s
+upstreams   :
+%s
+summary     : %s
+description : |
+    %s

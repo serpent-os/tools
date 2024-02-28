@@ -10,6 +10,7 @@ definitions:
     - cpp            : "%(compiler_cpp) -m32"
     - march          : i686
     - mtune          : i686
+    - target_triple  : "i686-unknown-linux-gnu"
     - pkgconfigpath  : "%(libdir)/pkgconfig:/usr/share/pkgconfig:%(prefix)/lib/pkgconfig"
 
 flags:

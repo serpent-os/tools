@@ -30,6 +30,12 @@ actions:
         dependencies:
             - meson
 
+    - meson_test:
+        command: |
+            meson test --no-rebuild --print-errorlogs -j "%(jobs)" -C "%(builddir)"
+        dependencies:
+            - meson
+
 definitions:
 
     # Default meson options as passed to meson
