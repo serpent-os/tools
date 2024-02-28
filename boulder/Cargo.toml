@@ -6,12 +6,12 @@ edition.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-config = { path = "../config" }
-container = { path = "../container" }
+config = { path = "../crates/config" }
+container = { path = "../crates/container" }
 moss = { path = "../moss" }
-stone_recipe = { path = "../stone_recipe" }
-tui = { path = "../tui" }
-yaml = { path = "../yaml" }
+stone_recipe = { path = "../crates/stone_recipe" }
+tui = { path = "../crates/tui" }
+yaml = { path = "../crates/yaml" }
 
 clap.workspace = true
 dirs.workspace = true

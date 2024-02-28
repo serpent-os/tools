@@ -4,11 +4,11 @@ version = "0.1.0"
 edition.workspace = true
 
 [dependencies]
-config = { path = "../config" }
-dag = { path = "../dag" }
-stone = { path = "../stone" }
-tui = { path = "../tui" }
-vfs = { path = "../vfs" }
+config = { path = "../crates/config" }
+dag = { path = "../crates/dag" }
+stone = { path = "../crates/stone" }
+tui = { path = "../crates/tui" }
+vfs = { path = "../crates/vfs" }
 
 bitflags.workspace = true
 bytes.workspace = true
@@ -29,8 +29,8 @@ sqlx.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true
-thiserror.workspace = true 
+thiserror.workspace = true
 url.workspace = true
 xxhash-rust.workspace = true
-triggers = { version = "0.1.0", path = "../triggers" }
-container = { version = "0.1.0", path = "../container" }
+triggers = { version = "0.1.0", path = "../crates/triggers" }
+container = { version = "0.1.0", path = "../crates/container" }
