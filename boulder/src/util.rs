@@ -3,67 +3,89 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
-    io,
+    fs, io,
     num::NonZeroUsize,
+    os::unix::fs::symlink,
     path::{Path, PathBuf},
     thread,
 };
 
-use futures::{future::BoxFuture, FutureExt};
-use tokio::fs::{copy, create_dir_all, read_dir, read_link, remove_dir_all, symlink};
+use nix::unistd::{linkat, LinkatFlags};
 use url::Url;
 
-pub async fn ensure_dir_exists(path: &Path) -> Result<(), io::Error> {
+pub fn ensure_dir_exists(path: &Path) -> Result<(), io::Error> {
     if !path.exists() {
-        create_dir_all(path).await?;
+        fs::create_dir_all(path)?;
     }
     Ok(())
 }
 
-pub async fn recreate_dir(path: &Path) -> Result<(), io::Error> {
+pub fn recreate_dir(path: &Path) -> Result<(), io::Error> {
     if path.exists() {
-        remove_dir_all(path).await?;
+        fs::remove_dir_all(path)?;
     }
-    create_dir_all(path).await?;
+    fs::create_dir_all(path)?;
     Ok(())
 }
 
-pub fn copy_dir<'a>(source_dir: &'a Path, out_dir: &'a Path) -> BoxFuture<'a, Result<(), io::Error>> {
-    async move {
-        recreate_dir(out_dir).await?;
+pub fn copy_dir(source_dir: &Path, out_dir: &Path) -> Result<(), io::Error> {
+    recreate_dir(out_dir)?;
 
-        let mut contents = read_dir(&source_dir).await?;
+    let contents = fs::read_dir(source_dir)?;
 
-        while let Some(entry) = contents.next_entry().await? {
-            let path = entry.path();
+    for entry in contents.flatten() {
+        let path = entry.path();
 
-            if let Some(file_name) = path.file_name() {
-                let dest = out_dir.join(file_name);
-                let meta = entry.metadata().await?;
+        if let Some(file_name) = path.file_name() {
+            let dest = out_dir.join(file_name);
+            let meta = entry.metadata()?;
 
-                if meta.is_dir() {
-                    copy_dir(&path, &dest).await?;
-                } else if meta.is_file() {
-                    copy(&path, &dest).await?;
-                } else if meta.is_symlink() {
-                    symlink(read_link(&path).await?, &dest).await?;
-                }
+            if meta.is_dir() {
+                copy_dir(&path, &dest)?;
+            } else if meta.is_file() {
+                fs::copy(&path, &dest)?;
+            } else if meta.is_symlink() {
+                symlink(fs::read_link(&path)?, &dest)?;
             }
         }
-
-        Ok(())
     }
-    .boxed()
+
+    Ok(())
 }
 
-pub async fn list_dirs(dir: &Path) -> Result<Vec<PathBuf>, io::Error> {
-    let mut read_dir = read_dir(dir).await?;
+pub fn enumerate_files<'a>(
+    dir: &'a Path,
+    matcher: impl Fn(&Path) -> bool + Send + Copy + 'a,
+) -> Result<Vec<PathBuf>, io::Error> {
+    use std::fs::read_dir;
+
+    let read_dir = read_dir(dir)?;
 
     let mut paths = vec![];
 
-    while let Some(entry) = read_dir.next_entry().await? {
+    for entry in read_dir {
+        let entry = entry?;
         let path = entry.path();
-        let meta = entry.metadata().await?;
+        let meta = entry.metadata()?;
+
+        if meta.is_dir() {
+            paths.extend(enumerate_files(&path, matcher)?);
+        } else if meta.is_file() && matcher(&path) {
+            paths.push(path);
+        }
+    }
+
+    Ok(paths)
+}
+
+pub fn list_dirs(dir: &Path) -> Result<Vec<PathBuf>, io::Error> {
+    let read_dir = fs::read_dir(dir)?;
+
+    let mut paths = vec![];
+
+    for entry in read_dir.flatten() {
+        let path = entry.path();
+        let meta = entry.metadata()?;
 
         if meta.is_dir() {
             paths.push(path);
@@ -71,6 +93,18 @@ pub async fn list_dirs(dir: &Path) -> Result<Vec<PathBuf>, io::Error> {
     }
 
     Ok(paths)
+}
+
+pub fn hardlink_or_copy(from: &Path, to: &Path) -> Result<(), io::Error> {
+    // Attempt hard link
+    let link_result = linkat(None, from, None, to, LinkatFlags::NoSymlinkFollow);
+
+    // Copy instead
+    if link_result.is_err() {
+        fs::copy(from, to)?;
+    }
+
+    Ok(())
 }
 
 pub fn uri_file_name(uri: &Url) -> &str {
@@ -93,66 +127,4 @@ pub fn is_root() -> bool {
     use nix::unistd::Uid;
 
     Uid::effective().is_root()
-}
-
-pub mod sync {
-    use std::{
-        fs::{copy, create_dir_all, remove_dir_all},
-        io,
-        path::{Path, PathBuf},
-    };
-
-    use nix::unistd::{linkat, LinkatFlags};
-
-    pub fn ensure_dir_exists(path: &Path) -> Result<(), io::Error> {
-        if !path.exists() {
-            create_dir_all(path)?;
-        }
-        Ok(())
-    }
-
-    pub fn recreate_dir(path: &Path) -> Result<(), io::Error> {
-        if path.exists() {
-            remove_dir_all(path)?;
-        }
-        create_dir_all(path)?;
-        Ok(())
-    }
-
-    pub fn enumerate_files<'a>(
-        dir: &'a Path,
-        matcher: impl Fn(&Path) -> bool + Send + Copy + 'a,
-    ) -> Result<Vec<PathBuf>, io::Error> {
-        use std::fs::read_dir;
-
-        let read_dir = read_dir(dir)?;
-
-        let mut paths = vec![];
-
-        for entry in read_dir {
-            let entry = entry?;
-            let path = entry.path();
-            let meta = entry.metadata()?;
-
-            if meta.is_dir() {
-                paths.extend(enumerate_files(&path, matcher)?);
-            } else if meta.is_file() && matcher(&path) {
-                paths.push(path);
-            }
-        }
-
-        Ok(paths)
-    }
-
-    pub fn hardlink_or_copy(from: &Path, to: &Path) -> Result<(), io::Error> {
-        // Attempt hard link
-        let link_result = linkat(None, from, None, to, LinkatFlags::NoSymlinkFollow);
-
-        // Copy instead
-        if link_result.is_err() {
-            copy(from, to)?;
-        }
-
-        Ok(())
-    }
 }

@@ -5,7 +5,6 @@
 use std::path::PathBuf;
 
 use clap::{arg, ArgMatches, Command};
-use futures::StreamExt;
 use itertools::Itertools;
 use thiserror::Error;
 
@@ -46,7 +45,7 @@ enum Sync {
 }
 
 /// Handle listing by filter
-pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
+pub fn handle(args: &ArgMatches) -> Result<(), Error> {
     let root = args.get_one::<PathBuf>("root").unwrap().clone();
 
     let (filter_flags, sync) = match args.subcommand() {
@@ -72,11 +71,11 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     };
 
     // Grab a client for the target, enumerate packages
-    let client = Client::new(environment::NAME, root).await?;
-    let pkgs = client.registry.list(filter_flags).collect::<Vec<_>>().await;
+    let client = Client::new(environment::NAME, root)?;
+    let pkgs = client.registry.list(filter_flags).collect::<Vec<_>>();
 
     let sync_available = if sync.is_some() {
-        client.registry.list(Flags::AVAILABLE).collect::<Vec<_>>().await
+        client.registry.list(Flags::AVAILABLE).collect::<Vec<_>>()
     } else {
         vec![]
     };

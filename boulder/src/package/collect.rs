@@ -10,9 +10,9 @@ use std::{
 };
 
 use glob::Pattern;
-use moss::stone::payload::{layout, Layout};
-use moss::stone::write::digest;
 use nix::libc::{S_IFDIR, S_IRGRP, S_IROTH, S_IRWXU, S_IXGRP, S_IXOTH};
+use stone::payload::{layout, Layout};
+use stone::write::digest;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Eq, PartialEq)]

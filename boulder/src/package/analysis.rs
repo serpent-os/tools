@@ -7,7 +7,8 @@ use std::{
     path::PathBuf,
 };
 
-use moss::{stone::write::digest, Dependency, Provider};
+use moss::{Dependency, Provider};
+use stone::write::digest;
 use tui::{ProgressBar, ProgressStyle, Stylize};
 
 use super::collect::{Collector, PathInfo};

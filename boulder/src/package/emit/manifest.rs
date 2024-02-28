@@ -4,7 +4,6 @@
 
 use std::{collections::BTreeSet, io, path::PathBuf};
 
-use moss::stone;
 use thiserror::Error;
 
 use crate::{Architecture, Paths, Recipe};

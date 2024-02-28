@@ -4,13 +4,10 @@
 
 use std::{collections::BTreeSet, fs::File, path::Path};
 
-use moss::{
-    stone::{
-        self,
-        header::v1::FileType,
-        payload::{self, meta},
-    },
-    Dependency,
+use moss::Dependency;
+use stone::{
+    header::v1::FileType,
+    payload::{self, meta},
 };
 
 use super::Error;

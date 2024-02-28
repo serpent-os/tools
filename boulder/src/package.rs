@@ -7,7 +7,7 @@ use std::{
 };
 
 use itertools::Itertools;
-use moss::stone::write::digest;
+use stone::write::digest;
 use stone_recipe::{script, Package};
 use thiserror::Error;
 
@@ -52,7 +52,7 @@ impl Packager {
 
     pub fn package(self) -> Result<(), Error> {
         // Remove old artifacts
-        util::sync::recreate_dir(&self.paths.artefacts().host).map_err(Error::RecreateArtefactsDir)?;
+        util::recreate_dir(&self.paths.artefacts().host).map_err(Error::RecreateArtefactsDir)?;
 
         // Executed in guest container since file permissions may be borked
         // for host if run rootless
@@ -198,7 +198,7 @@ fn resolve_packages(
 }
 
 fn sync_artefacts(paths: &Paths) -> Result<(), io::Error> {
-    for path in util::sync::enumerate_files(&paths.artefacts().host, |_| true)? {
+    for path in util::enumerate_files(&paths.artefacts().host, |_| true)? {
         let filename = path.file_name().and_then(|p| p.to_str()).unwrap_or_default();
 
         let target = paths.recipe().host.join(filename);
@@ -207,7 +207,7 @@ fn sync_artefacts(paths: &Paths) -> Result<(), io::Error> {
             fs::remove_file(&target)?;
         }
 
-        util::sync::hardlink_or_copy(&path, &target)?;
+        util::hardlink_or_copy(&path, &target)?;
     }
     Ok(())
 }

@@ -27,7 +27,7 @@ pub fn command() -> Command {
 }
 
 /// Handle execution of `moss install`
-pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
+pub fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     let pkgs = args
         .get_many::<String>("NAME")
         .into_iter()
@@ -37,12 +37,12 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     let yes = *args.get_one::<bool>("yes").unwrap();
 
     // Grab a client for the root
-    let mut client = Client::new(environment::NAME, root).await?;
+    let mut client = Client::new(environment::NAME, root)?;
 
     // Make ephemeral if a blit target was provided
     if let Some(blit_target) = args.get_one::<PathBuf>("to").cloned() {
         client = client.ephemeral(blit_target)?;
     }
 
-    client.install(&pkgs, yes).await
+    client.install(&pkgs, yes)
 }

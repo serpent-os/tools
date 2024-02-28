@@ -22,8 +22,8 @@ impl Macros {
 
         let matcher = |p: &Path| p.extension().and_then(|s| s.to_str()) == Some("yml");
 
-        let arch_files = util::sync::enumerate_files(&arch_dir, matcher).map_err(Error::ArchFiles)?;
-        let action_files = util::sync::enumerate_files(&actions_dir, matcher).map_err(Error::ActionFiles)?;
+        let arch_files = util::enumerate_files(&arch_dir, matcher).map_err(Error::ArchFiles)?;
+        let action_files = util::enumerate_files(&actions_dir, matcher).map_err(Error::ActionFiles)?;
 
         let mut arch = HashMap::new();
         let mut actions = vec![];

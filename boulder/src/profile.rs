@@ -92,11 +92,10 @@ pub struct Manager<'a> {
 }
 
 impl<'a> Manager<'a> {
-    pub async fn new(env: &'a Env) -> Manager<'a> {
+    pub fn new(env: &'a Env) -> Manager<'a> {
         let profiles = env
             .config
             .load::<Map>()
-            .await
             .into_iter()
             .reduce(Map::merge)
             .unwrap_or_default();
@@ -111,10 +110,10 @@ impl<'a> Manager<'a> {
             .ok_or_else(|| Error::MissingProfile(profile.clone()))
     }
 
-    pub async fn save_profile(&mut self, id: Id, profile: Profile) -> Result<(), Error> {
+    pub fn save_profile(&mut self, id: Id, profile: Profile) -> Result<(), Error> {
         // Save config
         let map = Map::with([(id.clone(), profile.clone())]);
-        self.env.config.save(id.clone(), &map).await?;
+        self.env.config.save(id.clone(), &map)?;
 
         // Add to profile map
         self.profiles.add(id, profile);

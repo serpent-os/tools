@@ -3,15 +3,17 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::fs::{self, File};
+use std::io;
+use std::path::{Path, PathBuf};
 
-use futures::{future, stream, StreamExt, TryStreamExt};
+use futures::{stream, StreamExt, TryFutureExt, TryStreamExt};
+use itertools::Itertools;
 use thiserror::Error;
-use tokio::{fs, io};
 use xxhash_rust::xxh3::xxh3_64;
 
 use crate::db::meta;
-use crate::{environment, stone};
+use crate::{environment, runtime};
 use crate::{package, Installation};
 
 use crate::repository::{self, Repository};
@@ -43,14 +45,14 @@ impl Manager {
     }
 
     /// Create a [`Manager`] for the supplied [`Installation`] using system configurations
-    pub async fn system(config: config::Manager, installation: Installation) -> Result<Self, Error> {
-        Self::new(Source::System(config), installation).await
+    pub fn system(config: config::Manager, installation: Installation) -> Result<Self, Error> {
+        Self::new(Source::System(config), installation)
     }
 
     /// Create a [`Manager`] for the supplied [`Installation`] using the provided configurations
     ///
     /// [`Manager`] can't be used to `add` new repos in this mode
-    pub async fn explicit(
+    pub fn explicit(
         identifier: impl ToString,
         repos: repository::Map,
         installation: Installation,
@@ -62,17 +64,15 @@ impl Manager {
             },
             installation,
         )
-        .await
     }
 
-    async fn new(source: Source, installation: Installation) -> Result<Self, Error> {
+    fn new(source: Source, installation: Installation) -> Result<Self, Error> {
         let configs = match &source {
             Source::System(config) =>
             // Load all configs, default if none exist
             {
                 config
                     .load::<repository::Map>()
-                    .await
                     .into_iter()
                     .reduce(repository::Map::merge)
                     .unwrap_or_default()
@@ -81,14 +81,14 @@ impl Manager {
         };
 
         // Open all repo meta dbs and collect into hash map
-        let repositories = future::try_join_all(configs.into_iter().map(|(id, repository)| async {
-            let db = open_meta_db(source.identifier(), &repository, &installation).await?;
+        let repositories = configs
+            .into_iter()
+            .map(|(id, repository)| {
+                let db = open_meta_db(source.identifier(), &repository, &installation)?;
 
-            Ok::<_, Error>((id.clone(), repository::Active { id, repository, db }))
-        }))
-        .await?
-        .into_iter()
-        .collect();
+                Ok((id.clone(), repository::Active { id, repository, db }))
+            })
+            .collect::<Result<_, Error>>()?;
 
         Ok(Self {
             source,
@@ -98,7 +98,7 @@ impl Manager {
     }
 
     /// Add a [`Repository`]
-    pub async fn add_repository(&mut self, id: repository::Id, repository: Repository) -> Result<(), Error> {
+    pub fn add_repository(&mut self, id: repository::Id, repository: Repository) -> Result<(), Error> {
         let Source::System(config) = &self.source else {
             return Err(Error::ExplicitUnsupported);
         };
@@ -108,11 +108,10 @@ impl Manager {
         // multiple configuration files
         {
             let map = repository::Map::with([(id.clone(), repository.clone())]);
-
-            config.save(&id, &map).await.map_err(Error::SaveConfig)?;
+            config.save(&id, &map).map_err(Error::SaveConfig)?;
         }
 
-        let db = open_meta_db(self.source.identifier(), &repository, &self.installation).await?;
+        let db = open_meta_db(self.source.identifier(), &repository, &self.installation)?;
 
         self.repositories
             .insert(id.clone(), repository::Active { id, repository, db });
@@ -123,21 +122,30 @@ impl Manager {
     /// Refresh all [`Repository`]'s by fetching it's latest index
     /// file and updating it's associated meta database
     pub async fn refresh_all(&mut self) -> Result<(), Error> {
-        // Fetch index file + add to meta_db
-        future::try_join_all(
-            self.repositories
-                .iter()
-                .map(|(id, state)| refresh_index(self.source.identifier(), state, &self.installation)),
-        )
-        .await?;
+        // Fetch index files asynchronously
+        let fetched = stream::iter(&self.repositories)
+            .map(|(_, state)| {
+                fetch_index(self.source.identifier(), state, &self.installation)
+                    .and_then(move |file| async move { Ok((state.clone(), file)) })
+            })
+            .buffer_unordered(environment::MAX_NETWORK_CONCURRENCY)
+            .try_collect::<Vec<_>>()
+            .await?;
+
+        // Add each file to its meta_db
+        for (state, file) in fetched {
+            runtime::unblock(move || update_meta_db(&state, &file)).await?;
+        }
 
         Ok(())
     }
 
     /// Refresh a [`Repository`] by Id
     pub async fn refresh(&mut self, id: &repository::Id) -> Result<(), Error> {
-        if let Some(repo) = self.repositories.get(id) {
-            refresh_index(self.source.identifier(), repo, &self.installation).await
+        if let Some(repo) = self.repositories.get(id).cloned() {
+            let file = fetch_index(self.source.identifier(), &repo, &self.installation).await?;
+            runtime::unblock(move || update_meta_db(&repo, &file)).await?;
+            Ok(())
         } else {
             Err(Error::UnknownRepo(id.clone()))
         }
@@ -149,24 +157,29 @@ impl Manager {
     /// This is useful to call when initializing the moss client in-case users added configs
     /// manually outside the CLI
     pub async fn ensure_all_initialized(&mut self) -> Result<(), Error> {
-        let initialized = stream::iter(&self.repositories)
-            .filter(|(id, state)| async {
-                let index_file =
-                    cache_dir(self.source.identifier(), &state.repository, &self.installation).join("stone.index");
+        let uninitialized = self.repositories.iter().filter_map(|(id, state)| {
+            let index_file =
+                cache_dir(self.source.identifier(), &state.repository, &self.installation).join("stone.index");
 
-                !index_file.exists()
-            })
-            .map(|(id, state)| async {
-                println!("Initializing repo {}...", *id);
+            if !index_file.exists() {
+                Some(state)
+            } else {
+                None
+            }
+        });
 
-                refresh_index(self.source.identifier(), state, &self.installation).await
+        let fetched = stream::iter(uninitialized)
+            .map(|state| {
+                fetch_index(self.source.identifier(), state, &self.installation)
+                    .and_then(move |file| async move { Ok((state.clone(), file)) })
             })
             .buffer_unordered(environment::MAX_NETWORK_CONCURRENCY)
             .try_collect::<Vec<_>>()
             .await?;
 
-        if !initialized.is_empty() {
-            println!();
+        // Add each file to its meta_db
+        for (state, file) in fetched {
+            runtime::unblock(move || update_meta_db(&state, &file)).await?;
         }
 
         Ok(())
@@ -178,7 +191,7 @@ impl Manager {
     }
 
     /// Remove a repository, deleting any related config & cached data
-    pub async fn remove(&mut self, id: impl Into<repository::Id>) -> Result<Removal, Error> {
+    pub fn remove(&mut self, id: impl Into<repository::Id>) -> Result<Removal, Error> {
         // Only allow removal for system repo manager
         let Source::System(config) = &self.source else {
             return Err(Error::ExplicitUnsupported);
@@ -193,12 +206,12 @@ impl Manager {
 
         // Remove cache
         if cache_dir.exists() {
-            fs::remove_dir_all(&cache_dir).await.map_err(Error::RemoveDir)?;
+            fs::remove_dir_all(&cache_dir).map_err(Error::RemoveDir)?;
         }
 
         // Delete config, only succeeds for configs that live in their
         // own config file w/ matching repo name
-        if config.delete::<repository::Map>(&repo.id).await.is_err() {
+        if config.delete::<repository::Map>(&repo.id).is_err() {
             return Ok(Removal::ConfigDeleted(false));
         }
 
@@ -219,49 +232,57 @@ fn cache_dir(identifier: &str, repo: &Repository, installation: &Installation) -
 
 /// Open the meta db file, ensuring it's
 /// directory exists
-async fn open_meta_db(
-    identifier: &str,
-    repo: &Repository,
-    installation: &Installation,
-) -> Result<meta::Database, Error> {
+fn open_meta_db(identifier: &str, repo: &Repository, installation: &Installation) -> Result<meta::Database, Error> {
     let dir = cache_dir(identifier, repo, installation);
 
-    fs::create_dir_all(&dir).await.map_err(Error::CreateDir)?;
+    fs::create_dir_all(&dir).map_err(Error::CreateDir)?;
 
-    let db = meta::Database::new(dir.join("db"), installation.read_only()).await?;
+    let db = meta::Database::new(dir.join("db"), installation.read_only())?;
 
     Ok(db)
 }
 
-/// Fetches a stone index file from the repository URL,
-/// saves it to the repo installation path, then
-/// loads it's metadata into the meta db
-async fn refresh_index(identifier: &str, state: &repository::Active, installation: &Installation) -> Result<(), Error> {
+/// Fetches a stone index file from the repository URL
+/// and saves it to the repo installation path
+async fn fetch_index(
+    identifier: &str,
+    state: &repository::Active,
+    installation: &Installation,
+) -> Result<PathBuf, Error> {
     let out_dir = cache_dir(identifier, &state.repository, installation);
 
-    fs::create_dir_all(&out_dir).await.map_err(Error::CreateDir)?;
+    tokio::fs::create_dir_all(&out_dir).await.map_err(Error::CreateDir)?;
 
     let out_path = out_dir.join("stone.index");
 
     // Fetch index & write to `out_path`
     repository::fetch_index(state.repository.uri.clone(), &out_path).await?;
 
+    Ok(out_path)
+}
+
+/// Updates a stones metadata into the meta db
+fn update_meta_db(state: &repository::Active, index_path: &Path) -> Result<(), Error> {
     // Wipe db since we're refreshing from a new index file
-    state.db.wipe().await?;
+    state.db.wipe()?;
 
     // Get a stream of payloads
-    let (_, payloads) = stone::stream_payloads(&out_path).await?;
+    let mut file = File::open(index_path).map_err(Error::OpenIndex)?;
+    let mut reader = stone::read(&mut file)?;
+    let payloads = reader.payloads()?;
 
     // Update each payload into the meta db
     payloads
-        .map_err(Error::ReadStone)
         // Batch up to `DB_BATCH_SIZE` payloads
         .chunks(environment::DB_BATCH_SIZE)
+        .into_iter()
         // Transpose error for early bail
-        .map(|results| results.into_iter().collect::<Result<Vec<_>, _>>())
-        .try_for_each(|payloads| async {
+        .map(|chunk| chunk.into_iter().collect::<Result<Vec<_>, _>>())
+        .try_for_each(|result| {
+            let chunk = result?;
+
             // Construct Meta for each payload
-            let packages = payloads
+            let packages = chunk
                 .into_iter()
                 .filter_map(|payload| {
                     if let stone::read::PayloadKind::Meta(meta) = payload {
@@ -290,9 +311,8 @@ async fn refresh_index(identifier: &str, state: &repository::Active, installatio
             // package has 13 binds x 1k batch size = 17k. This leaves us
             // overhead to add more binds in the future, otherwise we can
             // lower the `DB_BATCH_SIZE`.
-            state.db.batch_add(packages).await.map_err(Error::Database)
-        })
-        .await?;
+            state.db.batch_add(packages).map_err(Error::Database)
+        })?;
 
     Ok(())
 }
@@ -309,6 +329,8 @@ pub enum Error {
     RemoveDir(#[source] io::Error),
     #[error("fetch index file")]
     FetchIndex(#[from] repository::FetchError),
+    #[error("open index file")]
+    OpenIndex(#[source] io::Error),
     #[error("read index file")]
     ReadStone(#[from] stone::read::Error),
     #[error("meta db")]

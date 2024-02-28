@@ -14,7 +14,6 @@ use moss::package::{self, MissingMetaFieldError};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use stone::{payload::layout, read::PayloadKind};
 use thiserror::{self, Error};
-use tokio::task;
 use tui::{ProgressBar, ProgressStyle, ProgressWriter};
 
 pub fn command() -> Command {
@@ -25,7 +24,7 @@ pub fn command() -> Command {
 }
 
 /// Handle the `extract` command
-pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
+pub fn handle(args: &ArgMatches) -> Result<(), Error> {
     let paths = args
         .get_many::<PathBuf>("PATH")
         .into_iter()
@@ -33,14 +32,6 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
         .cloned()
         .collect::<Vec<_>>();
 
-    task::spawn_blocking(move || extract(paths))
-        .await
-        .expect("join handle")?;
-
-    Ok(())
-}
-
-fn extract(paths: Vec<PathBuf>) -> Result<(), Error> {
     // Begin unpack
     create_dir_all(".stoneStore")?;
 

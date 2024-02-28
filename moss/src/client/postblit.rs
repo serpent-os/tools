@@ -58,7 +58,7 @@ pub(super) struct TriggerRunner<'a> {
 
 /// Construct an iterator of executable triggers for the given
 /// scope, which can be used with nice progress bars.
-pub(super) async fn triggers<'a>(
+pub(super) fn triggers<'a>(
     scope: TriggerScope<'a>,
     fstree: &vfs::tree::Tree<PendingFile>,
 ) -> Result<Vec<TriggerRunner<'a>>, Error> {
@@ -68,13 +68,11 @@ pub(super) async fn triggers<'a>(
     let triggers = match scope {
         TriggerScope::Transaction(install) => config::Manager::custom(install.staging_dir().join(trigger_root))
             .load::<TransactionTrigger>()
-            .await
             .into_iter()
             .map(|t| t.0)
             .collect_vec(),
         TriggerScope::System(install) => config::Manager::custom(install.root.join(trigger_root))
             .load::<SystemTrigger>()
-            .await
             .into_iter()
             .map(|t| t.0)
             .collect_vec(),

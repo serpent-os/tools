@@ -5,7 +5,6 @@
 use std::path::PathBuf;
 
 use clap::{arg, ArgMatches, Command};
-use futures::StreamExt;
 use itertools::Itertools;
 use moss::{
     client::{self, Client},
@@ -29,7 +28,7 @@ pub fn command() -> Command {
 }
 
 /// For all arguments, try to match a package
-pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
+pub fn handle(args: &ArgMatches) -> Result<(), Error> {
     let pkgs = args
         .get_many::<String>("NAME")
         .into_iter()
@@ -39,15 +38,11 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     let show_files = args.get_flag("files");
 
     let root = args.get_one::<PathBuf>("root").unwrap().clone();
-    let client = Client::new(environment::NAME, root).await?;
+    let client = Client::new(environment::NAME, root)?;
 
     for pkg in pkgs {
         let lookup = Provider::from_name(&pkg).unwrap();
-        let resolved = client
-            .registry
-            .by_provider(&lookup, Flags::NONE)
-            .collect::<Vec<_>>()
-            .await;
+        let resolved = client.registry.by_provider(&lookup, Flags::NONE).collect::<Vec<_>>();
         if resolved.is_empty() {
             return Err(Error::NotFound(pkg));
         }
@@ -55,7 +50,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
             print_package(&candidate);
 
             if candidate.flags.contains(Flags::INSTALLED) && show_files {
-                let vfs = client.vfs([&candidate.id]).await?;
+                let vfs = client.vfs([&candidate.id])?;
                 print_files(vfs);
             }
             println!();

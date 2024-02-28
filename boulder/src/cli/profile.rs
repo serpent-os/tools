@@ -4,10 +4,10 @@
 
 use std::{collections::HashMap, io};
 
-use boulder::{profile, Env, Profile, Runtime};
+use boulder::{profile, Env, Profile};
 use clap::Parser;
 use itertools::Itertools;
-use moss::{repository, Repository};
+use moss::{repository, runtime, Repository};
 use thiserror::Error;
 use url::Url;
 
@@ -75,13 +75,14 @@ fn parse_repository(s: &str) -> Result<(repository::Id, Repository), String> {
 }
 
 pub fn handle(command: Command, env: Env) -> Result<(), Error> {
-    let rt = Runtime::new()?;
-    let manager = rt.block_on(profile::Manager::new(&env));
+    let _guard = runtime::init();
+
+    let manager = profile::Manager::new(&env);
 
     match command.subcommand {
         Subcommand::List => list(manager),
-        Subcommand::Add { name, repos } => rt.block_on(add(&env, manager, name, repos)),
-        Subcommand::Update { profile } => rt.block_on(update(&env, manager, &profile)),
+        Subcommand::Add { name, repos } => add(&env, manager, name, repos),
+        Subcommand::Update { profile } => update(&env, manager, &profile),
     }
 }
 
@@ -106,7 +107,7 @@ pub fn list(manager: profile::Manager) -> Result<(), Error> {
     Ok(())
 }
 
-pub async fn add<'a>(
+pub fn add<'a>(
     env: &'a Env,
     mut manager: profile::Manager<'a>,
     name: String,
@@ -114,27 +115,25 @@ pub async fn add<'a>(
 ) -> Result<(), Error> {
     let id = profile::Id::new(name);
 
-    manager
-        .save_profile(
-            id.clone(),
-            Profile {
-                collections: repository::Map::with(repos),
-            },
-        )
-        .await?;
+    manager.save_profile(
+        id.clone(),
+        Profile {
+            collections: repository::Map::with(repos),
+        },
+    )?;
 
-    update(env, manager, &id).await?;
+    update(env, manager, &id)?;
 
     println!("Profile \"{id}\" has been added");
 
     Ok(())
 }
 
-pub async fn update<'a>(env: &'a Env, manager: profile::Manager<'a>, profile: &profile::Id) -> Result<(), Error> {
+pub fn update<'a>(env: &'a Env, manager: profile::Manager<'a>, profile: &profile::Id) -> Result<(), Error> {
     let repos = manager.repositories(profile)?.clone();
 
-    let mut moss_client = moss::Client::with_explicit_repositories("boulder", &env.moss_dir, repos).await?;
-    moss_client.refresh_repositories().await?;
+    let mut moss_client = moss::Client::with_explicit_repositories("boulder", &env.moss_dir, repos)?;
+    runtime::block_on(moss_client.refresh_repositories())?;
 
     println!("Profile {profile} updated");
 

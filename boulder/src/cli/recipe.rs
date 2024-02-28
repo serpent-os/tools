@@ -7,10 +7,9 @@ use std::{
     path::PathBuf,
 };
 
-use boulder::Runtime;
 use clap::Parser;
 use futures::StreamExt;
-use moss::request;
+use moss::{request, runtime};
 use sha2::{Digest, Sha256};
 use stone_recipe::Recipe;
 use thiserror::Error;
@@ -133,7 +132,7 @@ fn update(recipe: Option<PathBuf>, overwrite: bool, version: String, upstreams: 
     }
 
     // Needed to fetch
-    let rt = Runtime::new().map_err(Error::Runtime)?;
+    let _guard = runtime::init();
 
     // Add all update operations
     let mut updater = yaml::Updater::new();
@@ -146,7 +145,7 @@ fn update(recipe: Option<PathBuf>, overwrite: bool, version: String, upstreams: 
                 updater.update_value(version, |root| root / "version");
             }
             Update::PlainUpstream(i, key, new_uri) => {
-                let hash = rt.block_on(fetch_hash(new_uri.clone()))?;
+                let hash = runtime::block_on(fetch_hash(new_uri.clone()))?;
 
                 let path = |root| root / "upstreams" / i / key.as_str().unwrap_or_default();
 
@@ -216,8 +215,6 @@ pub enum Error {
     Fetch(#[from] request::Error),
     #[error("fetch upstream")]
     FetchIo(#[source] io::Error),
-    #[error("runtime")]
-    Runtime(#[source] io::Error),
     #[error("invalid utf-8 input")]
     Utf8(#[from] std::string::FromUtf8Error),
 }

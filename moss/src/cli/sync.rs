@@ -7,8 +7,6 @@ use std::path::PathBuf;
 use std::{collections::BTreeSet, path::Path};
 
 use clap::{arg, value_parser, ArgMatches, Command};
-use futures::{stream, StreamExt, TryStreamExt};
-use moss::environment;
 use moss::registry::transaction;
 use moss::state::Selection;
 use moss::{
@@ -16,6 +14,7 @@ use moss::{
     package::{self, Flags},
     Package,
 };
+use moss::{environment, runtime};
 use thiserror::Error;
 
 use tui::dialoguer::theme::ColorfulTheme;
@@ -39,11 +38,11 @@ pub fn command() -> Command {
         )
 }
 
-pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
+pub fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     let yes_all = *args.get_one::<bool>("yes").unwrap();
     let upgrade_only = *args.get_one::<bool>("upgrade-only").unwrap();
 
-    let mut client = Client::new(environment::NAME, root).await?;
+    let mut client = Client::new(environment::NAME, root)?;
 
     // Make ephemeral if a blit target was provided
     if let Some(blit_target) = args.get_one::<PathBuf>("to").cloned() {
@@ -51,11 +50,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     }
 
     // Grab all the existing installed packages
-    let installed = client
-        .registry
-        .list_installed(package::Flags::NONE)
-        .collect::<Vec<_>>()
-        .await;
+    let installed = client.registry.list_installed(package::Flags::NONE).collect::<Vec<_>>();
     if installed.is_empty() {
         return Err(Error::NoInstall);
     }
@@ -68,8 +63,8 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     //
     // By resolving only explicit first, this ensures any "orphaned" transitive deps
     // are naturally dropped from the final state.
-    let first_pass = resolve_with_sync(&client, Resolution::Explicit, upgrade_only, &installed).await?;
-    let finalized = resolve_with_sync(&client, Resolution::All, upgrade_only, &first_pass).await?;
+    let first_pass = resolve_with_sync(&client, Resolution::Explicit, upgrade_only, &installed)?;
+    let finalized = resolve_with_sync(&client, Resolution::All, upgrade_only, &first_pass)?;
 
     // Synced are packages are:
     //
@@ -116,13 +111,13 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
         return Err(Error::Cancelled);
     }
 
-    client.cache_packages(&synced).await?;
+    runtime::block_on(client.cache_packages(&synced))?;
 
     // Map finalized state to a [`Selection`] by referencing
     // it's value from the previous state
     let new_selections = {
         let previous_selections = match client.installation.active_state {
-            Some(id) => client.state_db.get(&id).await?.selections,
+            Some(id) => client.state_db.get(&id)?.selections,
             None => vec![],
         };
 
@@ -155,7 +150,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     };
 
     // Perfect, apply state.
-    client.apply_state(&new_selections, "Sync").await?;
+    client.apply_state(&new_selections, "Sync")?;
 
     Ok(())
 }
@@ -167,7 +162,7 @@ enum Resolution {
 
 /// Return a fully resolved package set w/ sync'd changes swapped in
 /// using the provided `packages` at the requested [`Resolution`]
-async fn resolve_with_sync(
+fn resolve_with_sync(
     client: &Client,
     resolution: Resolution,
     upgrade_only: bool,
@@ -177,22 +172,15 @@ async fn resolve_with_sync(
 
     // For each package, replace it w/ it's sync'd change (if available)
     // or return the original package
-    let with_sync = stream::iter(packages.iter())
-        .filter(|p| async {
-            match resolution {
-                Resolution::Explicit => p.flags.contains(Flags::EXPLICIT),
-                Resolution::All => true,
-            }
+    let with_sync = packages
+        .iter()
+        .filter(|p| match resolution {
+            Resolution::Explicit => p.flags.contains(Flags::EXPLICIT),
+            Resolution::All => true,
         })
-        .map(|p| async {
+        .map(|p| {
             // Get first available = use highest priority
-            if let Some(lookup) = client
-                .registry
-                .by_name(&p.meta.name, package::Flags::AVAILABLE)
-                .boxed()
-                .next()
-                .await
-            {
+            if let Some(lookup) = client.registry.by_name(&p.meta.name, package::Flags::AVAILABLE).next() {
                 let upgrade_check = if upgrade_only {
                     lookup.meta.source_release > p.meta.source_release
                 } else {
@@ -208,16 +196,14 @@ async fn resolve_with_sync(
                 Err(Error::NameNotFound(p.meta.name.clone()))
             }
         })
-        .buffer_unordered(environment::MAX_DISK_CONCURRENCY)
-        .try_collect::<Vec<_>>()
-        .await?;
+        .collect::<Result<Vec<_>, _>>()?;
 
     // Build a new tx from this sync'd package set
     let mut tx = client.registry.transaction()?;
-    tx.add(with_sync.iter().map(|p| p.id.clone()).collect()).await?;
+    tx.add(with_sync.iter().map(|p| p.id.clone()).collect())?;
 
     // Resolve the tx
-    Ok(client.resolve_packages(tx.finalize()).await?)
+    Ok(client.resolve_packages(tx.finalize())?)
 }
 
 #[derive(Debug, Error)]

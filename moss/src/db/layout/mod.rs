@@ -5,21 +5,19 @@
 use std::collections::HashSet;
 
 use sqlx::sqlite::SqliteConnectOptions;
-use sqlx::{Pool, Sqlite};
 use stone::payload;
 use thiserror::Error;
-use tokio::sync::Mutex;
 
-use crate::package;
-use crate::Installation;
+use super::Pool;
+use crate::{package, runtime, Installation};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Database {
-    pool: Mutex<Pool<Sqlite>>,
+    pool: Pool,
 }
 
 impl Database {
-    pub async fn new(installation: &Installation) -> Result<Self, Error> {
+    pub fn new(installation: &Installation) -> Result<Self, Error> {
         let path = installation.db_path("layout");
 
         let options = sqlx::sqlite::SqliteConnectOptions::new()
@@ -28,180 +26,96 @@ impl Database {
             .read_only(installation.read_only())
             .foreign_keys(true);
 
-        Self::connect(options).await
+        Self::connect(options)
     }
 
-    async fn connect(options: SqliteConnectOptions) -> Result<Self, Error> {
-        let pool = sqlx::SqlitePool::connect_with(options).await?;
-
-        sqlx::migrate!("src/db/layout/migrations").run(&pool).await?;
-
-        Ok(Self { pool: Mutex::new(pool) })
+    fn connect(options: SqliteConnectOptions) -> Result<Self, Error> {
+        runtime::block_on(async {
+            let pool = sqlx::SqlitePool::connect_with(options).await?;
+            sqlx::migrate!("src/db/layout/migrations").run(&pool).await?;
+            Ok(pool)
+        })
+        .map(|pool| Self { pool: Pool::new(pool) })
     }
 
-    pub async fn all(&self) -> Result<Vec<(package::Id, payload::Layout)>, Error> {
-        let pool = self.pool.lock().await;
-        let layouts = sqlx::query_as::<_, encoding::Layout>(
-            "
-            SELECT package_id,
-                   uid,
-                   gid,
-                   mode,
-                   tag,
-                   entry_type,
-                   entry_value1,
-                   entry_value2
-            FROM layout;
-            ",
-        )
-        .fetch_all(&*pool)
-        .await?;
+    pub fn all(&self) -> Result<Vec<(package::Id, payload::Layout)>, Error> {
+        self.pool.exec(|pool| async move {
+            let layouts = sqlx::query_as::<_, encoding::Layout>(
+                "
+                SELECT package_id,
+                       uid,
+                       gid,
+                       mode,
+                       tag,
+                       entry_type,
+                       entry_value1,
+                       entry_value2
+                FROM layout;
+                ",
+            )
+            .fetch_all(&pool)
+            .await?;
 
-        Ok(layouts
-            .into_iter()
-            .filter_map(|layout| {
-                let encoding::Layout {
-                    package_id,
-                    uid,
-                    gid,
-                    mode,
-                    tag,
-                    entry_type,
-                    entry_value1,
-                    entry_value2,
-                } = layout;
-
-                let entry = encoding::decode_entry(entry_type, entry_value1, entry_value2)?;
-
-                Some((
-                    package_id,
-                    payload::Layout {
+            Ok(layouts
+                .into_iter()
+                .filter_map(|layout| {
+                    let encoding::Layout {
+                        package_id,
                         uid,
                         gid,
                         mode,
                         tag,
-                        entry,
-                    },
-                ))
-            })
-            .collect())
-    }
+                        entry_type,
+                        entry_value1,
+                        entry_value2,
+                    } = layout;
 
-    pub async fn file_hashes(&self) -> Result<HashSet<String>, Error> {
-        let pool = self.pool.lock().await;
-        let layouts = sqlx::query_as::<_, (String,)>(
-            "
-            SELECT DISTINCT entry_value1
-            FROM layout
-            WHERE entry_type = 'regular';
-            ",
-        )
-        .fetch_all(&*pool)
-        .await?;
+                    let entry = encoding::decode_entry(entry_type, entry_value1, entry_value2)?;
 
-        Ok(layouts
-            .into_iter()
-            .filter_map(|(hash,)| hash.parse::<u128>().ok().map(|hash| format!("{hash:02x}")))
-            .collect())
-    }
-
-    pub async fn add(&self, package: package::Id, layout: payload::Layout) -> Result<(), Error> {
-        self.batch_add(vec![(package, layout)]).await
-    }
-
-    pub async fn batch_add(&self, layouts: Vec<(package::Id, payload::Layout)>) -> Result<(), Error> {
-        let pool = self.pool.lock().await;
-
-        sqlx::QueryBuilder::new(
-            "
-            INSERT INTO layout
-            (
-                package_id,
-                uid,
-                gid,
-                mode,
-                tag,
-                entry_type,
-                entry_value1,
-                entry_value2
-            )
-            ",
-        )
-        .push_values(layouts, |mut b, (id, layout)| {
-            let payload::Layout {
-                uid,
-                gid,
-                mode,
-                tag,
-                entry,
-            } = layout;
-
-            let (entry_type, entry_value1, entry_value2) = encoding::encode_entry(entry);
-
-            b.push_bind(id.to_string())
-                .push_bind(uid)
-                .push_bind(gid)
-                .push_bind(mode)
-                .push_bind(tag)
-                .push_bind(entry_type)
-                .push_bind(entry_value1)
-                .push_bind(entry_value2);
+                    Some((
+                        package_id,
+                        payload::Layout {
+                            uid,
+                            gid,
+                            mode,
+                            tag,
+                            entry,
+                        },
+                    ))
+                })
+                .collect())
         })
-        .build()
-        .execute(&*pool)
-        .await?;
-
-        Ok(())
     }
 
-    pub async fn remove(&self, package: &package::Id) -> Result<(), Error> {
-        self.batch_remove(Some(package)).await
+    pub fn file_hashes(&self) -> Result<HashSet<String>, Error> {
+        self.pool.exec(|pool| async move {
+            let layouts = sqlx::query_as::<_, (String,)>(
+                "
+                SELECT DISTINCT entry_value1
+                FROM layout
+                WHERE entry_type = 'regular';
+                ",
+            )
+            .fetch_all(&pool)
+            .await?;
+
+            Ok(layouts
+                .into_iter()
+                .filter_map(|(hash,)| hash.parse::<u128>().ok().map(|hash| format!("{hash:02x}")))
+                .collect())
+        })
     }
 
-    pub async fn batch_remove(&self, packages: impl IntoIterator<Item = &package::Id>) -> Result<(), Error> {
-        let pool = self.pool.lock().await;
-
-        let mut query = sqlx::QueryBuilder::new(
-            "
-            DELETE FROM layout
-            WHERE package_id IN (
-            ",
-        );
-
-        let mut separated = query.separated(", ");
-        packages.into_iter().for_each(|pkg| {
-            separated.push_bind(pkg.to_string());
-        });
-        separated.push_unseparated(");");
-
-        query.build().execute(&*pool).await?;
-
-        Ok(())
+    pub fn add(&self, package: package::Id, layout: payload::Layout) -> Result<(), Error> {
+        self.batch_add(vec![(package, layout)])
     }
 
-    /// Retrieve all entries for a given package by ID
-    pub async fn query(&self, package: &package::Id) -> Result<Vec<payload::Layout>, Error> {
-        let pool = self.pool.lock().await;
-
-        let query = sqlx::query_as::<_, encoding::Layout>(
-            "SELECT package_id,
-                   uid,
-                   gid,
-                   mode,
-                   tag,
-                   entry_type,
-                   entry_value1,
-                   entry_value2
-            FROM layout WHERE package_id = ?",
-        )
-        .bind(package.to_string());
-
-        let layouts = query.fetch_all(&*pool).await?;
-
-        Ok(layouts
-            .into_iter()
-            .filter_map(|layout| {
-                let encoding::Layout {
+    pub fn batch_add(&self, layouts: Vec<(package::Id, payload::Layout)>) -> Result<(), Error> {
+        self.pool.exec(|pool| async move {
+            sqlx::QueryBuilder::new(
+                "
+                INSERT INTO layout
+                (
                     package_id,
                     uid,
                     gid,
@@ -209,20 +123,107 @@ impl Database {
                     tag,
                     entry_type,
                     entry_value1,
-                    entry_value2,
-                } = layout;
-
-                let entry = encoding::decode_entry(entry_type, entry_value1, entry_value2)?;
-
-                Some(payload::Layout {
+                    entry_value2
+                )
+                ",
+            )
+            .push_values(layouts, |mut b, (id, layout)| {
+                let payload::Layout {
                     uid,
                     gid,
                     mode,
                     tag,
                     entry,
-                })
+                } = layout;
+
+                let (entry_type, entry_value1, entry_value2) = encoding::encode_entry(entry);
+
+                b.push_bind(id.to_string())
+                    .push_bind(uid)
+                    .push_bind(gid)
+                    .push_bind(mode)
+                    .push_bind(tag)
+                    .push_bind(entry_type)
+                    .push_bind(entry_value1)
+                    .push_bind(entry_value2);
             })
-            .collect())
+            .build()
+            .execute(&pool)
+            .await?;
+
+            Ok(())
+        })
+    }
+
+    pub fn remove(&self, package: &package::Id) -> Result<(), Error> {
+        self.batch_remove(Some(package))
+    }
+
+    pub fn batch_remove<'a>(&self, packages: impl IntoIterator<Item = &'a package::Id>) -> Result<(), Error> {
+        self.pool.exec(|pool| async move {
+            let mut query = sqlx::QueryBuilder::new(
+                "
+                DELETE FROM layout
+                WHERE package_id IN (
+                ",
+            );
+
+            let mut separated = query.separated(", ");
+            packages.into_iter().for_each(|pkg| {
+                separated.push_bind(pkg.to_string());
+            });
+            separated.push_unseparated(");");
+
+            query.build().execute(&pool).await?;
+
+            Ok(())
+        })
+    }
+
+    /// Retrieve all entries for a given package by ID
+    pub fn query(&self, package: &package::Id) -> Result<Vec<payload::Layout>, Error> {
+        self.pool.exec(|pool| async move {
+            let query = sqlx::query_as::<_, encoding::Layout>(
+                "SELECT package_id,
+                   uid,
+                   gid,
+                   mode,
+                   tag,
+                   entry_type,
+                   entry_value1,
+                   entry_value2
+                FROM layout WHERE package_id = ?",
+            )
+            .bind(package.to_string());
+
+            let layouts = query.fetch_all(&pool).await?;
+
+            Ok(layouts
+                .into_iter()
+                .filter_map(|layout| {
+                    let encoding::Layout {
+                        package_id,
+                        uid,
+                        gid,
+                        mode,
+                        tag,
+                        entry_type,
+                        entry_value1,
+                        entry_value2,
+                    } = layout;
+
+                    let entry = encoding::decode_entry(entry_type, entry_value1, entry_value2)?;
+
+                    Some(payload::Layout {
+                        uid,
+                        gid,
+                        mode,
+                        tag,
+                        entry,
+                    })
+                })
+                .collect())
+        })
     }
 }
 
@@ -300,11 +301,10 @@ mod test {
 
     use super::*;
 
-    #[tokio::test]
-    async fn create_insert_select() {
-        let database = Database::connect(SqliteConnectOptions::from_str("sqlite::memory:").unwrap())
-            .await
-            .unwrap();
+    fn create_insert_select() {
+        let _guard = runtime::init();
+
+        let database = Database::connect(SqliteConnectOptions::from_str("sqlite::memory:").unwrap()).unwrap();
 
         let bash_completion = include_bytes!("../../../../test/bash-completion-2.11-1-1-x86_64.stone");
 
@@ -321,9 +321,9 @@ mod test {
 
         let count = layouts.len();
 
-        database.batch_add(layouts).await.unwrap();
+        database.batch_add(layouts).unwrap();
 
-        let all = database.all().await.unwrap();
+        let all = database.all().unwrap();
 
         assert_eq!(count, all.len());
     }

@@ -9,18 +9,16 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use futures::{stream, StreamExt};
+use futures::StreamExt;
 use stone::{payload, read::PayloadKind};
 use thiserror::Error;
 use tokio::{
     fs::{self, File},
     io::AsyncWriteExt,
-    runtime::Handle,
-    task,
 };
 use url::Url;
 
-use crate::{environment, package, request, Installation};
+use crate::{package, request, Installation};
 
 /// Synchronized set of assets that are currently being
 /// unpacked. Used to prevent unpacking the same asset
@@ -124,7 +122,7 @@ pub struct UnpackedAsset {
 impl Download {
     /// Unpack the downloaded package
     // TODO: Return an "Unpacked" struct which has a "blit" method on it?
-    pub async fn unpack(
+    pub fn unpack(
         self,
         unpacking_in_progress: UnpackingInProgress,
         on_progress: impl Fn(Progress) + Send + 'static,
@@ -170,101 +168,91 @@ impl Download {
             }
         }
 
-        let rt = Handle::current();
+        let content_dir = self.installation.cache_path("content");
+        let content_path = content_dir.join(self.id);
 
-        task::spawn_blocking(move || {
-            let content_dir = self.installation.cache_path("content");
-            let content_path = content_dir.join(self.id);
+        create_dir_all(&content_dir)?;
 
-            create_dir_all(&content_dir)?;
+        let mut reader = stone::read(File::open(&self.path)?)?;
 
-            let mut reader = stone::read(File::open(&self.path)?)?;
+        let payloads = reader.payloads()?.collect::<Result<Vec<_>, _>>()?;
+        let indicies = payloads
+            .iter()
+            .filter_map(PayloadKind::index)
+            .flat_map(|p| &p.body)
+            .collect::<Vec<_>>();
 
-            let payloads = reader.payloads()?.collect::<Result<Vec<_>, _>>()?;
-            let indicies = payloads
-                .iter()
-                .filter_map(PayloadKind::index)
-                .flat_map(|p| &p.body)
-                .collect::<Vec<_>>();
+        // If download was cached & all assets exist, we can skip unpacking
+        if self.was_cached && check_assets_exist(&indicies, &self.installation) {
+            return Ok(UnpackedAsset { payloads });
+        }
 
-            // If download was cached & all assets exist, we can skip unpacking
-            if self.was_cached && rt.block_on(check_assets_exist(&indicies, &self.installation)) {
-                return Ok(UnpackedAsset { payloads });
-            }
+        let content = payloads
+            .iter()
+            .find_map(PayloadKind::content)
+            .ok_or(Error::MissingContent)?;
 
-            let content = payloads
-                .iter()
-                .find_map(PayloadKind::content)
-                .ok_or(Error::MissingContent)?;
+        let content_file = File::options()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&content_path)?;
 
-            let content_file = File::options()
-                .read(true)
-                .write(true)
-                .create(true)
-                .open(&content_path)?;
+        reader.unpack_content(
+            content,
+            &mut ProgressWriter::new(&content_file, content.header.plain_size, &on_progress),
+        )?;
 
-            reader.unpack_content(
-                content,
-                &mut ProgressWriter::new(&content_file, content.header.plain_size, &on_progress),
-            )?;
+        indicies
+            .into_iter()
+            .map(|idx| {
+                let path = asset_path(&self.installation, &format!("{:02x}", idx.digest));
 
-            indicies
-                .into_iter()
-                .map(|idx| {
-                    let path = asset_path(&self.installation, &format!("{:02x}", idx.digest));
+                // If file is already being unpacked by another worker, skip
+                // to prevent clobbering IO
+                if !unpacking_in_progress.add(path.clone()) {
+                    return Ok(());
+                }
 
-                    // If file is already being unpacked by another worker, skip
-                    // to prevent clobbering IO
-                    if !unpacking_in_progress.add(path.clone()) {
-                        return Ok(());
-                    }
-
-                    // This asset already exists
-                    if path.exists() {
-                        unpacking_in_progress.remove(&path);
-                        return Ok(());
-                    }
-
-                    // Create parent dir
-                    if let Some(parent) = path.parent() {
-                        create_dir_all(parent)?;
-                    }
-
-                    // Split file reader over index range
-                    let mut file = &content_file;
-                    file.seek(SeekFrom::Start(idx.start))?;
-                    let mut split_file = (&mut file).take(idx.end - idx.start);
-
-                    let mut output = File::create(&path)?;
-
-                    copy(&mut split_file, &mut output)?;
-
-                    // Remove file from in-progress
+                // This asset already exists
+                if path.exists() {
                     unpacking_in_progress.remove(&path);
+                    return Ok(());
+                }
 
-                    Ok(())
-                })
-                .collect::<Result<Vec<_>, Error>>()?;
+                // Create parent dir
+                if let Some(parent) = path.parent() {
+                    create_dir_all(parent)?;
+                }
 
-            remove_file(&content_path)?;
+                // Split file reader over index range
+                let mut file = &content_file;
+                file.seek(SeekFrom::Start(idx.start))?;
+                let mut split_file = (&mut file).take(idx.end - idx.start);
 
-            Ok(UnpackedAsset { payloads })
-        })
-        .await
-        .expect("join handle")
+                let mut output = File::create(&path)?;
+
+                copy(&mut split_file, &mut output)?;
+
+                // Remove file from in-progress
+                unpacking_in_progress.remove(&path);
+
+                Ok(())
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+
+        remove_file(&content_path)?;
+
+        Ok(UnpackedAsset { payloads })
     }
 }
 
 /// Returns true if all assets already exist in the installation
-async fn check_assets_exist(indicies: &[&payload::Index], installation: &Installation) -> bool {
-    stream::iter(indicies)
-        .map(|index| async move {
-            let path = asset_path(installation, &format!("{:02x}", index.digest));
-            fs::try_exists(path).await.unwrap_or_default()
-        })
-        .buffer_unordered(environment::MAX_DISK_CONCURRENCY)
-        .all(|exists| async move { exists })
-        .await
+fn check_assets_exist(indicies: &[&payload::Index], installation: &Installation) -> bool {
+    indicies.iter().all(|index| {
+        let path = asset_path(installation, &format!("{:02x}", index.digest));
+        path.exists()
+    })
 }
 
 pub fn download_path(installation: &Installation, hash: &str) -> Result<PathBuf, Error> {
