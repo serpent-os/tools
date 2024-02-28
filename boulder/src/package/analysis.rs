@@ -47,7 +47,7 @@ impl<'a> Chain<'a> {
     }
 
     pub fn process(&mut self, paths: impl IntoIterator<Item = PathInfo>) -> Result<(), BoxError> {
-        println!("Analyzing artefacts\n");
+        println!("│Analyzing artefacts (» = Include, × = Ignore)");
 
         let mut queue = paths.into_iter().collect::<VecDeque<_>>();
 
@@ -90,16 +90,16 @@ impl<'a> Chain<'a> {
                     Decision::NextHandler => continue 'handlers,
                     Decision::IgnoreFile { reason } => {
                         pb.println(format!(
-                            "{} {}{}",
-                            "Ignored ".yellow(),
-                            path.target_path.display(),
-                            format!(" ({reason})").dim()
+                            "│A{} {} {}",
+                            "│ ×".yellow(),
+                            format!("{}", path.target_path.display()).dim(),
+                            format!("({reason})").yellow()
                         ));
                         pb.inc(1);
                         continue 'paths;
                     }
                     Decision::IncludeFile => {
-                        pb.println(format!("{} {}", "Included".green(), path.target_path.display()));
+                        pb.println(format!("│A{} {}", "│ »".green(), path.target_path.display()));
                         pb.inc(1);
                         bucket.paths.push(path);
                         continue 'paths;
