@@ -21,11 +21,17 @@ use stone_recipe::{
 use thiserror::Error;
 use tui::Stylize;
 
+pub mod job;
+mod pgo;
+mod root;
+mod upstream;
+
+use self::job::Job;
 use crate::{
     architecture::BuildTarget,
-    container::{self, ExecError},
-    job::{self, Step},
-    macros, pgo, profile, recipe, root, upstream, util, Env, Job, Macros, Paths, Recipe, Runtime,
+    container, macros,
+    package::{self, Packager},
+    profile, recipe, util, Env, Macros, Paths, Recipe, Runtime,
 };
 
 pub struct Builder {
@@ -87,7 +93,7 @@ impl Builder {
     pub fn extra_deps(&self) -> impl Iterator<Item = &str> {
         self.targets.iter().flat_map(|target| {
             target.jobs.iter().flat_map(|job| {
-                job.steps
+                job.phases
                     .values()
                     .flat_map(|script| script.dependencies.iter().map(String::as_str))
             })
@@ -113,7 +119,7 @@ impl Builder {
         Ok(())
     }
 
-    pub fn build(self) -> Result<(), Error> {
+    pub fn build(self) -> Result<Packager, Error> {
         container::exec(&self.paths, self.recipe.parsed.options.networking, || {
             // We're now in the container =)
 
@@ -151,7 +157,7 @@ impl Builder {
                         println!("{}", format!("│pgo-{stage}").dim());
                     }
 
-                    for (i, (step, script)) in job.steps.iter().enumerate() {
+                    for (i, (phase, script)) in job.phases.iter().enumerate() {
                         let pipes = if job.pgo_stage.is_some() {
                             "││".dim()
                         } else {
@@ -161,7 +167,7 @@ impl Builder {
                         if i > 0 {
                             println!("{pipes}");
                         }
-                        println!("{pipes}{}", step.styled(format!("{step}")));
+                        println!("{pipes}{}", phase.styled(format!("{phase}")));
 
                         let build_dir = &job.build_dir;
                         let work_dir = &job.work_dir;
@@ -170,7 +176,7 @@ impl Builder {
                         for command in &script.commands {
                             match command {
                                 script::Command::Break(breakpoint) => {
-                                    let line_num = breakpoint_line(breakpoint, &self.recipe, job.target, *step)
+                                    let line_num = breakpoint_line(breakpoint, &self.recipe, job.target, *phase)
                                         .map(|line_num| format!(" at line {line_num}"))
                                         .unwrap_or_default();
 
@@ -186,7 +192,7 @@ impl Builder {
                                     );
 
                                     // Write env to $HOME/.profile
-                                    std::fs::write(build_dir.join(".profile"), build_profile(script))?;
+                                    std::fs::write(build_dir.join(".profile"), format_profile(script))?;
 
                                     let mut command = process::Command::new("/bin/bash")
                                         .arg("--login")
@@ -211,7 +217,7 @@ impl Builder {
                                     let script_path = "/tmp/script";
                                     std::fs::write(script_path, content).unwrap();
 
-                                    let result = logged(*step, is_pgo, "/bin/sh", |command| {
+                                    let result = logged(*phase, is_pgo, "/bin/sh", |command| {
                                         command
                                             .arg(script_path)
                                             .env_clear()
@@ -245,14 +251,19 @@ impl Builder {
                 }
             }
 
+            println!();
+
             Ok(())
         })?;
-        Ok(())
+
+        let packager = Packager::new(self.paths, self.recipe, self.macros, self.targets)?;
+
+        Ok(packager)
     }
 }
 
 fn logged(
-    step: Step,
+    phase: job::Phase,
     is_pgo: bool,
     command: &str,
     f: impl FnOnce(&mut process::Command) -> &mut process::Command,
@@ -267,8 +278,8 @@ fn logged(
         .spawn()?;
 
     // Log stdout and stderr
-    let stdout_log = log(step, is_pgo, child.stdout.take().unwrap());
-    let stderr_log = log(step, is_pgo, child.stderr.take().unwrap());
+    let stdout_log = log(phase, is_pgo, child.stdout.take().unwrap());
+    let stderr_log = log(phase, is_pgo, child.stderr.take().unwrap());
 
     // Forward SIGINT to this process
     ::container::forward_sigint(Pid::from_raw(child.id() as i32))?;
@@ -281,7 +292,7 @@ fn logged(
     Ok(result)
 }
 
-fn log<R>(step: Step, is_pgo: bool, pipe: R) -> thread::JoinHandle<()>
+fn log<R>(phase: job::Phase, is_pgo: bool, pipe: R) -> thread::JoinHandle<()>
 where
     R: io::Read + Send + 'static,
 {
@@ -289,7 +300,7 @@ where
 
     thread::spawn(move || {
         let pgo = is_pgo.then_some("│").unwrap_or_default().dim();
-        let kind = step.styled(format!("{}│", step.abbrev()));
+        let kind = phase.styled(format!("{}│", phase.abbrev()));
         let tag = format!("{}{pgo}{kind}", "│".dim());
 
         let mut lines = io::BufReader::new(pipe).lines();
@@ -300,7 +311,7 @@ where
     })
 }
 
-pub fn build_profile(script: &Script) -> String {
+pub fn format_profile(script: &Script) -> String {
     let env = script
         .env
         .as_deref()
@@ -324,7 +335,12 @@ pub fn build_profile(script: &Script) -> String {
     format!("{env}\n{action_functions}\n{definition_vars}")
 }
 
-fn breakpoint_line(breakpoint: &Breakpoint, recipe: &Recipe, build_target: BuildTarget, step: Step) -> Option<usize> {
+fn breakpoint_line(
+    breakpoint: &Breakpoint,
+    recipe: &Recipe,
+    build_target: BuildTarget,
+    phase: job::Phase,
+) -> Option<usize> {
     let profile = recipe.build_target_profile_key(build_target);
 
     let has_key = |line: &str, key: &str| {
@@ -357,18 +373,18 @@ fn breakpoint_line(breakpoint: &Breakpoint, recipe: &Recipe, build_target: Build
             }
         });
 
-    let step = match step {
-        // Internal step, no breakpoint will occur
-        Step::Prepare => return None,
-        Step::Setup => "setup",
-        Step::Build => "build",
-        Step::Install => "install",
-        Step::Check => "check",
-        Step::Workload => "workload",
+    let phase = match phase {
+        // Internal phase, no breakpoint will occur
+        job::Phase::Prepare => return None,
+        job::Phase::Setup => "setup",
+        job::Phase::Build => "build",
+        job::Phase::Install => "install",
+        job::Phase::Check => "check",
+        job::Phase::Workload => "workload",
     };
 
     lines.find_map(|(mut line_num, line)| {
-        if has_key(line, step) {
+        if has_key(line, phase) {
             // 0 based to 1 based
             line_num += 1;
 
@@ -404,6 +420,22 @@ pub enum Error {
     Container(#[from] container::Error),
     #[error("recipe")]
     Recipe(#[from] recipe::Error),
+    #[error("create packager")]
+    Package(#[from] package::Error),
     #[error("io")]
+    Io(#[from] io::Error),
+}
+
+#[derive(Debug, Error)]
+pub enum ExecError {
+    #[error("failed with status code {0}")]
+    Code(i32),
+    #[error("stopped by signal {}", .0.as_str())]
+    Signal(Signal),
+    #[error("stopped by unknown signal")]
+    UnknownSignal,
+    #[error(transparent)]
+    Nix(#[from] nix::Error),
+    #[error(transparent)]
     Io(#[from] io::Error),
 }

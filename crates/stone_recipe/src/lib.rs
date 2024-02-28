@@ -239,9 +239,9 @@ impl<'de> Deserialize<'de> for Upstream {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Path {
-    pub path: PathBuf,
+    pub path: String,
     pub kind: PathKind,
 }
 
@@ -253,8 +253,8 @@ impl<'de> Deserialize<'de> for Path {
         #[derive(Debug, Deserialize)]
         #[serde(untagged)]
         enum Inner {
-            String(PathBuf),
-            KeyValue(HashMap<PathBuf, PathKind>),
+            String(String),
+            KeyValue(HashMap<String, PathKind>),
         }
 
         match Inner::deserialize(deserializer)? {
@@ -273,7 +273,7 @@ impl<'de> Deserialize<'de> for Path {
     }
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, strum::EnumString, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, strum::EnumString, Default)]
 #[serde(try_from = "&str")]
 #[strum(serialize_all = "lowercase")]
 pub enum PathKind {

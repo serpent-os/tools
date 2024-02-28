@@ -11,16 +11,17 @@ use std::{
 use stone_recipe::{script, tuning, Script, Upstream};
 use thiserror::Error;
 
-pub use self::step::Step;
-use crate::{architecture::BuildTarget, pgo, util, Macros, Paths, Recipe};
+pub use self::phase::Phase;
+use crate::build::pgo;
+use crate::{architecture::BuildTarget, util, Macros, Paths, Recipe};
 
-mod step;
+mod phase;
 
 #[derive(Debug)]
 pub struct Job {
     pub target: BuildTarget,
     pub pgo_stage: Option<pgo::Stage>,
-    pub steps: BTreeMap<Step, Script>,
+    pub phases: BTreeMap<Phase, Script>,
     pub work_dir: PathBuf,
     pub build_dir: PathBuf,
 }
@@ -37,20 +38,20 @@ impl Job {
         let build_dir = paths.build().guest.join(target.to_string());
         let work_dir = work_dir(&build_dir, &recipe.parsed.upstreams);
 
-        let steps = step::list(pgo_stage)
+        let phases = phase::list(pgo_stage)
             .into_iter()
-            .filter_map(|step| {
-                let result = step
+            .filter_map(|phase| {
+                let result = phase
                     .script(target, pgo_stage, recipe, paths, macros, ccache)
                     .transpose()?;
-                Some(result.map(|script| (step, script)))
+                Some(result.map(|script| (phase, script)))
             })
             .collect::<Result<_, _>>()?;
 
         Ok(Self {
             target,
             pgo_stage,
-            steps,
+            phases,
             work_dir,
             build_dir,
         })

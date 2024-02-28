@@ -18,7 +18,7 @@ impl Id {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Paths {
     id: Id,
     host_root: PathBuf,
@@ -92,9 +92,7 @@ impl Paths {
 
     pub fn install(&self) -> Mapping {
         Mapping {
-            // TODO: Shitty impossible state, this folder
-            // doesn't exist on host
-            host: "".into(),
+            host: self.rootfs().host.join("mason").join("install"),
             guest: self.guest_root.join("install"),
         }
     }

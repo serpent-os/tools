@@ -104,7 +104,7 @@ impl<'a> Transaction<'a> {
                 let package = matches.first().ok_or(Error::NoCandidate(check_id.clone().into()))?;
                 for dependency in package.meta.dependencies.iter() {
                     let provider = Provider {
-                        kind: dependency.kind.clone(),
+                        kind: dependency.kind,
                         name: dependency.name.clone(),
                     };
 

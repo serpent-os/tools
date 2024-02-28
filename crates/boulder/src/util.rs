@@ -97,10 +97,12 @@ pub fn is_root() -> bool {
 
 pub mod sync {
     use std::{
-        fs::{create_dir_all, remove_dir_all},
+        fs::{copy, create_dir_all, remove_dir_all},
         io,
         path::{Path, PathBuf},
     };
+
+    use nix::unistd::{linkat, LinkatFlags};
 
     pub fn ensure_dir_exists(path: &Path) -> Result<(), io::Error> {
         if !path.exists() {
@@ -140,5 +142,17 @@ pub mod sync {
         }
 
         Ok(paths)
+    }
+
+    pub fn hardlink_or_copy(from: &Path, to: &Path) -> Result<(), io::Error> {
+        // Attempt hard link
+        let link_result = linkat(None, from, None, to, LinkatFlags::NoSymlinkFollow);
+
+        // Copy instead
+        if link_result.is_err() {
+            copy(from, to)?;
+        }
+
+        Ok(())
     }
 }

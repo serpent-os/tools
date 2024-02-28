@@ -5,9 +5,8 @@
 use std::io;
 use std::path::PathBuf;
 
-use boulder::builder;
-use boulder::Builder;
-use boulder::{profile, Env};
+use boulder::build::{self, Builder};
+use boulder::{package, profile, Env};
 use clap::Parser;
 use thiserror::Error;
 
@@ -45,8 +44,12 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
     }
 
     let builder = Builder::new(&recipe, env, profile, ccache)?;
+
     builder.setup()?;
-    builder.build()?;
+
+    let packager = builder.build()?;
+
+    packager.package()?;
 
     Ok(())
 }
@@ -57,8 +60,10 @@ pub enum Error {
     MissingOutput(PathBuf),
     #[error("recipe file does not exist: {0:?}")]
     MissingRecipe(PathBuf),
-    #[error("builder")]
-    Builder(#[from] builder::Error),
+    #[error("build recipe")]
+    Build(#[from] build::Error),
+    #[error("package artifacts")]
+    Package(#[from] package::Error),
     #[error("io")]
     Io(#[from] io::Error),
 }

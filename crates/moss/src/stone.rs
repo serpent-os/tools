@@ -4,8 +4,10 @@
 
 pub use stone::header;
 pub use stone::payload;
+pub use stone::write;
 
 pub use self::read::stream_payloads;
+pub use self::write::Writer;
 
 pub mod read {
     use std::{fs::File, path::PathBuf};
