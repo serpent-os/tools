@@ -38,7 +38,7 @@ impl Filter {
                     query
                         .push(
                             "
-                            where provider = 
+                            where provider =
                             ",
                         )
                         .push_bind(p.encode());
@@ -46,8 +46,8 @@ impl Filter {
                     query
                         .push(
                             "
-                            where package in 
-                                (select distinct package from meta_providers where provider = 
+                            where package in
+                                (select distinct package from meta_providers where provider =
                             ",
                         )
                         .push_bind(p.encode())
@@ -59,7 +59,7 @@ impl Filter {
                     query
                         .push(
                             "
-                            where dependency = 
+                            where dependency =
                             ",
                         )
                         .push_bind(d.encode());
@@ -67,8 +67,8 @@ impl Filter {
                     query
                         .push(
                             "
-                            where package in 
-                                (select distinct package from meta_dependencies where dependency = 
+                            where package in
+                                (select distinct package from meta_dependencies where dependency =
                             ",
                         )
                         .push_bind(d.encode())
@@ -80,7 +80,7 @@ impl Filter {
                     query
                         .push(
                             "
-                            where name = 
+                            where name =
                             ",
                         )
                         .push_bind(n.encode().to_string());
@@ -88,8 +88,8 @@ impl Filter {
                     query
                         .push(
                             "
-                            where package in 
-                                (select distinct package from meta where name = 
+                            where package in
+                                (select distinct package from meta where name =
                             ",
                         )
                         .push_bind(n.encode().to_string())
@@ -244,7 +244,7 @@ impl Database {
 
         let entry_query = sqlx::query_as::<_, encoding::Entry>(
             "
-            SELECT package, 
+            SELECT package,
                    name,
                    version_identifier,
                    source_release,
@@ -356,7 +356,7 @@ impl Database {
                 homepage,
                 uri,
                 hash,
-                download_size                
+                download_size
             )
             ",
         )
@@ -575,7 +575,7 @@ mod test {
             .await
             .unwrap();
 
-        let bash_completion = include_bytes!("../../../../../test/bash-completion-2.11-1-1-x86_64.stone");
+        let bash_completion = include_bytes!("../../../../test/bash-completion-2.11-1-1-x86_64.stone");
 
         let mut stone = stone::read_bytes(bash_completion).unwrap();
 

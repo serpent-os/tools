@@ -1,9 +1,11 @@
 [workspace]
 members = [
+    "boulder",
+    "moss",
     "crates/*",
 ]
 default-members = [
-    "crates/moss"
+    "moss"
 ]
 resolver = "2"
 
@@ -56,4 +58,3 @@ opt-level = 3
 # allow packaging system to do it
 strip = "none"
 debug = true
-

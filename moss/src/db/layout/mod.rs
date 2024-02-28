@@ -116,7 +116,7 @@ impl Database {
 
         sqlx::QueryBuilder::new(
             "
-            INSERT INTO layout 
+            INSERT INTO layout
             (
                 package_id,
                 uid,
@@ -166,7 +166,7 @@ impl Database {
         let mut query = sqlx::QueryBuilder::new(
             "
             DELETE FROM layout
-            WHERE package_id IN ( 
+            WHERE package_id IN (
             ",
         );
 
@@ -307,7 +307,7 @@ mod test {
             .await
             .unwrap();
 
-        let bash_completion = include_bytes!("../../../../../test/bash-completion-2.11-1-1-x86_64.stone");
+        let bash_completion = include_bytes!("../../../../test/bash-completion-2.11-1-1-x86_64.stone");
 
         let mut stone = stone::read_bytes(bash_completion).unwrap();
 
