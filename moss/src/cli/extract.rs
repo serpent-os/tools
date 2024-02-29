@@ -14,7 +14,7 @@ use moss::package::{self, MissingMetaFieldError};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use stone::{payload::layout, read::PayloadKind};
 use thiserror::{self, Error};
-use tui::{ProgressBar, ProgressStyle, ProgressWriter};
+use tui::{ProgressBar, ProgressStyle};
 
 pub fn command() -> Command {
     Command::new("extract")
@@ -56,23 +56,19 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
             remove_dir_all(&extraction_root)?;
         }
 
-        let progress = ProgressBar::new(1000).with_style(
-            ProgressStyle::with_template("|{bar:20.cyan/bue}| {percent}%")
-                .unwrap()
-                .progress_chars("■≡=- "),
-        );
-
         if let Some(content) = content {
-            let size = content.header.plain_size;
-
             let content_file = File::options()
                 .read(true)
                 .write(true)
                 .create(true)
                 .open(".stoneContent")?;
 
-            let mut writer = ProgressWriter::new(&content_file, size, progress.clone());
-            reader.unpack_content(content, &mut writer)?;
+            let progress = ProgressBar::new(content.header.plain_size).with_style(
+                ProgressStyle::with_template("|{bar:20.cyan/bue}| {percent}%")
+                    .unwrap()
+                    .progress_chars("■≡=- "),
+            );
+            reader.unpack_content(content, &mut progress.wrap_write(&content_file))?;
 
             // Extract all indices from the `.stoneContent` into hash-indexed unique files
             payloads
@@ -130,8 +126,6 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
                 }
             }
         }
-
-        progress.finish_and_clear();
     }
 
     // Clean up.

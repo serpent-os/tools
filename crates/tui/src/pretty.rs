@@ -9,7 +9,7 @@ use std::{
     io::{stdout, Write},
 };
 
-use crate::term_size;
+use crate::TermSize;
 
 /// Simplistic handling of renderable display columns
 /// allowing implementations to handle first, n and last specific alignment
@@ -33,19 +33,19 @@ pub trait ColumnDisplay: Sized {
 /// These will be printed in individual columns assuming that the input order is
 /// alphabetically sorted, to give each column an ascending alpha sort.
 pub fn print_to_columns<T: ColumnDisplay>(items: &[T]) {
-    let terminal_width = term_size().width;
+    let terminal_width = TermSize::get().width;
 
     // Figure render constraints
     let largest_element = items.iter().max_by_key(|p| p.get_display_width() + 3).unwrap();
     let largest_width = largest_element.get_display_width() + 6;
     let num_columns = max(1, terminal_width / largest_width);
-    let height = ((items.len() as f32) / (num_columns as f32)).ceil() as usize;
+    let num_rows = ((items.len() as f32) / (num_columns as f32)).ceil() as usize;
 
     let mut stdout = stdout().lock();
 
-    for y in 0..height {
+    for y in 0..num_rows {
         for x in 0..num_columns {
-            let idx = y + (x * height);
+            let idx = y + (x * num_rows);
             let state = items.get(idx);
             if let Some(state) = state {
                 let column = if x == 0 {

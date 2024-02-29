@@ -10,7 +10,7 @@ use std::{
 use itertools::Itertools;
 use moss::{package::Meta, Dependency};
 use thiserror::Error;
-use tui::{ProgressBar, ProgressReader, ProgressStyle, Styled};
+use tui::{ProgressBar, ProgressStyle, Styled};
 
 use self::manifest::Manifest;
 use super::analysis;
@@ -168,21 +168,9 @@ fn emit_package(paths: &Paths, package: &Package) -> Result<(), Error> {
     // Convert to content writer using pledged size = total size of all files
     let mut writer = writer.with_content(&mut temp_content, Some(total_file_size))?;
 
-    let mut total_read = 0;
-
-    // Add each file content
     for file in sorted_files {
-        let mut file = File::open(&file.path)?;
-        let mut progress_reader = ProgressReader {
-            reader: &mut file,
-            total: total_file_size,
-            read: total_read,
-            progress: pb.clone(),
-        };
-
-        writer.add_content(&mut progress_reader)?;
-
-        total_read = progress_reader.read;
+        let file = File::open(&file.path)?;
+        writer.add_content(&mut pb.wrap_read(&file))?;
     }
 
     // Finalize & flush
