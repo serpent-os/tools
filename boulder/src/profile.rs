@@ -38,7 +38,7 @@ impl From<String> for Id {
 /// Profile configuration data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Profile {
-    pub collections: repository::Map,
+    pub repositories: repository::Map,
 }
 
 /// A map of profiles
@@ -106,7 +106,7 @@ impl<'a> Manager<'a> {
     pub fn repositories(&self, profile: &Id) -> Result<&repository::Map, Error> {
         self.profiles
             .get(profile)
-            .map(|profile| &profile.collections)
+            .map(|profile| &profile.repositories)
             .ok_or_else(|| Error::MissingProfile(profile.clone()))
     }
 
