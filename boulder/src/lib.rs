@@ -7,6 +7,7 @@ pub use self::macros::Macros;
 pub use self::paths::Paths;
 pub use self::profile::Profile;
 pub use self::recipe::Recipe;
+pub use self::timing::Timing;
 
 pub mod architecture;
 pub mod build;
@@ -17,4 +18,5 @@ pub mod package;
 pub mod paths;
 pub mod profile;
 pub mod recipe;
+pub mod timing;
 pub mod util;

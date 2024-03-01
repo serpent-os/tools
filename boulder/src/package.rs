@@ -11,7 +11,7 @@ use stone::write::digest;
 use stone_recipe::{script, Package};
 use thiserror::Error;
 
-use crate::{build, container, util, Macros, Paths, Recipe};
+use crate::{build, container, timing, util, Macros, Paths, Recipe, Timing};
 
 use self::collect::Collector;
 use self::emit::emit;
@@ -20,15 +20,20 @@ mod analysis;
 mod collect;
 mod emit;
 
-pub struct Packager {
-    paths: Paths,
-    recipe: Recipe,
+pub struct Packager<'a> {
+    paths: &'a Paths,
+    recipe: &'a Recipe,
     packages: HashMap<String, Package>,
     collector: Collector,
 }
 
-impl Packager {
-    pub fn new(paths: Paths, recipe: Recipe, macros: Macros, targets: Vec<build::Target>) -> Result<Self, Error> {
+impl<'a> Packager<'a> {
+    pub fn new(
+        paths: &'a Paths,
+        recipe: &'a Recipe,
+        macros: &'a Macros,
+        targets: &'a [build::Target],
+    ) -> Result<Self, Error> {
         let mut collector = Collector::new(paths.install().guest);
 
         // Arch names used to parse [`Marcos`] for package templates
@@ -36,11 +41,11 @@ impl Packager {
         // We always use "base" plus whatever build targets we've built
         let arches = Some("base".to_string())
             .into_iter()
-            .chain(targets.into_iter().map(|target| target.build_target.to_string()));
+            .chain(targets.iter().map(|target| target.build_target.to_string()));
 
         // Resolves all package templates from arch macros + recipe file. Also adds
         // package paths to [`Collector`]
-        let packages = resolve_packages(arches, &macros, &recipe, &mut collector)?;
+        let packages = resolve_packages(arches, macros, recipe, &mut collector)?;
 
         Ok(Self {
             paths,
@@ -50,51 +55,47 @@ impl Packager {
         })
     }
 
-    pub fn package(self) -> Result<(), Error> {
-        // Remove old artifacts
-        util::recreate_dir(&self.paths.artefacts().host).map_err(Error::RecreateArtefactsDir)?;
+    pub fn package(&self, timing: &mut Timing) -> Result<(), Error> {
+        // Hasher used for calculating file digests
+        let mut hasher = digest::Hasher::new();
 
-        // Executed in guest container since file permissions may be borked
-        // for host if run rootless
-        container::exec(&self.paths, false, || {
-            // Hasher used for calculating file digests
-            let mut hasher = digest::Hasher::new();
+        let timer = timing.begin(timing::Kind::Analysis);
 
-            // Collect all paths under install root
-            let paths = self
-                .collector
-                .enumerate_paths(None, &mut hasher)
-                .map_err(Error::CollectPaths)?;
+        // Collect all paths under install root
+        let paths = self
+            .collector
+            .enumerate_paths(None, &mut hasher)
+            .map_err(Error::CollectPaths)?;
 
-            // Process all paths with the analysis chain
-            // This will determine which files get included
-            // and what deps / provides they produce
-            let mut analysis = analysis::Chain::new(&self.paths, &self.recipe, &self.collector, &mut hasher);
-            analysis.process(paths).map_err(Error::Analysis)?;
+        // Process all paths with the analysis chain
+        // This will determine which files get included
+        // and what deps / provides they produce
+        let mut analysis = analysis::Chain::new(self.paths, self.recipe, &self.collector, &mut hasher);
+        analysis.process(paths).map_err(Error::Analysis)?;
 
-            // Combine the package definition with the analysis results
-            // for that package. We will use this to emit the package stones & manifests.
-            //
-            // If no bucket exists, that means no paths matched this package so we can
-            // safely filter it out
-            let packages = self
-                .packages
-                .iter()
-                .filter_map(|(name, package)| {
-                    let bucket = analysis.buckets.remove(name)?;
+        timing.finish(timer);
 
-                    Some(emit::Package::new(name, &self.recipe.parsed.source, package, bucket))
-                })
-                .collect::<Vec<_>>();
+        let timer = timing.begin(timing::Kind::Packaging);
 
-            // Emit package stones and manifest files to artefact directory
-            emit(&self.paths, &self.recipe, &packages).map_err(Error::Emit)?;
+        // Combine the package definition with the analysis results
+        // for that package. We will use this to emit the package stones & manifests.
+        //
+        // If no bucket exists, that means no paths matched this package so we can
+        // safely filter it out
+        let packages = self
+            .packages
+            .iter()
+            .filter_map(|(name, package)| {
+                let bucket = analysis.buckets.remove(name)?;
 
-            Ok(()) as Result<(), Error>
-        })?;
+                Some(emit::Package::new(name, &self.recipe.parsed.source, package, bucket))
+            })
+            .collect::<Vec<_>>();
 
-        // We've exited container, sync artefacts to host
-        sync_artefacts(&self.paths).map_err(Error::SyncArtefacts)?;
+        // Emit package stones and manifest files to artefact directory
+        emit(self.paths, self.recipe, &packages).map_err(Error::Emit)?;
+
+        timing.finish(timer);
 
         Ok(())
     }
@@ -197,7 +198,7 @@ fn resolve_packages(
     Ok(packages)
 }
 
-fn sync_artefacts(paths: &Paths) -> Result<(), io::Error> {
+pub fn sync_artefacts(paths: &Paths) -> Result<(), io::Error> {
     for path in util::enumerate_files(&paths.artefacts().host, |_| true)? {
         let filename = path.file_name().and_then(|p| p.to_str()).unwrap_or_default();
 
@@ -218,10 +219,6 @@ pub enum Error {
     Script(#[from] script::Error),
     #[error("collect install paths")]
     CollectPaths(#[source] collect::Error),
-    #[error("recreate artefacts dir")]
-    RecreateArtefactsDir(#[source] io::Error),
-    #[error("sync artefacts")]
-    SyncArtefacts(#[source] io::Error),
     #[error("analyzing paths")]
     Analysis(#[source] analysis::BoxError),
     #[error("emit packages")]

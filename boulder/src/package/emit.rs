@@ -90,7 +90,7 @@ impl<'a> Package<'a> {
 pub fn emit(paths: &Paths, recipe: &Recipe, packages: &[Package]) -> Result<(), Error> {
     let mut manifest = Manifest::new(paths, recipe, architecture::host());
 
-    println!("Emitting packages\n");
+    println!("Packaging");
 
     for package in packages {
         if !package.is_dbginfo() {
@@ -102,6 +102,8 @@ pub fn emit(paths: &Paths, recipe: &Recipe, packages: &[Package]) -> Result<(), 
 
     manifest.write_binary()?;
     manifest.write_json()?;
+
+    println!();
 
     Ok(())
 }

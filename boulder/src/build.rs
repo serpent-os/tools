@@ -24,16 +24,13 @@ use thiserror::Error;
 use tui::Stylize;
 
 pub mod job;
-mod pgo;
+pub mod pgo;
 mod root;
 mod upstream;
 
 use self::job::Job;
 use crate::{
-    architecture::BuildTarget,
-    container, macros,
-    package::{self, Packager},
-    profile, recipe, util, Env, Macros, Paths, Recipe,
+    architecture::BuildTarget, container, macros, profile, recipe, timing, util, Env, Macros, Paths, Recipe, Timing,
 };
 
 pub struct Builder {
@@ -103,6 +100,9 @@ impl Builder {
     }
 
     pub fn setup(&self) -> Result<(), Error> {
+        // Remove old artifacts
+        util::recreate_dir(&self.paths.artefacts().host).map_err(Error::RecreateArtefactsDir)?;
+
         root::clean(self)?;
 
         let rt = runtime::init();
@@ -128,128 +128,115 @@ impl Builder {
         Ok(())
     }
 
-    pub fn build(self) -> Result<Packager, Error> {
-        container::exec(&self.paths, self.recipe.parsed.options.networking, || {
-            // We're now in the container =)
+    pub fn build(&self, timing: &mut Timing) -> Result<(), Error> {
+        // Set ourselves into our own process group
+        // and set it as fg term
+        //
+        // This is so we can restore this process back as
+        // the fg term after using `bash` for chroot below
+        // so we can reestablish SIGINT forwarding to scripts
+        setpgid(Pid::from_raw(0), Pid::from_raw(0))?;
+        let pgid = getpgrp();
+        ::container::set_term_fg(pgid)?;
 
-            // Set ourselves into our own process group
-            // and set it as fg term
-            //
-            // This is so we can restore this process back as
-            // the fg term after using `bash` for chroot below
-            // so we can reestablish SIGINT forwarding to scripts
-            setpgid(Pid::from_raw(0), Pid::from_raw(0))?;
-            let pgid = getpgrp();
-            ::container::set_term_fg(pgid)?;
+        for (i, target) in self.targets.iter().enumerate() {
+            println!("{}", build_target_prefix(target.build_target, i));
 
-            for (i, target) in self.targets.iter().enumerate() {
-                if i > 0 {
-                    println!();
+            for (i, job) in target.jobs.iter().enumerate() {
+                let is_pgo = job.pgo_stage.is_some();
+
+                // Recreate work dir for each job
+                util::recreate_dir(&job.work_dir)?;
+                // Ensure pgo dir exists
+                if is_pgo {
+                    let pgo_dir = PathBuf::from(format!("{}-pgo", job.build_dir.display()));
+                    util::ensure_dir_exists(&pgo_dir)?;
                 }
-                println!("{}", target.build_target.to_string().dim());
 
-                for (i, job) in target.jobs.iter().enumerate() {
-                    let is_pgo = job.pgo_stage.is_some();
+                if let Some(stage) = job.pgo_stage {
+                    println!("{}", pgo_stage_prefix(stage, i));
+                }
 
-                    // Recreate work dir for each job
-                    util::recreate_dir(&job.work_dir)?;
-                    // Ensure pgo dir exists
-                    if is_pgo {
-                        let pgo_dir = PathBuf::from(format!("{}-pgo", job.build_dir.display()));
-                        util::ensure_dir_exists(&pgo_dir)?;
-                    }
+                for (i, (phase, script)) in job.phases.iter().enumerate() {
+                    println!("{}", phase_prefix(*phase, is_pgo, i));
 
-                    if let Some(stage) = job.pgo_stage {
-                        if i > 0 {
-                            println!("{}", "│".dim());
-                        }
-                        println!("{}", format!("│pgo-{stage}").dim());
-                    }
+                    let build_dir = &job.build_dir;
+                    let work_dir = &job.work_dir;
+                    let current_dir = if work_dir.exists() { &work_dir } else { &build_dir };
 
-                    for (i, (phase, script)) in job.phases.iter().enumerate() {
-                        let pipes = if job.pgo_stage.is_some() {
-                            "││".dim()
-                        } else {
-                            "│".dim()
-                        };
+                    let timer = timing.begin(timing::Kind::Build(timing::Build {
+                        target: job.target,
+                        pgo_stage: job.pgo_stage,
+                        phase: *phase,
+                    }));
 
-                        if i > 0 {
-                            println!("{pipes}");
-                        }
-                        println!("{pipes}{}", phase.styled(format!("{phase}")));
+                    for command in &script.commands {
+                        match command {
+                            script::Command::Break(breakpoint) => {
+                                let line_num = breakpoint_line(breakpoint, &self.recipe, job.target, *phase)
+                                    .map(|line_num| format!(" at line {line_num}"))
+                                    .unwrap_or_default();
 
-                        let build_dir = &job.build_dir;
-                        let work_dir = &job.work_dir;
-                        let current_dir = if work_dir.exists() { &work_dir } else { &build_dir };
+                                println!(
+                                    "\n{}{} {}",
+                                    "Breakpoint".bold(),
+                                    line_num,
+                                    if breakpoint.exit {
+                                        "(exit)".dim()
+                                    } else {
+                                        "(continue)".dim()
+                                    },
+                                );
 
-                        for command in &script.commands {
-                            match command {
-                                script::Command::Break(breakpoint) => {
-                                    let line_num = breakpoint_line(breakpoint, &self.recipe, job.target, *phase)
-                                        .map(|line_num| format!(" at line {line_num}"))
-                                        .unwrap_or_default();
+                                // Write env to $HOME/.profile
+                                std::fs::write(build_dir.join(".profile"), format_profile(script))?;
 
-                                    println!(
-                                        "\n{}{} {}",
-                                        "Breakpoint".bold(),
-                                        line_num,
-                                        if breakpoint.exit {
-                                            "(exit)".dim()
-                                        } else {
-                                            "(continue)".dim()
-                                        },
-                                    );
+                                let mut command = process::Command::new("/bin/bash")
+                                    .arg("--login")
+                                    .env_clear()
+                                    .env("HOME", build_dir)
+                                    .env("PATH", "/usr/bin:/usr/sbin")
+                                    .env("TERM", "xterm-256color")
+                                    .current_dir(current_dir)
+                                    .spawn()?;
 
-                                    // Write env to $HOME/.profile
-                                    std::fs::write(build_dir.join(".profile"), format_profile(script))?;
+                                command.wait()?;
 
-                                    let mut command = process::Command::new("/bin/bash")
-                                        .arg("--login")
+                                // Restore ourselves as fg term since bash steals it
+                                ::container::set_term_fg(pgid)?;
+
+                                if breakpoint.exit {
+                                    return Ok(());
+                                }
+                            }
+                            script::Command::Content(content) => {
+                                // TODO: Proper temp file
+                                let script_path = "/tmp/script";
+                                std::fs::write(script_path, content).unwrap();
+
+                                let result = logged(*phase, is_pgo, "/bin/sh", |command| {
+                                    command
+                                        .arg(script_path)
                                         .env_clear()
                                         .env("HOME", build_dir)
                                         .env("PATH", "/usr/bin:/usr/sbin")
-                                        .env("TERM", "xterm-256color")
                                         .current_dir(current_dir)
-                                        .spawn()?;
+                                })?;
 
-                                    command.wait()?;
-
-                                    // Restore ourselves as fg term since bash steals it
-                                    ::container::set_term_fg(pgid)?;
-
-                                    if breakpoint.exit {
-                                        return Ok(());
-                                    }
-                                }
-                                script::Command::Content(content) => {
-                                    // TODO: Proper temp file
-                                    let script_path = "/tmp/script";
-                                    std::fs::write(script_path, content).unwrap();
-
-                                    let result = logged(*phase, is_pgo, "/bin/sh", |command| {
-                                        command
-                                            .arg(script_path)
-                                            .env_clear()
-                                            .env("HOME", build_dir)
-                                            .env("PATH", "/usr/bin:/usr/sbin")
-                                            .current_dir(current_dir)
-                                    })?;
-
-                                    if !result.success() {
-                                        match result.code() {
-                                            Some(code) => {
-                                                return Err(ExecError::Code(code));
-                                            }
-                                            None => {
-                                                if let Some(signal) = result
-                                                    .signal()
-                                                    .or_else(|| result.stopped_signal())
-                                                    .and_then(|i| Signal::try_from(i).ok())
-                                                {
-                                                    return Err(ExecError::Signal(signal));
-                                                } else {
-                                                    return Err(ExecError::UnknownSignal);
-                                                }
+                                if !result.success() {
+                                    match result.code() {
+                                        Some(code) => {
+                                            return Err(Error::Code(code));
+                                        }
+                                        None => {
+                                            if let Some(signal) = result
+                                                .signal()
+                                                .or_else(|| result.stopped_signal())
+                                                .and_then(|i| Signal::try_from(i).ok())
+                                            {
+                                                return Err(Error::Signal(signal));
+                                            } else {
+                                                return Err(Error::UnknownSignal);
                                             }
                                         }
                                     }
@@ -257,18 +244,39 @@ impl Builder {
                             }
                         }
                     }
+
+                    timing.finish(timer);
                 }
             }
+        }
 
-            println!();
+        println!();
 
-            Ok(())
-        })?;
-
-        let packager = Packager::new(self.paths, self.recipe, self.macros, self.targets)?;
-
-        Ok(packager)
+        Ok(())
     }
+}
+
+pub fn build_target_prefix(target: BuildTarget, i: usize) -> String {
+    let newline = if i > 0 { "\n".into() } else { String::default() };
+
+    format!("{}{}", newline, target.to_string().dim())
+}
+
+pub fn pgo_stage_prefix(stage: pgo::Stage, i: usize) -> String {
+    let newline = if i > 0 {
+        format!("{}\n", "│".dim())
+    } else {
+        String::default()
+    };
+
+    format!("{}{}", newline, format!("│pgo-{stage}").dim())
+}
+
+pub fn phase_prefix(phase: job::Phase, is_pgo: bool, i: usize) -> String {
+    let pipes = if is_pgo { "││".dim() } else { "│".dim() };
+    let newline = if i > 0 { format!("{pipes}\n") } else { String::default() };
+
+    format!("{}{pipes}{}", newline, phase.styled(phase))
 }
 
 fn logged(
@@ -429,22 +437,16 @@ pub enum Error {
     Container(#[from] container::Error),
     #[error("recipe")]
     Recipe(#[from] recipe::Error),
-    #[error("create packager")]
-    Package(#[from] package::Error),
-    #[error("io")]
-    Io(#[from] io::Error),
-}
-
-#[derive(Debug, Error)]
-pub enum ExecError {
     #[error("failed with status code {0}")]
     Code(i32),
     #[error("stopped by signal {}", .0.as_str())]
     Signal(Signal),
     #[error("stopped by unknown signal")]
     UnknownSignal,
-    #[error(transparent)]
+    #[error("nix")]
     Nix(#[from] nix::Error),
-    #[error(transparent)]
+    #[error("io")]
     Io(#[from] io::Error),
+    #[error("recreate artefacts dir")]
+    RecreateArtefactsDir(#[source] io::Error),
 }
