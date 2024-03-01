@@ -14,7 +14,7 @@ use moss::{
 };
 use stone::payload::layout;
 use thiserror::Error;
-use tui::Stylize;
+use tui::Styled;
 use vfs::tree::BlitFile;
 
 const COLUMN_WIDTH: usize = 20;

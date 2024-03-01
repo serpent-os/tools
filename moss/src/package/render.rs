@@ -6,7 +6,7 @@ use std::io::Write;
 
 use tui::{
     pretty::{Column, ColumnDisplay},
-    Stylize,
+    Styled,
 };
 
 use crate::Package;

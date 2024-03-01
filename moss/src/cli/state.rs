@@ -10,7 +10,7 @@ use moss::{
     environment, state,
 };
 use thiserror::Error;
-use tui::Stylize;
+use tui::Styled;
 
 pub fn command() -> Command {
     Command::new("state")

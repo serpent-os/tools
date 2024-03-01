@@ -5,8 +5,10 @@
 use std::io::{Read, Write};
 
 pub use self::reexport::*;
+pub use self::styled::Styled;
 
 pub mod pretty;
+mod styled;
 
 const DEFAULT_TERM_SIZE: (u16, u16) = (80, 24);
 
@@ -102,7 +104,6 @@ impl<R: Read> Read for ProgressReader<R> {
 
 /// Provide a standard approach to ratatui based TUI in moss
 mod reexport {
-    pub use crossterm::style::Stylize;
     pub use dialoguer;
     pub use indicatif::*;
 }

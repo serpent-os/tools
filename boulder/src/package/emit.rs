@@ -10,7 +10,7 @@ use std::{
 use itertools::Itertools;
 use moss::{package::Meta, Dependency};
 use thiserror::Error;
-use tui::{ProgressBar, ProgressReader, ProgressStyle, Stylize};
+use tui::{ProgressBar, ProgressReader, ProgressStyle, Styled};
 
 use self::manifest::Manifest;
 use super::analysis;

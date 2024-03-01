@@ -11,7 +11,7 @@ use stone_recipe::{
     Script,
 };
 
-use tui::Stylize;
+use tui::Styled;
 
 use super::{work_dir, Error};
 use crate::build::pgo;
