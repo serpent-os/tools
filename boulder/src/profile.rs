@@ -2,9 +2,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{collections::HashMap, fmt};
+use std::collections::HashMap;
 
 use config::Config;
+use derive_more::Display;
 use moss::repository;
 pub use moss::{repository::Priority, Repository};
 use serde::{Deserialize, Serialize};
@@ -13,7 +14,7 @@ use thiserror::Error;
 use crate::Env;
 
 /// A unique [`Profile`] identifier
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Display)]
 #[serde(from = "String")]
 pub struct Id(String);
 
@@ -25,12 +26,6 @@ impl Id {
                 .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '_' })
                 .collect(),
         )
-    }
-}
-
-impl fmt::Display for Id {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
     }
 }
 

@@ -2,17 +2,21 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{fmt, str::FromStr};
+use std::str::FromStr;
 
+use derive_more::Display;
 use stone::payload;
 use thiserror::Error;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString)]
+#[strum(serialize_all = "lowercase")]
 pub enum Kind {
     /// Name based dependency
+    #[strum(serialize = "name")]
     PackageName,
 
     /// Shared library (soname)
+    #[strum(serialize = "soname")]
     SharedLibary,
 
     /// Exported pkg-config provider
@@ -31,47 +35,11 @@ pub enum Kind {
     Binary,
 
     /// Executable in /usr/sbin
+    #[strum(serialize = "sysbinary")]
     SystemBinary,
 
     /// Exported 32-bit pkgconfig provider
     PkgConfig32,
-}
-
-/// Custom pretty-print, i.e `pkgconfig(zlib)`
-impl fmt::Display for Kind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Kind::PackageName => write!(f, "name"),
-            Kind::SharedLibary => write!(f, "soname"),
-            Kind::PkgConfig => write!(f, "pkgconfig"),
-            Kind::Interpreter => write!(f, "interpreter"),
-            Kind::CMake => write!(f, "cmake"),
-            Kind::Python => write!(f, "python"),
-            Kind::Binary => write!(f, "binary"),
-            Kind::SystemBinary => write!(f, "sysbinary"),
-            Kind::PkgConfig32 => write!(f, "pkgconfig32"),
-        }
-    }
-}
-
-/// Decode a name into a Kind (yaml helper)
-impl FromStr for Kind {
-    type Err = ParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s {
-            "name" => Kind::PackageName,
-            "soname" => Kind::SharedLibary,
-            "pkgconfig" => Kind::PkgConfig,
-            "interpreter" => Kind::Interpreter,
-            "cmake" => Kind::CMake,
-            "python" => Kind::Python,
-            "binary" => Kind::Binary,
-            "sysbinary" => Kind::SystemBinary,
-            "pkgconfig32" => Kind::PkgConfig32,
-            _ => return Err(ParseError(s.to_string())),
-        })
-    }
 }
 
 /// Convert payload dependency types to our internal representation
@@ -109,7 +77,8 @@ impl From<Kind> for payload::meta::Dependency {
 
 /// A Dependency in moss is simplistic in that it only contains
 /// a target and a Kind, ie. `pkgconfig(zlib)`
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Display)]
+#[display(fmt = "{kind}({name})")]
 pub struct Dependency {
     /// Tag for the table-type of dependency
     pub kind: Kind,
@@ -143,13 +112,6 @@ impl Ord for Dependency {
     }
 }
 
-/// Pretty-printing of dependencies (e.g.: `binary(whoami)`)
-impl fmt::Display for Dependency {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}({})", self.kind, self.name)
-    }
-}
-
 impl FromStr for Dependency {
     type Err = ParseError;
 
@@ -160,7 +122,16 @@ impl FromStr for Dependency {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+impl<'a> TryFrom<&'a str> for Dependency {
+    type Error = ParseError;
+
+    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+        Self::from_str(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Display)]
+#[display(fmt = "{kind}({name})")]
 pub struct Provider {
     pub kind: Kind,
     pub name: String,
@@ -191,12 +162,6 @@ impl Ord for Provider {
     }
 }
 
-impl fmt::Display for Provider {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}({})", self.kind, self.name)
-    }
-}
-
 impl FromStr for Provider {
     type Err = ParseError;
 
@@ -207,6 +172,14 @@ impl FromStr for Provider {
     }
 }
 
+impl<'a> TryFrom<&'a str> for Provider {
+    type Error = ParseError;
+
+    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+        Self::from_str(value)
+    }
+}
+
 fn parse(s: &str) -> Result<(Kind, String), ParseError> {
     let (kind, rest) = s.split_once('(').ok_or(ParseError(s.to_string()))?;
 
@@ -214,7 +187,7 @@ fn parse(s: &str) -> Result<(Kind, String), ParseError> {
         return Err(ParseError(s.to_string()));
     }
 
-    let kind = kind.parse()?;
+    let kind = kind.parse::<Kind>().map_err(|e| ParseError(e.to_string()))?;
     // Safe since we checked `ends_with(')')`
     let name = rest[0..rest.len() - 1].to_string();
 

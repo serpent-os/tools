@@ -11,7 +11,6 @@ use sqlx::{Executor, QueryBuilder};
 use thiserror::Error;
 use tokio::sync::Mutex;
 
-use crate::db::Encoding;
 use crate::package::{self, Meta};
 use crate::{Dependency, Provider};
 
@@ -41,7 +40,7 @@ impl Filter {
                             where provider =
                             ",
                         )
-                        .push_bind(p.encode());
+                        .push_bind(p.to_string());
                 } else {
                     query
                         .push(
@@ -50,7 +49,7 @@ impl Filter {
                                 (select distinct package from meta_providers where provider =
                             ",
                         )
-                        .push_bind(p.encode())
+                        .push_bind(p.to_string())
                         .push(")");
                 }
             }
@@ -62,7 +61,7 @@ impl Filter {
                             where dependency =
                             ",
                         )
-                        .push_bind(d.encode());
+                        .push_bind(d.to_string());
                 } else {
                     query
                         .push(
@@ -71,7 +70,7 @@ impl Filter {
                                 (select distinct package from meta_dependencies where dependency =
                             ",
                         )
-                        .push_bind(d.encode())
+                        .push_bind(d.to_string())
                         .push(")");
                 }
             }
@@ -83,7 +82,7 @@ impl Filter {
                             where name =
                             ",
                         )
-                        .push_bind(n.encode().to_string());
+                        .push_bind(n.to_string());
                 } else {
                     query
                         .push(
@@ -92,7 +91,7 @@ impl Filter {
                                 (select distinct package from meta where name =
                             ",
                         )
-                        .push_bind(n.encode().to_string())
+                        .push_bind(n.to_string())
                         .push(")");
                 }
             }
@@ -204,9 +203,9 @@ impl Database {
             .into_iter()
             .map(|entry| {
                 (
-                    entry.id.0.clone(),
+                    entry.id.clone(),
                     Meta {
-                        name: entry.name.0,
+                        name: entry.name,
                         version_identifier: entry.version_identifier,
                         source_release: entry.source_release as u64,
                         build_release: entry.build_release as u64,
@@ -217,18 +216,18 @@ impl Database {
                         homepage: entry.homepage,
                         licenses: licenses
                             .iter()
-                            .filter(|l| l.id.0 == entry.id.0)
+                            .filter(|l| l.id == entry.id)
                             .map(|l| l.license.clone())
                             .collect(),
                         dependencies: dependencies
                             .iter()
-                            .filter(|l| l.id.0 == entry.id.0)
-                            .map(|d| d.dependency.0.clone())
+                            .filter(|l| l.id == entry.id)
+                            .map(|d| d.dependency.clone())
                             .collect(),
                         providers: providers
                             .iter()
-                            .filter(|l| l.id.0 == entry.id.0)
-                            .map(|p| p.provider.0.clone())
+                            .filter(|l| l.id == entry.id)
+                            .map(|p| p.provider.clone())
                             .collect(),
                         uri: entry.uri,
                         hash: entry.hash,
@@ -261,7 +260,7 @@ impl Database {
             WHERE package = ?;
             ",
         )
-        .bind(package.encode());
+        .bind(package.to_string());
 
         let licenses_query = sqlx::query_as::<_, encoding::License>(
             "
@@ -270,7 +269,7 @@ impl Database {
             WHERE package = ?;
             ",
         )
-        .bind(package.encode());
+        .bind(package.to_string());
 
         let dependencies_query = sqlx::query_as::<_, encoding::Dependency>(
             "
@@ -279,7 +278,7 @@ impl Database {
             WHERE package = ?;
             ",
         )
-        .bind(package.encode());
+        .bind(package.to_string());
 
         let providers_query = sqlx::query_as::<_, encoding::Provider>(
             "
@@ -288,7 +287,7 @@ impl Database {
             WHERE package = ?;
             ",
         )
-        .bind(package.encode());
+        .bind(package.to_string());
 
         let entry = entry_query.fetch_one(&*pool).await?;
         let licenses = licenses_query.fetch_all(&*pool).await?;
@@ -296,7 +295,7 @@ impl Database {
         let providers = providers_query.fetch_all(&*pool).await?;
 
         Ok(Meta {
-            name: entry.name.0,
+            name: entry.name,
             version_identifier: entry.version_identifier,
             source_release: entry.source_release as u64,
             build_release: entry.build_release as u64,
@@ -306,8 +305,8 @@ impl Database {
             source_id: entry.source_id,
             homepage: entry.homepage,
             licenses: licenses.into_iter().map(|l| l.license).collect(),
-            dependencies: dependencies.into_iter().map(|d| d.dependency.0).collect(),
-            providers: providers.into_iter().map(|p| p.provider.0).collect(),
+            dependencies: dependencies.into_iter().map(|d| d.dependency).collect(),
+            providers: providers.into_iter().map(|p| p.provider).collect(),
             uri: entry.uri,
             hash: entry.hash,
             download_size: entry.download_size.map(|i| i as u64),
@@ -377,8 +376,8 @@ impl Database {
                 ..
             } = meta;
 
-            b.push_bind(id.encode())
-                .push_bind(name.encode())
+            b.push_bind(id.to_string())
+                .push_bind(name.to_string())
                 .push_bind(version_identifier)
                 .push_bind(*source_release as i64)
                 .push_bind(*build_release as i64)
@@ -407,7 +406,7 @@ impl Database {
                 ",
             )
             .push_values(licenses, |mut b, (id, license)| {
-                b.push_bind(id.encode()).push_bind(license);
+                b.push_bind(id.to_string()).push_bind(license);
             })
             .build()
             .execute(transaction.acquire().await?)
@@ -426,7 +425,7 @@ impl Database {
                 ",
             )
             .push_values(dependencies, |mut b, (id, dependency)| {
-                b.push_bind(id.encode()).push_bind(dependency.encode());
+                b.push_bind(id.to_string()).push_bind(dependency.to_string());
             })
             .build()
             .execute(transaction.acquire().await?)
@@ -445,7 +444,7 @@ impl Database {
                 ",
             )
             .push_values(providers, |mut b, (id, provider)| {
-                b.push_bind(id.encode()).push_bind(provider.encode());
+                b.push_bind(id.to_string()).push_bind(provider.to_string());
             })
             .build()
             .execute(transaction.acquire().await?)
@@ -480,7 +479,7 @@ async fn batch_remove_impl<'a>(
 
     let mut separated = query_builder.separated(", ");
     packages.into_iter().for_each(|package| {
-        separated.push_bind(package.encode());
+        separated.push_bind(package.to_string());
     });
     separated.push_unseparated(");");
 
@@ -511,14 +510,14 @@ impl From<sqlx::Error> for Error {
 mod encoding {
     use sqlx::FromRow;
 
-    use crate::db::Decoder;
     use crate::package;
 
     #[derive(FromRow)]
     pub struct Entry {
-        #[sqlx(rename = "package")]
-        pub id: Decoder<package::Id>,
-        pub name: Decoder<package::Name>,
+        #[sqlx(rename = "package", try_from = "String")]
+        pub id: package::Id,
+        #[sqlx(try_from = "String")]
+        pub name: package::Name,
         pub version_identifier: String,
         pub source_release: i64,
         pub build_release: i64,
@@ -534,28 +533,31 @@ mod encoding {
 
     #[derive(FromRow)]
     pub struct License {
-        #[sqlx(rename = "package")]
-        pub id: Decoder<package::Id>,
+        #[sqlx(rename = "package", try_from = "String")]
+        pub id: package::Id,
         pub license: String,
     }
 
     #[derive(FromRow)]
     pub struct Dependency {
-        #[sqlx(rename = "package")]
-        pub id: Decoder<package::Id>,
-        pub dependency: Decoder<crate::Dependency>,
+        #[sqlx(rename = "package", try_from = "String")]
+        pub id: package::Id,
+        #[sqlx(try_from = "&'a str")]
+        pub dependency: crate::Dependency,
     }
 
     #[derive(FromRow)]
     pub struct Provider {
-        #[sqlx(rename = "package")]
-        pub id: Decoder<package::Id>,
-        pub provider: Decoder<crate::Provider>,
+        #[sqlx(rename = "package", try_from = "String")]
+        pub id: package::Id,
+        #[sqlx(try_from = "&'a str")]
+        pub provider: crate::Provider,
     }
 
     #[derive(FromRow)]
     pub struct ProviderPackage {
-        pub package: Decoder<package::Id>,
+        #[sqlx(try_from = "String")]
+        pub package: package::Id,
     }
 }
 

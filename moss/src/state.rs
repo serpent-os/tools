@@ -2,15 +2,16 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{fmt, io::Write};
+use std::io::Write;
 
 use chrono::{DateTime, Utc};
+use derive_more::{Display, From, Into};
 use tui::{pretty, Stylize};
 
 use crate::package;
 
 /// Unique identifier for [`State`]
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, From, Into, Display)]
 pub struct Id(i64);
 
 impl Id {
@@ -19,27 +20,10 @@ impl Id {
     }
 }
 
-impl From<i64> for Id {
-    fn from(id: i64) -> Self {
-        Id(id)
-    }
-}
-
-impl From<Id> for i64 {
-    fn from(id: Id) -> Self {
-        id.0
-    }
-}
-
-impl fmt::Display for Id {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
 /// State types
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display, strum::EnumString)]
 #[repr(u8)]
+#[strum(serialize_all = "kebab-case")]
 pub enum Kind {
     /// Automatically constructed state
     Transaction,

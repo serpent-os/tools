@@ -14,6 +14,7 @@ tui = { path = "../crates/tui" }
 yaml = { path = "../crates/yaml" }
 
 clap.workspace = true
+derive_more.workspace = true
 dirs.workspace = true
 elf.workspace = true
 glob.workspace = true

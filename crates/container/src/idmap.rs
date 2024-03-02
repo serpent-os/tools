@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{fmt, fs, process::Command};
+use std::{fs, process::Command};
 
 use nix::unistd::{getgid, getuid, Pid, User};
 use thiserror::Error;
@@ -24,20 +24,12 @@ pub fn idmap(pid: Pid) -> Result<(), Error> {
     Ok(())
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, strum::Display)]
 pub enum Kind {
+    #[strum(serialize = "uid")]
     User,
+    #[strum(serialize = "gid")]
     Group,
-}
-
-impl fmt::Display for Kind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Kind::User => "uid",
-            Kind::Group => "gid",
-        }
-        .fmt(f)
-    }
 }
 
 fn load_sub_mappings(kind: Kind, id: u32, username: &str) -> Result<Vec<Submap>, Error> {

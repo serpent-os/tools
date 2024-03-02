@@ -2,50 +2,21 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{collections::BTreeSet, fmt};
+use std::collections::BTreeSet;
 
+use derive_more::{AsRef, Display, From, Into};
 use stone::payload;
 use thiserror::Error;
 
 use crate::{dependency, Dependency, Provider};
 
 /// A package identifier constructed from metadata fields
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Display)]
 pub struct Id(pub(super) String);
 
-impl fmt::Display for Id {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
 /// The name of a [`Package`]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, AsRef, From, Into, Display)]
 pub struct Name(String);
-
-impl From<String> for Name {
-    fn from(name: String) -> Self {
-        Self(name)
-    }
-}
-
-impl From<Name> for String {
-    fn from(name: Name) -> Self {
-        name.0
-    }
-}
-
-impl AsRef<str> for Name {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for Name {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
 
 /// The metadata of a [`Package`]
 #[derive(Debug, Clone, PartialEq, Eq)]
