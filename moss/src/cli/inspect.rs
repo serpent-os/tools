@@ -3,12 +3,11 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use clap::{arg, ArgMatches, Command};
-use futures::StreamExt;
-use moss::stone;
-use moss::stone::payload::layout;
-use moss::stone::payload::meta;
-use moss::stone::read::PayloadKind;
+use std::fs::File;
 use std::path::PathBuf;
+use stone::payload::layout;
+use stone::payload::meta;
+use stone::read::PayloadKind;
 use thiserror::Error;
 
 const COLUMN_WIDTH: usize = 20;
@@ -23,7 +22,7 @@ pub fn command() -> Command {
 ///
 /// Inspect the given .stone files and print results
 ///
-pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
+pub fn handle(args: &ArgMatches) -> Result<(), Error> {
     let paths = args
         .get_many::<PathBuf>("PATH")
         .into_iter()
@@ -31,20 +30,18 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
         .cloned()
         .collect::<Vec<_>>();
 
-    inspect(paths).await
-}
-
-async fn inspect(paths: Vec<PathBuf>) -> Result<(), Error> {
     // Process each input path in order.
     for path in paths {
-        let (header, mut payloads) = stone::stream_payloads(&path).await?;
+        let mut file = File::open(&path)?;
+        let mut reader = stone::read(&mut file)?;
+
+        let header = reader.header;
+        let payloads = reader.payloads()?;
 
         // Grab the header version
         print!("{path:?} = stone container version {:?}", header.version());
 
-        while let Some(result) = payloads.next().await {
-            let payload = result?;
-
+        for payload in payloads.flatten() {
             let mut layouts = vec![];
 
             // Grab deps/providers/conflicts

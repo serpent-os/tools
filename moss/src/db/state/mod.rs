@@ -4,20 +4,20 @@
 
 use chrono::{DateTime, Utc};
 use sqlx::sqlite::SqliteConnectOptions;
-use sqlx::{Acquire, Executor, Pool, Sqlite};
+use sqlx::{Acquire, Executor};
 use thiserror::Error;
-use tokio::sync::Mutex;
 
+use super::Pool;
 use crate::state::{self, Id, Selection};
-use crate::{Installation, State};
+use crate::{runtime, Installation, State};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Database {
-    pool: Mutex<Pool<Sqlite>>,
+    pool: Pool,
 }
 
 impl Database {
-    pub async fn new(installation: &Installation) -> Result<Self, Error> {
+    pub fn new(installation: &Installation) -> Result<Self, Error> {
         let path = installation.db_path("state");
 
         let options = sqlx::sqlite::SqliteConnectOptions::new()
@@ -26,148 +26,149 @@ impl Database {
             .read_only(installation.read_only())
             .foreign_keys(true);
 
-        Self::connect(options).await
+        Self::connect(options)
     }
 
-    async fn connect(options: SqliteConnectOptions) -> Result<Self, Error> {
-        let pool = sqlx::SqlitePool::connect_with(options).await?;
-
-        sqlx::migrate!("src/db/state/migrations").run(&pool).await?;
-
-        Ok(Self { pool: Mutex::new(pool) })
+    fn connect(options: SqliteConnectOptions) -> Result<Self, Error> {
+        runtime::block_on(async {
+            let pool = sqlx::SqlitePool::connect_with(options).await?;
+            sqlx::migrate!("src/db/state/migrations").run(&pool).await?;
+            Ok(pool)
+        })
+        .map(|pool| Self { pool: Pool::new(pool) })
     }
 
-    pub async fn list_ids(&self) -> Result<Vec<(Id, DateTime<Utc>)>, Error> {
-        let pool = self.pool.lock().await;
+    pub fn list_ids(&self) -> Result<Vec<(Id, DateTime<Utc>)>, Error> {
+        self.pool.exec(|pool| async move {
+            let states = sqlx::query_as::<_, encoding::Created>(
+                "
+                SELECT id, created
+                FROM state;
+                ",
+            )
+            .fetch_all(&pool)
+            .await?;
 
-        let states = sqlx::query_as::<_, encoding::Created>(
-            "
-            SELECT id, created
-            FROM state;
-            ",
-        )
-        .fetch_all(&*pool)
-        .await?;
-
-        Ok(states.into_iter().map(|state| (state.id, state.created)).collect())
-    }
-
-    pub async fn get(&self, id: &Id) -> Result<State, Error> {
-        let pool = self.pool.lock().await;
-
-        let state_query = sqlx::query_as::<_, encoding::State>(
-            "
-            SELECT id, type, created, summary, description
-            FROM state
-            WHERE id = ?;
-            ",
-        )
-        .bind(i64::from(*id));
-        let selections_query = sqlx::query_as::<_, encoding::Selection>(
-            "
-            SELECT package_id,
-                   explicit,
-                   reason
-            FROM state_selections
-            WHERE state_id = ?;
-            ",
-        )
-        .bind(i64::from(*id));
-
-        let state = state_query.fetch_one(&*pool).await?;
-        let selections_rows = selections_query.fetch_all(&*pool).await?;
-
-        let selections = selections_rows
-            .into_iter()
-            .map(|row| Selection {
-                package: row.package_id,
-                explicit: row.explicit,
-                reason: row.reason,
-            })
-            .collect();
-
-        Ok(State {
-            id: state.id,
-            summary: state.summary,
-            description: state.description,
-            selections,
-            created: state.created,
-            kind: state.kind,
+            Ok(states.into_iter().map(|state| (state.id, state.created)).collect())
         })
     }
 
-    pub async fn add(
+    pub fn get(&self, id: &Id) -> Result<State, Error> {
+        self.pool.exec(|pool| async move {
+            let state_query = sqlx::query_as::<_, encoding::State>(
+                "
+                SELECT id, type, created, summary, description
+                FROM state
+                WHERE id = ?;
+                ",
+            )
+            .bind(i64::from(*id));
+            let selections_query = sqlx::query_as::<_, encoding::Selection>(
+                "
+                SELECT package_id,
+                       explicit,
+                       reason
+                FROM state_selections
+                WHERE state_id = ?;
+                ",
+            )
+            .bind(i64::from(*id));
+
+            let state = state_query.fetch_one(&pool).await?;
+            let selections_rows = selections_query.fetch_all(&pool).await?;
+
+            let selections = selections_rows
+                .into_iter()
+                .map(|row| Selection {
+                    package: row.package_id,
+                    explicit: row.explicit,
+                    reason: row.reason,
+                })
+                .collect();
+
+            Ok(State {
+                id: state.id,
+                summary: state.summary,
+                description: state.description,
+                selections,
+                created: state.created,
+                kind: state.kind,
+            })
+        })
+    }
+
+    pub fn add(
         &self,
         selections: &[Selection],
         summary: Option<String>,
         description: Option<String>,
     ) -> Result<State, Error> {
-        let pool = self.pool.lock().await;
-        let mut transaction = pool.begin().await?;
+        self.pool
+            .exec(|pool| async move {
+                let mut transaction = pool.begin().await?;
 
-        let encoding::StateId { id } = sqlx::query_as::<_, encoding::StateId>(
-            "
-            INSERT INTO state (type, summary, description)
-            VALUES (?, ?, ?)
-            RETURNING id;
-            ",
-        )
-        .bind(state::Kind::Transaction.to_string())
-        .bind(summary)
-        .bind(description)
-        .fetch_one(transaction.acquire().await?)
-        .await?;
-
-        if !selections.is_empty() {
-            transaction
-                .execute(
-                    sqlx::QueryBuilder::new(
-                        "
-                    INSERT INTO state_selections (state_id, package_id, explicit, reason)
+                let encoding::StateId { id } = sqlx::query_as::<_, encoding::StateId>(
+                    "
+                    INSERT INTO state (type, summary, description)
+                    VALUES (?, ?, ?)
+                    RETURNING id;
                     ",
-                    )
-                    .push_values(selections, |mut b, selection| {
-                        b.push_bind(i64::from(id))
-                            .push_bind(selection.package.to_string())
-                            .push_bind(selection.explicit)
-                            .push_bind(selection.reason.as_ref());
-                    })
-                    .build(),
                 )
+                .bind(state::Kind::Transaction.to_string())
+                .bind(summary)
+                .bind(description)
+                .fetch_one(transaction.acquire().await?)
                 .await?;
-        }
 
-        transaction.commit().await?;
-        drop(pool);
+                if !selections.is_empty() {
+                    transaction
+                        .execute(
+                            sqlx::QueryBuilder::new(
+                                "
+                                INSERT INTO state_selections (state_id, package_id, explicit, reason)
+                                ",
+                            )
+                            .push_values(selections, |mut b, selection| {
+                                b.push_bind(i64::from(id))
+                                    .push_bind(selection.package.to_string())
+                                    .push_bind(selection.explicit)
+                                    .push_bind(selection.reason.as_ref());
+                            })
+                            .build(),
+                        )
+                        .await?;
+                }
 
-        let state = self.get(&id).await?;
+                transaction.commit().await?;
 
-        Ok(state)
+                Ok(id)
+            })
+            .and_then(|id| self.get(&id))
     }
 
-    pub async fn remove(&self, state: &state::Id) -> Result<(), Error> {
-        self.batch_remove(Some(state)).await
+    pub fn remove(&self, state: &state::Id) -> Result<(), Error> {
+        self.batch_remove(Some(state))
     }
 
-    pub async fn batch_remove(&self, states: impl IntoIterator<Item = &state::Id>) -> Result<(), Error> {
-        let pool = self.pool.lock().await;
+    pub fn batch_remove<'a>(&self, states: impl IntoIterator<Item = &'a state::Id>) -> Result<(), Error> {
+        self.pool.exec(|pool| async move {
+            let mut query = sqlx::QueryBuilder::new(
+                "
+                DELETE FROM state
+                WHERE id IN ( 
+                ",
+            );
 
-        let mut query = sqlx::QueryBuilder::new(
-            "
-            DELETE FROM state
-            WHERE id IN ( 
-            ",
-        );
+            let mut separated = query.separated(", ");
+            states.into_iter().for_each(|id| {
+                separated.push_bind(i64::from(*id));
+            });
+            separated.push_unseparated(");");
 
-        let mut separated = query.separated(", ");
-        states.into_iter().for_each(|id| {
-            separated.push_bind(i64::from(*id));
-        });
-        separated.push_unseparated(");");
+            query.build().execute(&pool).await?;
 
-        query.build().execute(&*pool).await?;
-
-        Ok(())
+            Ok(())
+        })
     }
 }
 
@@ -228,11 +229,10 @@ mod test {
     use super::*;
     use crate::package;
 
-    #[tokio::test]
     async fn create_insert_select() {
-        let database = Database::connect(SqliteConnectOptions::from_str("sqlite::memory:").unwrap())
-            .await
-            .unwrap();
+        let _guard = runtime::init();
+
+        let database = Database::connect(SqliteConnectOptions::from_str("sqlite::memory:").unwrap()).unwrap();
 
         let selections = vec![
             Selection::explicit(package::Id::from("pkg a".to_string())),
@@ -242,7 +242,6 @@ mod test {
 
         let state = database
             .add(&selections, Some("test".to_string()), Some("test".to_string()))
-            .await
             .unwrap();
 
         // First record

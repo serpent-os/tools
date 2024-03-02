@@ -3,19 +3,18 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
-    io,
+    fs, io,
     path::{Path, PathBuf},
     str::FromStr,
     time::Duration,
 };
 
 use futures::{stream, StreamExt, TryStreamExt};
+use moss::runtime;
 use nix::unistd::{linkat, LinkatFlags};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
-use tokio::fs::{copy, remove_dir_all};
 use tokio::io::AsyncWriteExt;
-use tokio::process::Command;
 use tui::{MultiProgress, ProgressBar, ProgressStyle, Stylize};
 use url::Url;
 
@@ -23,7 +22,7 @@ use crate::{util, Paths, Recipe};
 
 /// Cache all upstreams from the provided [`Recipe`] and make them available
 /// in the guest rootfs.
-pub async fn sync(recipe: &Recipe, paths: &Paths) -> Result<(), Error> {
+pub fn sync(recipe: &Recipe, paths: &Paths) -> Result<(), Error> {
     let upstreams = recipe
         .parsed
         .upstreams
@@ -47,43 +46,52 @@ pub async fn sync(recipe: &Recipe, paths: &Paths) -> Result<(), Error> {
     tp.tick();
 
     let upstream_dir = paths.guest_host_path(&paths.upstreams());
-    util::ensure_dir_exists(&upstream_dir).await?;
+    util::ensure_dir_exists(&upstream_dir)?;
 
-    stream::iter(&upstreams)
-        .map(|upstream| async {
-            let pb = mp.insert_before(
-                &tp,
-                ProgressBar::new(u64::MAX)
-                    .with_message(format!("{} {}", "Downloading".blue(), upstream.name().bold(),)),
-            );
-            pb.enable_steady_tick(Duration::from_millis(150));
+    runtime::block_on(
+        stream::iter(&upstreams)
+            .map(|upstream| async {
+                let pb = mp.insert_before(
+                    &tp,
+                    ProgressBar::new(u64::MAX).with_message(format!(
+                        "{} {}",
+                        "Downloading".blue(),
+                        upstream.name().bold(),
+                    )),
+                );
+                pb.enable_steady_tick(Duration::from_millis(150));
 
-            let install = upstream.fetch(paths, &pb).await?;
+                let install = upstream.fetch(paths, &pb).await?;
 
-            pb.set_message(format!("{} {}", "Copying".yellow(), upstream.name().bold(),));
-            pb.set_style(
-                ProgressStyle::with_template(" {spinner} {wide_msg} ")
-                    .unwrap()
-                    .tick_chars("--=≡■≡=--"),
-            );
+                pb.set_message(format!("{} {}", "Copying".yellow(), upstream.name().bold(),));
+                pb.set_style(
+                    ProgressStyle::with_template(" {spinner} {wide_msg} ")
+                        .unwrap()
+                        .tick_chars("--=≡■≡=--"),
+                );
 
-            install.share(&upstream_dir).await?;
+                runtime::unblock({
+                    let install = install.clone();
+                    let dir = upstream_dir.clone();
+                    move || install.share(&dir)
+                })
+                .await?;
 
-            let cached_tag = install
-                .was_cached()
-                .then_some(format!("{}", " (cached)".dim()))
-                .unwrap_or_default();
+                let cached_tag = install
+                    .was_cached()
+                    .then_some(format!("{}", " (cached)".dim()))
+                    .unwrap_or_default();
 
-            pb.finish();
-            mp.remove(&pb);
-            mp.println(format!("{} {}{}", "Shared".green(), upstream.name().bold(), cached_tag,))?;
-            tp.inc(1);
+                pb.finish();
+                mp.remove(&pb);
+                mp.println(format!("{} {}{}", "Shared".green(), upstream.name().bold(), cached_tag,))?;
+                tp.inc(1);
 
-            Ok(()) as Result<_, Error>
-        })
-        .buffer_unordered(moss::environment::MAX_NETWORK_CONCURRENCY)
-        .try_collect::<()>()
-        .await?;
+                Ok(()) as Result<_, Error>
+            })
+            .buffer_unordered(moss::environment::MAX_NETWORK_CONCURRENCY)
+            .try_collect::<()>(),
+    )?;
 
     mp.clear()?;
     println!();
@@ -91,6 +99,7 @@ pub async fn sync(recipe: &Recipe, paths: &Paths) -> Result<(), Error> {
     Ok(())
 }
 
+#[derive(Clone)]
 enum Installed {
     Plain {
         name: String,
@@ -112,7 +121,7 @@ impl Installed {
         }
     }
 
-    async fn share(&self, dest_dir: &Path) -> Result<(), Error> {
+    fn share(&self, dest_dir: &Path) -> Result<(), Error> {
         match self {
             Installed::Plain { name, path, .. } => {
                 let target = dest_dir.join(name);
@@ -122,12 +131,12 @@ impl Installed {
 
                 // Copy instead
                 if link_result.is_err() {
-                    copy(&path, &target).await?;
+                    fs::copy(path, &target)?;
                 }
             }
             Installed::Git { name, path, .. } => {
                 let target = dest_dir.join(name);
-                util::copy_dir(path, &target).await?;
+                util::copy_dir(path, &target)?;
             }
         }
 
@@ -207,20 +216,17 @@ impl Plain {
         }
     }
 
-    async fn path(&self, paths: &Paths) -> PathBuf {
+    fn path(&self, paths: &Paths) -> PathBuf {
         // Type safe guaranteed to be >= 5 bytes
         let hash = &self.hash.0;
 
-        let parent = paths
+        paths
             .upstreams()
             .host
             .join("fetched")
             .join(&hash[..5])
-            .join(&hash[hash.len() - 5..]);
-
-        let _ = util::ensure_dir_exists(&parent).await;
-
-        parent.join(hash)
+            .join(&hash[hash.len() - 5..])
+            .join(hash)
     }
 
     async fn fetch(&self, paths: &Paths, pb: &ProgressBar) -> Result<Installed, Error> {
@@ -234,7 +240,11 @@ impl Plain {
         );
 
         let name = self.name();
-        let path = self.path(paths).await;
+        let path = self.path(paths);
+
+        if let Some(parent) = path.parent().map(Path::to_path_buf) {
+            runtime::unblock(move || util::recreate_dir(&parent)).await?;
+        }
 
         if path.exists() {
             return Ok(Installed::Plain {
@@ -290,23 +300,26 @@ impl Git {
         util::uri_file_name(&self.uri)
     }
 
-    async fn final_path(&self, paths: &Paths) -> PathBuf {
-        let parent = paths.upstreams().host.join("git");
-
-        let _ = util::ensure_dir_exists(&parent).await;
-
-        parent.join(util::uri_relative_path(&self.uri))
+    fn final_path(&self, paths: &Paths) -> PathBuf {
+        paths
+            .upstreams()
+            .host
+            .join("git")
+            .join(util::uri_relative_path(&self.uri))
     }
 
-    async fn staging_path(&self, paths: &Paths) -> PathBuf {
-        let parent = paths.upstreams().host.join("staging").join("git");
-
-        let _ = util::ensure_dir_exists(&parent).await;
-
-        parent.join(util::uri_relative_path(&self.uri))
+    fn staging_path(&self, paths: &Paths) -> PathBuf {
+        paths
+            .upstreams()
+            .host
+            .join("staging")
+            .join("git")
+            .join(util::uri_relative_path(&self.uri))
     }
 
     async fn fetch(&self, paths: &Paths, pb: &ProgressBar) -> Result<Installed, Error> {
+        use tokio::fs;
+
         pb.set_style(
             ProgressStyle::with_template(" {spinner} {wide_msg} ")
                 .unwrap()
@@ -314,14 +327,21 @@ impl Git {
         );
 
         let clone_path = if self.staging {
-            self.staging_path(paths).await
+            self.staging_path(paths)
         } else {
-            self.final_path(paths).await
+            self.final_path(paths)
         };
         let clone_path_string = clone_path.display().to_string();
 
-        let final_path = self.final_path(paths).await;
+        let final_path = self.final_path(paths);
         let final_path_string = final_path.display().to_string();
+
+        if let Some(parent) = clone_path.parent().map(Path::to_path_buf) {
+            runtime::unblock(move || util::recreate_dir(&parent)).await?;
+        }
+        if let Some(parent) = final_path.parent().map(Path::to_path_buf) {
+            runtime::unblock(move || util::recreate_dir(&parent)).await?;
+        }
 
         if self.ref_exists(&final_path).await? {
             self.reset_to_ref(&final_path).await?;
@@ -332,9 +352,9 @@ impl Git {
             });
         }
 
-        let _ = remove_dir_all(&clone_path).await;
+        let _ = fs::remove_dir_all(&clone_path).await;
         if self.staging {
-            let _ = remove_dir_all(&final_path).await;
+            let _ = fs::remove_dir_all(&final_path).await;
         }
 
         let mut args = vec!["clone"];
@@ -393,7 +413,9 @@ impl Git {
     }
 
     async fn run(&self, args: &[&str], cwd: Option<&Path>) -> Result<(), Error> {
-        let mut command = Command::new("git");
+        use tokio::process;
+
+        let mut command = process::Command::new("git");
 
         if let Some(dir) = cwd {
             command.current_dir(dir);

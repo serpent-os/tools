@@ -8,7 +8,7 @@ use std::{
 };
 
 use itertools::Itertools;
-use moss::{package::Meta, stone, Dependency};
+use moss::{package::Meta, Dependency};
 use thiserror::Error;
 use tui::{ProgressBar, ProgressReader, ProgressStyle, Stylize};
 

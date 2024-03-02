@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use dag::Dag;
-use futures::{StreamExt, TryFutureExt};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -53,23 +52,20 @@ pub(super) fn new(registry: &Registry) -> Result<Transaction<'_>, Error> {
 }
 
 /// Populate the transaction on initialisation
-pub(super) async fn new_with_installed(
-    registry: &Registry,
-    incoming: Vec<package::Id>,
-) -> Result<Transaction<'_>, Error> {
+pub(super) fn new_with_installed(registry: &Registry, incoming: Vec<package::Id>) -> Result<Transaction<'_>, Error> {
     let mut tx = new(registry)?;
-    tx.update(incoming, Lookup::InstalledOnly).await?;
+    tx.update(incoming, Lookup::InstalledOnly)?;
     Ok(tx)
 }
 
 impl<'a> Transaction<'a> {
     /// Add a package to this transaction
-    pub async fn add(&mut self, incoming: Vec<package::Id>) -> Result<(), Error> {
-        self.update(incoming, Lookup::Global).await
+    pub fn add(&mut self, incoming: Vec<package::Id>) -> Result<(), Error> {
+        self.update(incoming, Lookup::Global)
     }
 
     /// Remove a set of packages and their reverse dependencies
-    pub async fn remove(&mut self, packages: Vec<package::Id>) {
+    pub fn remove(&mut self, packages: Vec<package::Id>) {
         // Get transposed subgraph
         let transposed = self.packages.transpose();
         let subgraph = transposed.subgraph(&packages);
@@ -87,7 +83,7 @@ impl<'a> Transaction<'a> {
     }
 
     /// Update internal package graph with all incoming packages & their deps
-    async fn update(&mut self, incoming: Vec<package::Id>, lookup: Lookup) -> Result<(), Error> {
+    fn update(&mut self, incoming: Vec<package::Id>, lookup: Lookup) -> Result<(), Error> {
         let mut items = incoming;
 
         loop {
@@ -100,8 +96,11 @@ impl<'a> Transaction<'a> {
                 let check_node = self.packages.add_node_or_get_index(check_id.clone());
 
                 // Grab this package in question
-                let matches = self.registry.by_id(check_id).collect::<Vec<_>>().await;
-                let package = matches.first().ok_or(Error::NoCandidate(check_id.clone().into()))?;
+                let package = self
+                    .registry
+                    .by_id(check_id)
+                    .next()
+                    .ok_or(Error::NoCandidate(check_id.clone().into()))?;
                 for dependency in package.meta.dependencies.iter() {
                     let provider = Provider {
                         kind: dependency.kind,
@@ -110,8 +109,8 @@ impl<'a> Transaction<'a> {
 
                     // Now get it resolved
                     let search = match lookup {
-                        Lookup::Global => self.resolve_installation_provider(provider).await?,
-                        Lookup::InstalledOnly => self.resolve_provider(ProviderFilter::InstalledOnly(provider)).await?,
+                        Lookup::Global => self.resolve_installation_provider(provider)?,
+                        Lookup::InstalledOnly => self.resolve_provider(ProviderFilter::InstalledOnly(provider))?,
                     };
 
                     // Add dependency node
@@ -134,51 +133,39 @@ impl<'a> Transaction<'a> {
     }
 
     /// Attempt to resolve the filterered provider
-    async fn resolve_provider(&self, filter: ProviderFilter) -> Result<package::Id, Error> {
+    fn resolve_provider(&self, filter: ProviderFilter) -> Result<package::Id, Error> {
         match filter {
             ProviderFilter::All(provider) => self
                 .registry
                 .by_provider(&provider, package::Flags::AVAILABLE)
-                .boxed()
                 .next()
-                .await
-                .map(|p| p.id.clone())
+                .map(|p| p.id)
                 .ok_or(Error::NoCandidate(provider.to_string())),
             ProviderFilter::InstalledOnly(provider) => self
                 .registry
                 .by_provider(&provider, package::Flags::INSTALLED)
-                .boxed()
                 .next()
-                .await
-                .map(|p| p.id.clone())
+                .map(|p| p.id)
                 .ok_or(Error::NoCandidate(provider.to_string())),
             ProviderFilter::Selections(provider) => self
                 .registry
                 .by_provider(&provider, package::Flags::NONE)
-                .filter_map(|f| async {
-                    if self.packages.node_exists(&f.id) {
-                        Some(f)
+                .find_map(|p| {
+                    if self.packages.node_exists(&p.id) {
+                        Some(p.id)
                     } else {
                         None
                     }
                 })
-                .boxed()
-                .next()
-                .await
-                .map(|p| p.id.clone())
                 .ok_or(Error::NoCandidate(provider.to_string())),
         }
     }
 
     // Try all strategies to resolve a provider for installation
-    async fn resolve_installation_provider(&self, provider: Provider) -> Result<package::Id, Error> {
+    fn resolve_installation_provider(&self, provider: Provider) -> Result<package::Id, Error> {
         self.resolve_provider(ProviderFilter::Selections(provider.clone()))
-            .or_else(|_| async {
-                self.resolve_provider(ProviderFilter::InstalledOnly(provider.clone()))
-                    .await
-            })
-            .or_else(|_| async { self.resolve_provider(ProviderFilter::All(provider.clone())).await })
-            .await
+            .or_else(|_| self.resolve_provider(ProviderFilter::InstalledOnly(provider.clone())))
+            .or_else(|_| self.resolve_provider(ProviderFilter::All(provider)))
     }
 }
 

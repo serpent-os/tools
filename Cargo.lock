@@ -211,6 +211,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "sha2",
+ "stone",
  "stone_recipe",
  "strum",
  "thiserror",
@@ -353,12 +354,9 @@ name = "config"
 version = "0.1.0"
 dependencies = [
  "dirs",
- "futures",
  "serde",
  "serde_yaml",
  "thiserror",
- "tokio",
- "tokio-stream",
 ]
 
 [[package]]

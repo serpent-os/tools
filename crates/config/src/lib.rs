@@ -3,15 +3,12 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
-    fmt,
+    fmt, fs, io,
     path::{Path, PathBuf},
 };
 
-use futures::StreamExt;
 use serde::{de::DeserializeOwned, Serialize};
 use thiserror::Error;
-use tokio::{fs, io};
-use tokio_stream::wrappers::ReadDirStream;
 
 const EXTENSION: &str = "yaml";
 
@@ -55,14 +52,14 @@ impl Manager {
         }
     }
 
-    pub async fn load<T: Config>(&self) -> Vec<T> {
+    pub fn load<T: Config>(&self) -> Vec<T> {
         let domain = T::domain();
 
         let mut configs = vec![];
 
         for (entry, resolve) in self.scope.load_with() {
-            for path in enumerate_paths(entry, resolve, &domain).await {
-                if let Some(config) = read_config(path).await {
+            for path in enumerate_paths(entry, resolve, &domain) {
+                if let Some(config) = read_config(path) {
                     configs.push(config);
                 }
             }
@@ -71,33 +68,29 @@ impl Manager {
         configs
     }
 
-    pub async fn save<T: Config + Serialize>(&self, name: impl fmt::Display, config: &T) -> Result<(), SaveError> {
+    pub fn save<T: Config + Serialize>(&self, name: impl fmt::Display, config: &T) -> Result<(), SaveError> {
         let domain = T::domain();
 
         let dir = self.scope.save_dir(&domain);
 
-        fs::create_dir_all(&dir)
-            .await
-            .map_err(|io| SaveError::CreateDir(dir.clone(), io))?;
+        fs::create_dir_all(&dir).map_err(|io| SaveError::CreateDir(dir.clone(), io))?;
 
         let path = dir.join(format!("{name}.{EXTENSION}"));
 
         let serialized = serde_yaml::to_string(config)?;
 
-        fs::write(&path, serialized)
-            .await
-            .map_err(|io| SaveError::Write(path, io))?;
+        fs::write(&path, serialized).map_err(|io| SaveError::Write(path, io))?;
 
         Ok(())
     }
 
-    pub async fn delete<T: Config>(&self, name: impl fmt::Display) -> Result<(), io::Error> {
+    pub fn delete<T: Config>(&self, name: impl fmt::Display) -> Result<(), io::Error> {
         let domain = T::domain();
 
         let dir = self.scope.save_dir(&domain);
         let path = dir.join(format!("{name}.{EXTENSION}"));
 
-        fs::remove_file(&path).await?;
+        fs::remove_file(path)?;
 
         Ok(())
     }
@@ -117,7 +110,7 @@ pub enum SaveError {
     Write(PathBuf, #[source] io::Error),
 }
 
-async fn enumerate_paths(entry: Entry, resolve: Resolve<'_>, domain: &str) -> Vec<PathBuf> {
+fn enumerate_paths(entry: Entry, resolve: Resolve<'_>, domain: &str) -> Vec<PathBuf> {
     match entry {
         Entry::File => {
             let file = resolve.file(domain);
@@ -129,12 +122,12 @@ async fn enumerate_paths(entry: Entry, resolve: Resolve<'_>, domain: &str) -> Ve
             }
         }
         Entry::Directory => {
-            if let Ok(read_dir) = fs::read_dir(resolve.dir(domain)).await {
-                ReadDirStream::new(read_dir)
-                    .filter_map(|entry| async {
-                        let entry = entry.ok()?;
+            if let Ok(read_dir) = fs::read_dir(resolve.dir(domain)) {
+                read_dir
+                    .flatten()
+                    .filter_map(|entry| {
                         let path = entry.path();
-                        let extension = path.extension().and_then(|ext| ext.to_str()).unwrap_or_default();
+                        let extension = path.extension().and_then(|ext| ext.to_str())?;
 
                         if path.exists() && extension == EXTENSION {
                             Some(path)
@@ -143,7 +136,6 @@ async fn enumerate_paths(entry: Entry, resolve: Resolve<'_>, domain: &str) -> Ve
                         }
                     })
                     .collect()
-                    .await
             } else {
                 vec![]
             }
@@ -151,8 +143,8 @@ async fn enumerate_paths(entry: Entry, resolve: Resolve<'_>, domain: &str) -> Ve
     }
 }
 
-async fn read_config<T: Config>(path: PathBuf) -> Option<T> {
-    let bytes = fs::read(path).await.ok()?;
+fn read_config<T: Config>(path: PathBuf) -> Option<T> {
+    let bytes = fs::read(path).ok()?;
     serde_yaml::from_slice(&bytes).ok()
 }
 

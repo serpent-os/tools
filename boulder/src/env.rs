@@ -36,9 +36,9 @@ impl Env {
         let data_dir = resolve_data_dir(data_dir);
         let moss_dir = resolve_moss_root(is_root, moss_root)?;
 
-        util::sync::ensure_dir_exists(&cache_dir)?;
-        util::sync::ensure_dir_exists(&data_dir)?;
-        util::sync::ensure_dir_exists(&moss_dir)?;
+        util::ensure_dir_exists(&cache_dir)?;
+        util::ensure_dir_exists(&data_dir)?;
+        util::ensure_dir_exists(&moss_dir)?;
 
         Ok(Self {
             config,

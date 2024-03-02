@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use futures::{future::join_all, StreamExt};
 use thiserror::Error;
 use tui::{
     dialoguer::{theme::ColorfulTheme, Confirm},
@@ -13,24 +12,25 @@ use crate::{
     client::{self, Client},
     package::{self, Flags},
     registry::transaction,
+    runtime,
     state::Selection,
     Package, Provider,
 };
 
-pub async fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<(), Error> {
+pub fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<(), Error> {
     // Resolve input packages
-    let input = resolve_input(pkgs, client).await?;
+    let input = resolve_input(pkgs, client)?;
 
     // Add all inputs
     let mut tx = client.registry.transaction()?;
 
-    tx.add(input.clone()).await?;
+    tx.add(input.clone())?;
 
     // Resolve transaction to metadata
-    let resolved = client.resolve_packages(tx.finalize()).await?;
+    let resolved = client.resolve_packages(tx.finalize())?;
 
     // Get installed packages to check against
-    let installed = client.registry.list_installed(Flags::NONE).collect::<Vec<_>>().await;
+    let installed = client.registry.list_installed(Flags::NONE).collect::<Vec<_>>();
     let is_installed = |p: &Package| installed.iter().any(|i| i.meta.name == p.meta.name);
 
     // Get missing packages that are:
@@ -78,13 +78,13 @@ pub async fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<()
     }
 
     // Cache packages
-    client.cache_packages(&missing).await?;
+    runtime::block_on(client.cache_packages(&missing))?;
 
     // Calculate the new state of packages (old_state + missing)
     let new_state_pkgs = {
         // Only use previous state in stateful mode
         let previous_selections = match client.installation.active_state {
-            Some(id) if !client.is_ephemeral() => client.state_db.get(&id).await?.selections,
+            Some(id) if !client.is_ephemeral() => client.state_db.get(&id)?.selections,
             _ => vec![],
         };
         let missing_selections = missing.iter().map(|p| Selection {
@@ -99,22 +99,22 @@ pub async fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<()
     };
 
     // Perfect, apply state.
-    client.apply_state(&new_state_pkgs, "Install").await?;
+    client.apply_state(&new_state_pkgs, "Install")?;
 
     Ok(())
 }
 
 /// Resolves the package arguments as valid input packages. Returns an error
 /// if any args are invalid.
-async fn resolve_input(pkgs: &[&str], client: &Client) -> Result<Vec<package::Id>, Error> {
+fn resolve_input(pkgs: &[&str], client: &Client) -> Result<Vec<package::Id>, Error> {
     // Parse pkg args into valid / invalid sets
-    let queried = join_all(pkgs.iter().map(|p| find_packages(p, client))).await;
+    let queried = pkgs.iter().map(|p| find_packages(p, client));
 
     let mut results = vec![];
 
     for (id, pkg) in queried {
         if let Some(pkg) = pkg {
-            results.push(pkg.id.clone())
+            results.push(pkg.id)
         } else {
             return Err(Error::NoPackage(id));
         }
@@ -124,16 +124,12 @@ async fn resolve_input(pkgs: &[&str], client: &Client) -> Result<Vec<package::Id
 }
 
 /// Resolve a package name to the first package
-async fn find_packages<'a>(id: &'a str, client: &Client) -> (String, Option<Package>) {
+fn find_packages(id: &str, client: &Client) -> (String, Option<Package>) {
     let provider = Provider::from_name(id).unwrap();
-    let result = client
-        .registry
-        .by_provider(&provider, Flags::AVAILABLE)
-        .collect::<Vec<_>>()
-        .await;
+    let result = client.registry.by_provider(&provider, Flags::AVAILABLE).next();
 
     // First only, pre-sorted
-    (id.into(), result.first().cloned())
+    (id.into(), result)
 }
 
 #[derive(Debug, Error)]

@@ -39,11 +39,11 @@ impl Paths {
             recipe_dir,
         };
 
-        util::sync::ensure_dir_exists(&job.rootfs().host)?;
-        util::sync::ensure_dir_exists(&job.artefacts().host)?;
-        util::sync::ensure_dir_exists(&job.build().host)?;
-        util::sync::ensure_dir_exists(&job.ccache().host)?;
-        util::sync::ensure_dir_exists(&job.upstreams().host)?;
+        util::ensure_dir_exists(&job.rootfs().host)?;
+        util::ensure_dir_exists(&job.artefacts().host)?;
+        util::ensure_dir_exists(&job.build().host)?;
+        util::ensure_dir_exists(&job.ccache().host)?;
+        util::ensure_dir_exists(&job.upstreams().host)?;
 
         Ok(job)
     }

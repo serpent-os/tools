@@ -232,7 +232,7 @@ fn split_debug(
         return Ok(None);
     }
 
-    util::sync::ensure_dir_exists(&debug_info_dir)?;
+    util::ensure_dir_exists(&debug_info_dir)?;
 
     let output = Command::new(objcopy)
         .arg("--only-keep-debug")

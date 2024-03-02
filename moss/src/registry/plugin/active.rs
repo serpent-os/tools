@@ -28,8 +28,8 @@ impl Active {
     }
 
     /// Query the given package
-    pub async fn package(&self, id: &package::Id) -> Option<Package> {
-        match self.db.get(id).await {
+    pub fn package(&self, id: &package::Id) -> Option<Package> {
+        match self.db.get(id) {
             Ok(meta) => self.installed_package(id.clone(), meta),
             Err(db::meta::Error::RowNotFound) => None,
             Err(error) => {
@@ -40,10 +40,10 @@ impl Active {
     }
 
     /// Query, restricted to state
-    async fn query(&self, flags: package::Flags, filter: Option<db::meta::Filter>) -> Vec<Package> {
+    fn query(&self, flags: package::Flags, filter: Option<db::meta::Filter>) -> Vec<Package> {
         if flags.contains(package::Flags::INSTALLED) || flags == package::Flags::NONE {
             // TODO: Error handling
-            let packages = match self.db.query(filter).await {
+            let packages = match self.db.query(filter) {
                 Ok(packages) => packages,
                 Err(error) => {
                     warn!("failed to query repository packages: {error}");
@@ -69,20 +69,18 @@ impl Active {
     }
 
     /// List, restricted to state
-    pub async fn list(&self, flags: package::Flags) -> Vec<Package> {
-        self.query(flags, None).await
+    pub fn list(&self, flags: package::Flags) -> Vec<Package> {
+        self.query(flags, None)
     }
 
     /// Query all packages that match the given provider identity
-    pub async fn query_provider(&self, provider: &Provider, flags: package::Flags) -> Vec<Package> {
+    pub fn query_provider(&self, provider: &Provider, flags: package::Flags) -> Vec<Package> {
         self.query(flags, Some(db::meta::Filter::Provider(provider.clone())))
-            .await
     }
 
     /// Query matching by name
-    pub async fn query_name(&self, package_name: &package::Name, flags: package::Flags) -> Vec<Package> {
+    pub fn query_name(&self, package_name: &package::Name, flags: package::Flags) -> Vec<Package> {
         self.query(flags, Some(db::meta::Filter::Name(package_name.clone())))
-            .await
     }
 
     pub fn priority(&self) -> u64 {

@@ -3,20 +3,19 @@
 // SPDX-License-Identifier: MPL-2.0
 use std::{
     collections::{btree_map, BTreeMap},
-    io,
+    fs, io,
     path::{Path, PathBuf, StripPrefixError},
     time::Duration,
 };
 
 use clap::{arg, value_parser, ArgMatches, Command};
-use futures::{future::BoxFuture, stream, FutureExt, StreamExt, TryStreamExt};
 use moss::{
-    client, environment,
+    client,
     package::{self, Meta, MissingMetaFieldError},
 };
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
-use tokio::{fs, task};
 use tui::{MultiProgress, ProgressBar, ProgressStyle, Stylize};
 
 pub fn command() -> Command {
@@ -26,10 +25,10 @@ pub fn command() -> Command {
         .arg(arg!(<INDEX_DIR> "directory of index files").value_parser(value_parser!(PathBuf)))
 }
 
-pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
+pub fn handle(args: &ArgMatches) -> Result<(), Error> {
     let dir = args.get_one::<PathBuf>("INDEX_DIR").unwrap().canonicalize()?;
 
-    let stone_files = enumerate_stone_files(&dir).await?;
+    let stone_files = enumerate_stone_files(&dir)?;
 
     println!("Indexing {} files\n", stone_files.len());
 
@@ -44,11 +43,10 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     );
     total_progress.tick();
 
-    let list = stream::iter(&stone_files)
+    let list = stone_files
+        .par_iter()
         .map(|path| get_meta(path, &dir, &multi_progress, &total_progress))
-        .buffer_unordered(environment::MAX_DISK_CONCURRENCY)
-        .try_collect::<Vec<_>>()
-        .await?;
+        .collect::<Result<Vec<_>, _>>()?;
 
     let mut map = BTreeMap::new();
 
@@ -76,7 +74,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
         }
     }
 
-    write_index(&dir, map, &total_progress).await?;
+    write_index(&dir, map, &total_progress)?;
 
     multi_progress.clear()?;
 
@@ -85,15 +83,7 @@ pub async fn handle(args: &ArgMatches) -> Result<(), Error> {
     Ok(())
 }
 
-async fn write_index(
-    dir: &Path,
-    map: BTreeMap<package::Name, Meta>,
-    total_progress: &ProgressBar,
-) -> Result<(), Error> {
-    use std::fs::File;
-
-    let dir = dir.to_path_buf();
-
+fn write_index(dir: &Path, map: BTreeMap<package::Name, Meta>, total_progress: &ProgressBar) -> Result<(), Error> {
     total_progress.set_message("Writing index file");
     total_progress.set_style(
         ProgressStyle::with_template("\n {spinner} {wide_msg}")
@@ -102,25 +92,21 @@ async fn write_index(
     );
     total_progress.enable_steady_tick(Duration::from_millis(150));
 
-    task::spawn_blocking(move || {
-        let mut file = File::create(dir.join("stone.index"))?;
+    let mut file = fs::File::create(dir.join("stone.index"))?;
 
-        let mut writer = stone::Writer::new(&mut file, stone::header::v1::FileType::Repository)?;
+    let mut writer = stone::Writer::new(&mut file, stone::header::v1::FileType::Repository)?;
 
-        for (_, meta) in map {
-            let payload = meta.to_stone_payload();
-            writer.add_payload(payload.as_slice())?;
-        }
+    for (_, meta) in map {
+        let payload = meta.to_stone_payload();
+        writer.add_payload(payload.as_slice())?;
+    }
 
-        writer.finalize()?;
+    writer.finalize()?;
 
-        Ok(())
-    })
-    .await
-    .expect("join handle")
+    Ok(())
 }
 
-async fn get_meta(
+fn get_meta(
     path: &Path,
     dir: &Path,
     multi_progress: &MultiProgress,
@@ -131,7 +117,7 @@ async fn get_meta(
     let progress = multi_progress.insert_before(total_progress, ProgressBar::new_spinner());
     progress.enable_steady_tick(Duration::from_millis(150));
 
-    let (size, hash) = stat_file(path, &relative_path, &progress).await?;
+    let (size, hash) = stat_file(path, &relative_path, &progress)?;
 
     progress.set_message(format!("{} {}", "Indexing".yellow(), relative_path.clone().bold(),));
     progress.set_style(
@@ -140,9 +126,9 @@ async fn get_meta(
             .tick_chars("--=≡■≡=--"),
     );
 
-    let (_, payloads) = moss::stone::stream_payloads(path).await?;
-
-    let payloads = payloads.try_collect::<Vec<_>>().await?;
+    let mut file = fs::File::open(path)?;
+    let mut reader = stone::read(&mut file)?;
+    let payloads = reader.payloads()?.collect::<Result<Vec<_>, _>>()?;
 
     let payload = payloads
         .iter()
@@ -162,56 +148,42 @@ async fn get_meta(
     Ok(meta)
 }
 
-async fn stat_file(path: &Path, relative_path: &str, progress: &ProgressBar) -> Result<(u64, String), Error> {
-    use std::fs::File;
+fn stat_file(path: &Path, relative_path: &str, progress: &ProgressBar) -> Result<(u64, String), Error> {
+    let file = fs::File::open(path)?;
+    let size = file.metadata()?.len();
 
-    let path = path.to_path_buf();
-    let relative_path = relative_path.to_string();
-    let progress = progress.clone();
+    progress.set_length(size);
+    progress.set_message(format!("{} {}", "Hashing".blue(), relative_path.bold()));
+    progress.set_style(
+        ProgressStyle::with_template(" {spinner} |{percent:>3}%| {wide_msg} {binary_bytes_per_sec:>.dim} ")
+            .unwrap()
+            .tick_chars("--=≡■≡=--"),
+    );
 
-    task::spawn_blocking(move || {
-        let file = File::open(path)?;
-        let size = file.metadata()?.len();
+    let mut hasher = Sha256::new();
+    io::copy(&mut &file, &mut progress.wrap_write(&mut hasher))?;
 
-        progress.set_length(size);
-        progress.set_message(format!("{} {}", "Hashing".blue(), relative_path.bold()));
-        progress.set_style(
-            ProgressStyle::with_template(" {spinner} |{percent:>3}%| {wide_msg} {binary_bytes_per_sec:>.dim} ")
-                .unwrap()
-                .tick_chars("--=≡■≡=--"),
-        );
+    let hash = hex::encode(hasher.finalize());
 
-        let mut hasher = Sha256::new();
-        io::copy(&mut &file, &mut progress.wrap_write(&mut hasher))?;
-
-        let hash = hex::encode(hasher.finalize());
-
-        Ok((size, hash))
-    })
-    .await
-    .expect("join hande")
+    Ok((size, hash))
 }
 
-fn enumerate_stone_files(dir: &Path) -> BoxFuture<Result<Vec<PathBuf>, Error>> {
-    async move {
-        let mut read_dir = fs::read_dir(dir).await?;
+fn enumerate_stone_files(dir: &Path) -> Result<Vec<PathBuf>, Error> {
+    let read_dir = fs::read_dir(dir)?;
+    let mut paths = vec![];
 
-        let mut paths = vec![];
+    for entry in read_dir.flatten() {
+        let path = entry.path();
+        let meta = entry.metadata()?;
 
-        while let Some(entry) = read_dir.next_entry().await? {
-            let path = entry.path();
-            let meta = entry.metadata().await?;
-
-            if meta.is_dir() {
-                paths.extend(enumerate_stone_files(&path).await?);
-            } else if meta.is_file() && path.extension().and_then(|s| s.to_str()) == Some("stone") {
-                paths.push(path);
-            }
+        if meta.is_dir() {
+            paths.extend(enumerate_stone_files(&path)?);
+        } else if meta.is_file() && path.extension().and_then(|s| s.to_str()) == Some("stone") {
+            paths.push(path);
         }
-
-        Ok(paths)
     }
-    .boxed()
+
+    Ok(paths)
 }
 
 #[derive(Debug, Error)]

@@ -7,7 +7,6 @@ use log::warn;
 use crate::{
     db,
     package::{self, Package},
-    registry::job::Job,
     repository, Provider,
 };
 
@@ -25,8 +24,8 @@ impl Repository {
         self.active.repository.priority.into()
     }
 
-    pub async fn package(&self, id: &package::Id) -> Option<Package> {
-        let result = self.active.db.get(id).await;
+    pub fn package(&self, id: &package::Id) -> Option<Package> {
+        let result = self.active.db.get(id);
 
         match result {
             Ok(meta) => Some(Package {
@@ -50,10 +49,10 @@ impl Repository {
         }
     }
 
-    async fn query(&self, flags: package::Flags, filter: Option<db::meta::Filter>) -> Vec<Package> {
+    fn query(&self, flags: package::Flags, filter: Option<db::meta::Filter>) -> Vec<Package> {
         if flags.contains(package::Flags::AVAILABLE) || flags == package::Flags::NONE {
             // TODO: Error handling
-            let packages = match self.active.db.query(filter).await {
+            let packages = match self.active.db.query(filter) {
                 Ok(packages) => packages,
                 Err(error) => {
                     warn!("failed to query repository packages: {error}");
@@ -74,23 +73,17 @@ impl Repository {
         }
     }
 
-    pub async fn list(&self, flags: package::Flags) -> Vec<Package> {
-        self.query(flags, None).await
+    pub fn list(&self, flags: package::Flags) -> Vec<Package> {
+        self.query(flags, None)
     }
 
     /// Query all packages that match the given provider identity
-    pub async fn query_provider(&self, provider: &Provider, flags: package::Flags) -> Vec<Package> {
+    pub fn query_provider(&self, provider: &Provider, flags: package::Flags) -> Vec<Package> {
         self.query(flags, Some(db::meta::Filter::Provider(provider.clone())))
-            .await
     }
 
-    pub async fn query_name(&self, package_name: &package::Name, flags: package::Flags) -> Vec<Package> {
+    pub fn query_name(&self, package_name: &package::Name, flags: package::Flags) -> Vec<Package> {
         self.query(flags, Some(db::meta::Filter::Name(package_name.clone())))
-            .await
-    }
-
-    pub fn fetch_item(&self, id: &package::Id) -> Job {
-        todo!()
     }
 }
 

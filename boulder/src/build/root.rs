@@ -5,26 +5,31 @@
 use std::collections::HashSet;
 use std::io;
 
-use moss::repository;
+use moss::{repository, runtime};
 use stone_recipe::{tuning::Toolchain, Upstream};
 use thiserror::Error;
 
 use crate::build::Builder;
 use crate::{container, util};
 
-pub async fn populate(builder: &Builder, repositories: repository::Map) -> Result<(), Error> {
+pub fn populate(builder: &Builder, repositories: repository::Map) -> Result<(), Error> {
     let packages = packages(builder);
 
     let rootfs = builder.paths.rootfs().host;
 
     // Recreate root
-    util::recreate_dir(&rootfs).await?;
+    util::recreate_dir(&rootfs)?;
 
-    let mut moss_client = moss::Client::with_explicit_repositories("boulder", &builder.env.moss_dir, repositories)
-        .await?
-        .ephemeral(&rootfs)?;
+    // Create the moss client
+    let mut moss_client =
+        moss::Client::with_explicit_repositories("boulder", &builder.env.moss_dir, repositories)?.ephemeral(&rootfs)?;
 
-    moss_client.install(&packages, true).await?;
+    // Ensure all configured repos have been initialized (important since users
+    // might add profile configs from an editor)
+    runtime::block_on(moss_client.ensure_repos_initialized())?;
+
+    // Install packages
+    moss_client.install(&packages, true)?;
 
     Ok(())
 }
@@ -40,12 +45,12 @@ pub fn clean(builder: &Builder) -> Result<(), Error> {
     // and there's subuid mappings into the user namespace
     container::exec(&builder.paths, false, || {
         // Recreate `install` dir
-        util::sync::recreate_dir(&builder.paths.install().guest)?;
+        util::recreate_dir(&builder.paths.install().guest)?;
 
         for target in &builder.targets {
             for job in &target.jobs {
                 // Recerate build dir
-                util::sync::recreate_dir(&job.build_dir)?;
+                util::recreate_dir(&job.build_dir)?;
             }
         }
 

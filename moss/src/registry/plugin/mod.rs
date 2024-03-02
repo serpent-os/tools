@@ -19,8 +19,6 @@ pub use self::repository::Repository;
 #[cfg(test)]
 pub use self::test::Test;
 
-use super::job::Job;
-
 mod active;
 mod cobble;
 mod repository;
@@ -41,11 +39,11 @@ pub enum Plugin {
 impl Plugin {
     /// Return a package for the given [`package::Id`]. Returns `None` if
     /// the `package` cannot be located.
-    pub async fn package(&self, id: &package::Id) -> Option<Package> {
+    pub fn package(&self, id: &package::Id) -> Option<Package> {
         match self {
-            Plugin::Active(plugin) => plugin.package(id).await,
+            Plugin::Active(plugin) => plugin.package(id),
             Plugin::Cobble(plugin) => plugin.package(id),
-            Plugin::Repository(plugin) => plugin.package(id).await,
+            Plugin::Repository(plugin) => plugin.package(id),
 
             #[cfg(test)]
             Plugin::Test(plugin) => plugin.package(id),
@@ -53,11 +51,11 @@ impl Plugin {
     }
 
     /// List all packages with matching `flags`
-    pub async fn list(&self, flags: package::Flags) -> package::Sorted<Vec<Package>> {
+    pub fn list(&self, flags: package::Flags) -> package::Sorted<Vec<Package>> {
         package::Sorted::new(match self {
-            Plugin::Active(plugin) => plugin.list(flags).await,
+            Plugin::Active(plugin) => plugin.list(flags),
             Plugin::Cobble(plugin) => plugin.list(flags),
-            Plugin::Repository(plugin) => plugin.list(flags).await,
+            Plugin::Repository(plugin) => plugin.list(flags),
 
             #[cfg(test)]
             Plugin::Test(plugin) => plugin.list(flags),
@@ -65,11 +63,11 @@ impl Plugin {
     }
 
     /// Returns a list of packages with matching `provider` and `flags`
-    pub async fn query_provider(&self, provider: &Provider, flags: package::Flags) -> package::Sorted<Vec<Package>> {
+    pub fn query_provider(&self, provider: &Provider, flags: package::Flags) -> package::Sorted<Vec<Package>> {
         package::Sorted::new(match self {
-            Plugin::Active(plugin) => plugin.query_provider(provider, flags).await,
+            Plugin::Active(plugin) => plugin.query_provider(provider, flags),
             Plugin::Cobble(plugin) => plugin.query_provider(provider, flags),
-            Plugin::Repository(plugin) => plugin.query_provider(provider, flags).await,
+            Plugin::Repository(plugin) => plugin.query_provider(provider, flags),
 
             #[cfg(test)]
             Plugin::Test(plugin) => plugin.query_provider(provider, flags),
@@ -77,15 +75,11 @@ impl Plugin {
     }
 
     /// Returns a list of packages with matching `package_name` and `flags`
-    pub async fn query_name(
-        &self,
-        package_name: &package::Name,
-        flags: package::Flags,
-    ) -> package::Sorted<Vec<Package>> {
+    pub fn query_name(&self, package_name: &package::Name, flags: package::Flags) -> package::Sorted<Vec<Package>> {
         package::Sorted::new(match self {
-            Plugin::Active(plugin) => plugin.query_name(package_name, flags).await,
+            Plugin::Active(plugin) => plugin.query_name(package_name, flags),
             Plugin::Cobble(plugin) => plugin.query_name(package_name, flags),
-            Plugin::Repository(plugin) => plugin.query_name(package_name, flags).await,
+            Plugin::Repository(plugin) => plugin.query_name(package_name, flags),
 
             #[cfg(test)]
             Plugin::Test(plugin) => plugin.query_name(package_name, flags),
@@ -105,25 +99,10 @@ impl Plugin {
             Plugin::Test(plugin) => plugin.priority,
         }
     }
-
-    /// Request that the item is fetched from its location into a storage
-    /// medium.
-    pub fn fetch_item(&self, id: &package::Id) -> Job {
-        match self {
-            Plugin::Active(_) => panic!("Active plugin queried for fetch"),
-            Plugin::Cobble(plugin) => plugin.fetch_item(id),
-            Plugin::Repository(plugin) => plugin.fetch_item(id),
-
-            #[cfg(test)]
-            Plugin::Test(plugin) => plugin.fetch_item(id),
-        }
-    }
 }
 
 #[cfg(test)]
 pub mod test {
-    use std::path::PathBuf;
-
     use super::*;
 
     #[derive(Debug, Clone, PartialEq, Eq)]
@@ -163,17 +142,6 @@ pub mod test {
                 .filter(|p| p.meta.name == *package_name && p.flags.contains(flags))
                 .cloned()
                 .collect()
-        }
-
-        pub fn fetch_item(&self, id: &package::Id) -> Job {
-            Job {
-                domain: crate::registry::job::Domain::Package(id.clone()),
-                origin: crate::registry::job::Origin::LocalFile(PathBuf::from(
-                    "test/bash-completion-2.11-1-1-x86_64.stone",
-                )),
-                check: None,
-                size: 168864,
-            }
         }
     }
 }

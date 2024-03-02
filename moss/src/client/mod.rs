@@ -3,13 +3,13 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
-    io,
-    os::fd::RawFd,
+    fs, io,
+    os::{fd::RawFd, unix::fs::symlink},
     path::{Path, PathBuf},
     time::Duration,
 };
 
-use futures::{future::try_join_all, stream, StreamExt, TryStreamExt};
+use futures::{stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use nix::{
     errno::Errno,
@@ -20,7 +20,6 @@ use nix::{
 };
 use stone::{payload::layout, read::PayloadKind};
 use thiserror::Error;
-use tokio::fs::{self, create_dir_all, remove_dir_all, remove_file, rename, symlink};
 use tui::{MultiProgress, ProgressBar, ProgressStyle, Stylize};
 use vfs::tree::{builder::TreeBuilder, BlitFile, Element};
 
@@ -29,7 +28,7 @@ use self::prune::prune;
 use crate::{
     db, environment, package,
     registry::plugin::{self, Plugin},
-    repository,
+    repository, runtime,
     state::{self, Selection},
     Installation, Package, Registry, State,
 };
@@ -57,20 +56,20 @@ pub struct Client {
 
 impl Client {
     /// Construct a new Client
-    pub async fn new(client_name: impl ToString, root: impl Into<PathBuf>) -> Result<Client, Error> {
-        Self::build(client_name, root, None).await
+    pub fn new(client_name: impl ToString, root: impl Into<PathBuf>) -> Result<Client, Error> {
+        Self::build(client_name, root, None)
     }
 
     /// Construct a new Client with explicit repositories
-    pub async fn with_explicit_repositories(
+    pub fn with_explicit_repositories(
         client_name: impl ToString,
         root: impl Into<PathBuf>,
         repositories: repository::Map,
     ) -> Result<Client, Error> {
-        Self::build(client_name, root, Some(repositories)).await
+        Self::build(client_name, root, Some(repositories))
     }
 
-    async fn build(
+    fn build(
         client_name: impl ToString,
         root: impl Into<PathBuf>,
         repositories: Option<repository::Map>,
@@ -84,18 +83,17 @@ impl Client {
         let name = client_name.to_string();
         let config = config::Manager::system(&root, "moss");
         let installation = Installation::open(root);
-        let install_db = db::meta::Database::new(installation.db_path("install"), installation.read_only()).await?;
-        let state_db = db::state::Database::new(&installation).await?;
-        let layout_db = db::layout::Database::new(&installation).await?;
+        let install_db = db::meta::Database::new(installation.db_path("install"), installation.read_only())?;
+        let state_db = db::state::Database::new(&installation)?;
+        let layout_db = db::layout::Database::new(&installation)?;
 
-        let mut repositories = if let Some(repos) = repositories {
-            repository::Manager::explicit(&name, repos, installation.clone()).await?
+        let repositories = if let Some(repos) = repositories {
+            repository::Manager::explicit(&name, repos, installation.clone())?
         } else {
-            repository::Manager::system(config.clone(), installation.clone()).await?
+            repository::Manager::system(config.clone(), installation.clone())?
         };
-        repositories.ensure_all_initialized().await?;
 
-        let registry = build_registry(&installation, &repositories, &install_db, &state_db).await?;
+        let registry = build_registry(&installation, &repositories, &install_db, &state_db)?;
 
         Ok(Client {
             name,
@@ -114,8 +112,8 @@ impl Client {
         matches!(self.scope, Scope::Ephemeral { .. })
     }
 
-    pub async fn install(&mut self, packages: &[&str], yes: bool) -> Result<(), install::Error> {
-        install(self, packages, yes).await
+    pub fn install(&mut self, packages: &[&str], yes: bool) -> Result<(), install::Error> {
+        install(self, packages, yes)
     }
 
     /// Transition to an ephemeral client that doesn't record state changes
@@ -139,25 +137,32 @@ impl Client {
         })
     }
 
+    /// Ensures all repositories have been initialized by ensuring their stone indexes
+    /// are downloaded and added to the meta db
+    pub async fn ensure_repos_initialized(&mut self) -> Result<(), Error> {
+        self.repositories.ensure_all_initialized().await?;
+        self.registry = build_registry(&self.installation, &self.repositories, &self.install_db, &self.state_db)?;
+        Ok(())
+    }
+
     /// Reload all configured repositories and refreshes their index file, then update
     /// registry with all active repositories.
     pub async fn refresh_repositories(&mut self) -> Result<(), Error> {
         // Reload manager if not explicit to pickup config changes
         // then refresh indexes
         if !self.repositories.is_explicit() {
-            self.repositories = repository::Manager::system(self.config.clone(), self.installation.clone()).await?
+            self.repositories = repository::Manager::system(self.config.clone(), self.installation.clone())?
         };
         self.repositories.refresh_all().await?;
 
         // Rebuild registry
-        self.registry =
-            build_registry(&self.installation, &self.repositories, &self.install_db, &self.state_db).await?;
+        self.registry = build_registry(&self.installation, &self.repositories, &self.install_db, &self.state_db)?;
 
         Ok(())
     }
 
     /// Prune states with the provided [`prune::Strategy`]
-    pub async fn prune(&self, strategy: prune::Strategy) -> Result<(), Error> {
+    pub fn prune(&self, strategy: prune::Strategy) -> Result<(), Error> {
         if self.scope.is_ephemeral() {
             return Err(Error::EphemeralProhibitedOperation);
         }
@@ -168,27 +173,21 @@ impl Client {
             &self.install_db,
             &self.layout_db,
             &self.installation,
-        )
-        .await?;
+        )?;
         Ok(())
     }
 
     /// Resolves the provided id's with the underlying registry, returning
     /// the first [`Package`] for each id. Packages are sorted by name
     /// and deduped before returning.
-    pub async fn resolve_packages(
+    pub fn resolve_packages<'a>(
         &self,
-        packages: impl IntoIterator<Item = &package::Id>,
+        packages: impl IntoIterator<Item = &'a package::Id>,
     ) -> Result<Vec<Package>, Error> {
-        let mut metadata = try_join_all(packages.into_iter().map(|id| async {
-            self.registry
-                .by_id(id)
-                .boxed()
-                .next()
-                .await
-                .ok_or(Error::MissingMetadata(id.clone()))
-        }))
-        .await?;
+        let mut metadata = packages
+            .into_iter()
+            .map(|id| self.registry.by_id(id).next().ok_or(Error::MissingMetadata(id.clone())))
+            .collect::<Result<Vec<_>, _>>()?;
         metadata.sort_by_key(|p| p.meta.name.to_string());
         metadata.dedup_by_key(|p| p.meta.name.to_string());
         Ok(metadata)
@@ -199,48 +198,44 @@ impl Client {
     /// Then blit the filesystem, promote it, finally archiving the active ID
     ///
     /// Returns `None` if the client is ephemeral
-    pub async fn apply_state(&self, selections: &[Selection], summary: impl ToString) -> Result<Option<State>, Error> {
+    pub fn apply_state(&self, selections: &[Selection], summary: impl ToString) -> Result<Option<State>, Error> {
         let old_state = self.installation.active_state;
 
-        let fstree = self
-            .blit_root(selections.iter().map(|s| &s.package), old_state.map(state::Id::next))
-            .await?;
+        let fstree = self.blit_root(selections.iter().map(|s| &s.package), old_state.map(state::Id::next))?;
 
         match &self.scope {
             Scope::Stateful => {
                 // Add to db
-                let state = self.state_db.add(selections, Some(summary.to_string()), None).await?;
+                let state = self.state_db.add(selections, Some(summary.to_string()), None)?;
 
                 // Write state id
                 {
                     let usr = self.installation.staging_path("usr");
-                    fs::create_dir_all(&usr).await?;
+                    fs::create_dir_all(&usr)?;
                     let state_path = usr.join(".stateID");
-                    fs::write(state_path, state.id.to_string()).await?;
+                    fs::write(state_path, state.id.to_string())?;
                 }
 
-                record_os_release(&self.installation.staging_dir(), Some(state.id)).await?;
+                record_os_release(&self.installation.staging_dir(), Some(state.id))?;
 
                 // Run all of the transaction triggers
-                let triggers =
-                    postblit::triggers(postblit::TriggerScope::Transaction(&self.installation), &fstree).await?;
-                create_root_links(&self.installation.isolation_dir()).await?;
+                let triggers = postblit::triggers(postblit::TriggerScope::Transaction(&self.installation), &fstree)?;
+                create_root_links(&self.installation.isolation_dir())?;
                 for trigger in triggers {
                     trigger.execute()?;
                 }
                 // Staging is only used with [`Scope::Stateful`]
-                self.promote_staging().await?;
+                self.promote_staging()?;
 
                 // Now we got it staged, we need working rootfs
-                create_root_links(&self.installation.root).await?;
+                create_root_links(&self.installation.root)?;
 
                 if let Some(id) = old_state {
-                    self.archive_state(id).await?;
+                    self.archive_state(id)?;
                 }
 
                 // At this point we're allowed to run system triggers
-                let sys_triggers =
-                    postblit::triggers(postblit::TriggerScope::System(&self.installation), &fstree).await?;
+                let sys_triggers = postblit::triggers(postblit::TriggerScope::System(&self.installation), &fstree)?;
                 for trigger in sys_triggers {
                     trigger.execute()?;
                 }
@@ -248,15 +243,15 @@ impl Client {
                 Ok(Some(state))
             }
             Scope::Ephemeral { blit_root } => {
-                record_os_release(blit_root, None).await?;
-                create_root_links(blit_root).await?;
+                record_os_release(blit_root, None)?;
+                create_root_links(blit_root)?;
                 Ok(None)
             }
         }
     }
 
     /// Activate the given state
-    async fn promote_staging(&self) -> Result<(), Error> {
+    fn promote_staging(&self) -> Result<(), Error> {
         if self.scope.is_ephemeral() {
             return Err(Error::EphemeralProhibitedOperation);
         }
@@ -266,7 +261,7 @@ impl Client {
 
         // Create the target tree
         if !usr_target.try_exists()? {
-            create_dir_all(&usr_target).await?;
+            fs::create_dir_all(&usr_target)?;
         }
 
         // Now swap staging with live
@@ -295,7 +290,7 @@ impl Client {
     }
 
     /// Archive old states into their respective tree
-    async fn archive_state(&self, id: state::Id) -> Result<(), Error> {
+    fn archive_state(&self, id: state::Id) -> Result<(), Error> {
         if self.scope.is_ephemeral() {
             return Err(Error::EphemeralProhibitedOperation);
         }
@@ -305,11 +300,11 @@ impl Client {
         let usr_source = self.installation.staging_path("usr");
         if let Some(parent) = usr_target.parent() {
             if !parent.exists() {
-                create_dir_all(parent).await?;
+                fs::create_dir_all(parent)?;
             }
         }
         // hot swap the staging/usr into the root/$id/usr
-        rename(&usr_source, &usr_target).await?;
+        fs::rename(usr_source, &usr_target)?;
         Ok(())
     }
 
@@ -356,67 +351,77 @@ impl Client {
                 progress_bar.inc(progress.delta);
             })
             .await?;
-
             let is_cached = download.was_cached;
-            let package_name = package.meta.name.to_string();
 
-            // Set progress to unpacking
-            progress_bar.set_message(format!("{} {}", "Unpacking".yellow(), package_name.clone().bold(),));
-            progress_bar.set_length(1000);
-            progress_bar.set_position(0);
+            // Move rest of blocking code to threadpool
 
-            // Unpack and update progress
-            let unpacked = download
-                .unpack(unpacking_in_progress.clone(), {
+            let multi_progress = multi_progress.clone();
+            let total_progress = total_progress.clone();
+            let unpacking_in_progress = unpacking_in_progress.clone();
+            let layout_db = self.layout_db.clone();
+            let install_db = self.install_db.clone();
+            let package = (*package).clone();
+
+            runtime::unblock(move || {
+                let package_name = package.meta.name.to_string();
+
+                // Set progress to unpacking
+                progress_bar.set_message(format!("{} {}", "Unpacking".yellow(), package_name.clone().bold(),));
+                progress_bar.set_length(1000);
+                progress_bar.set_position(0);
+
+                // Unpack and update progress
+                let unpacked = download.unpack(unpacking_in_progress.clone(), {
                     let progress_bar = progress_bar.clone();
 
                     move |progress| {
                         progress_bar.set_position((progress.pct() * 1000.0) as u64);
                     }
-                })
-                .await?;
+                })?;
 
-            // Merge layoutdb
-            progress_bar.set_message(format!("{} {}", "Store layout".white(), package_name.clone().bold()));
-            // Remove old layout entries for package
-            self.layout_db.remove(&package.id).await?;
-            // Add new entries in batches of 1k
-            for chunk in progress_bar.wrap_iter(
-                unpacked
-                    .payloads
-                    .iter()
-                    .find_map(PayloadKind::layout)
-                    .map(|p| &p.body)
-                    .ok_or(Error::CorruptedPackage)?
-                    .chunks(environment::DB_BATCH_SIZE),
-            ) {
-                let entries = chunk.iter().map(|i| (package.id.clone(), i.clone())).collect_vec();
-                self.layout_db.batch_add(entries).await?;
-            }
+                // Merge layoutdb
+                progress_bar.set_message(format!("{} {}", "Store layout".white(), package_name.clone().bold()));
+                // Remove old layout entries for package
+                layout_db.remove(&package.id)?;
+                // Add new entries in batches of 1k
+                for chunk in progress_bar.wrap_iter(
+                    unpacked
+                        .payloads
+                        .iter()
+                        .find_map(PayloadKind::layout)
+                        .map(|p| &p.body)
+                        .ok_or(Error::CorruptedPackage)?
+                        .chunks(environment::DB_BATCH_SIZE),
+                ) {
+                    let entries = chunk.iter().map(|i| (package.id.clone(), i.clone())).collect_vec();
+                    layout_db.batch_add(entries)?;
+                }
 
-            // Consume the package in the metadb
-            self.install_db.add(package.id.clone(), package.meta.clone()).await?;
+                // Consume the package in the metadb
+                install_db.add(package.id.clone(), package.meta.clone())?;
 
-            // Remove this progress bar
-            progress_bar.finish();
-            multi_progress.remove(&progress_bar);
+                // Remove this progress bar
+                progress_bar.finish();
+                multi_progress.remove(&progress_bar);
 
-            let cached_tag = is_cached
-                .then_some(format!("{}", " (cached)".dim()))
-                .unwrap_or_default();
+                let cached_tag = is_cached
+                    .then_some(format!("{}", " (cached)".dim()))
+                    .unwrap_or_default();
 
-            // Write installed line
-            multi_progress.println(format!(
-                "{} {}{}",
-                "Installed".green(),
-                package_name.clone().bold(),
-                cached_tag,
-            ))?;
+                // Write installed line
+                multi_progress.println(format!(
+                    "{} {}{}",
+                    "Installed".green(),
+                    package_name.clone().bold(),
+                    cached_tag,
+                ))?;
 
-            // Inc total progress by 1
-            total_progress.inc(1);
+                // Inc total progress by 1
+                total_progress.inc(1);
 
-            Ok(()) as Result<(), Error>
+                Ok(()) as Result<(), Error>
+            })
+            .await
         }))
         // Use max network concurrency since we download files here
         .buffer_unordered(environment::MAX_NETWORK_CONCURRENCY)
@@ -430,10 +435,13 @@ impl Client {
     }
 
     /// Build a [`vfs::Tree`] for the provided packages
-    pub async fn vfs(&self, packages: impl IntoIterator<Item = &package::Id>) -> Result<vfs::Tree<PendingFile>, Error> {
+    pub fn vfs<'a>(
+        &self,
+        packages: impl IntoIterator<Item = &'a package::Id>,
+    ) -> Result<vfs::Tree<PendingFile>, Error> {
         let mut tbuild = TreeBuilder::new();
         for id in packages.into_iter() {
-            let layouts = self.layout_db.query(id).await?;
+            let layouts = self.layout_db.query(id)?;
             for layout in layouts {
                 tbuild.push(PendingFile { id: id.clone(), layout });
             }
@@ -444,9 +452,9 @@ impl Client {
     }
 
     /// Blit the packages to a filesystem root
-    async fn blit_root(
+    fn blit_root<'a>(
         &self,
-        packages: impl IntoIterator<Item = &package::Id>,
+        packages: impl IntoIterator<Item = &'a package::Id>,
         state_id: Option<state::Id>,
     ) -> Result<vfs::tree::Tree<PendingFile>, Error> {
         let progress = ProgressBar::new(1).with_style(
@@ -458,7 +466,7 @@ impl Client {
         progress.enable_steady_tick(Duration::from_millis(150));
         progress.tick();
 
-        let tree = self.vfs(packages).await?;
+        let tree = self.vfs(packages)?;
 
         progress.set_length(tree.len());
         progress.set_position(0_u64);
@@ -472,7 +480,7 @@ impl Client {
         };
 
         // undirt.
-        remove_dir_all(&blit_target).await?;
+        fs::remove_dir_all(&blit_target)?;
 
         if let Some(root) = tree.structured() {
             let _ = mkdir(&blit_target, Mode::from_bits_truncate(0o755));
@@ -572,7 +580,7 @@ impl Client {
 }
 
 /// Add root symlinks & os-release file
-async fn create_root_links(root: &Path) -> Result<(), io::Error> {
+fn create_root_links(root: &Path) -> Result<(), io::Error> {
     let links = vec![
         ("usr/sbin", "sbin"),
         ("usr/bin", "bin"),
@@ -586,21 +594,21 @@ async fn create_root_links(root: &Path) -> Result<(), io::Error> {
         let staging_target = root.join(format!("{target}.next"));
 
         if staging_target.exists() {
-            remove_file(&staging_target).await?;
+            fs::remove_file(&staging_target)?;
         }
 
         if final_target.exists() && final_target.is_symlink() && final_target.read_link()?.to_string_lossy() == source {
             continue 'linker;
         }
-        symlink(source, &staging_target).await?;
-        rename(staging_target, final_target).await?;
+        symlink(source, &staging_target)?;
+        fs::rename(staging_target, final_target)?;
     }
 
     Ok(())
 }
 
 /// Record the operating system release info
-async fn record_os_release(root: &Path, state_id: Option<state::Id>) -> Result<(), Error> {
+fn record_os_release(root: &Path, state_id: Option<state::Id>) -> Result<(), Error> {
     let os_release = format!(
         r#"NAME="Serpent OS"
 VERSION="{version}"
@@ -616,7 +624,7 @@ BUG_REPORT_URL="https://github.com/serpent-os""#,
         tx = state_id.unwrap_or_default()
     );
 
-    fs::write(root.join("usr").join("lib").join("os-release"), os_release).await?;
+    fs::write(root.join("usr").join("lib").join("os-release"), os_release)?;
 
     Ok(())
 }
@@ -706,14 +714,14 @@ impl ToString for PendingFile {
     }
 }
 
-async fn build_registry(
+fn build_registry(
     installation: &Installation,
     repositories: &repository::Manager,
     installdb: &db::meta::Database,
     statedb: &db::state::Database,
 ) -> Result<Registry, Error> {
     let state = match installation.active_state {
-        Some(id) => Some(statedb.get(&id).await?),
+        Some(id) => Some(statedb.get(&id)?),
         None => None,
     };
 

@@ -9,9 +9,8 @@ use tui::Stylize;
 mod cli;
 
 /// Main entry point
-#[tokio::main]
-async fn main() {
-    if let Err(error) = cli::process().await {
+fn main() {
+    if let Err(error) = cli::process() {
         report_error(error);
         std::process::exit(1);
     }

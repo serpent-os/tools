@@ -9,6 +9,7 @@ edition.workspace = true
 config = { path = "../crates/config" }
 container = { path = "../crates/container" }
 moss = { path = "../moss" }
+stone = { path = "../crates/stone" }
 stone_recipe = { path = "../crates/stone_recipe" }
 tui = { path = "../crates/tui" }
 yaml = { path = "../crates/yaml" }

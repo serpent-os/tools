@@ -7,9 +7,11 @@ use std::{
     os::unix::process::ExitStatusExt,
     path::{Path, PathBuf},
     process, thread,
+    time::Duration,
 };
 
 use itertools::Itertools;
+use moss::runtime;
 use nix::{
     sys::signal::Signal,
     unistd::{getpgrp, setpgid, Pid},
@@ -31,7 +33,7 @@ use crate::{
     architecture::BuildTarget,
     container, macros,
     package::{self, Packager},
-    profile, recipe, util, Env, Macros, Paths, Recipe, Runtime,
+    profile, recipe, util, Env, Macros, Paths, Recipe,
 };
 
 pub struct Builder {
@@ -103,18 +105,25 @@ impl Builder {
     pub fn setup(&self) -> Result<(), Error> {
         root::clean(self)?;
 
-        let rt = Runtime::new()?;
-        rt.block_on(async {
-            let profiles = profile::Manager::new(&self.env).await;
+        let rt = runtime::init();
 
-            let repos = profiles.repositories(&self.profile)?.clone();
+        let profiles = profile::Manager::new(&self.env);
+        let repos = profiles.repositories(&self.profile)?.clone();
 
-            root::populate(self, repos).await?;
-            upstream::sync(&self.recipe, &self.paths).await?;
+        root::populate(self, repos)?;
+        upstream::sync(&self.recipe, &self.paths)?;
 
-            Ok(()) as Result<_, Error>
-        })?;
         rt.destroy();
+        // We want to ensure no threads exist before
+        // cloning into container. Sometimes a deadlock
+        // occurs which appears related to a race condition
+        // from some thread artifacts still existing. Adding
+        // this delay allows things to get cleaned up.
+        // NOTE: This appears to reliably fix the problem,
+        // I ran boulder 100 times w/ and w/out this delay
+        // and the deadlock never occured w/ it, but w/out
+        // it occured within 10 attempts.
+        thread::sleep(Duration::from_millis(50));
 
         Ok(())
     }
@@ -143,11 +152,11 @@ impl Builder {
                     let is_pgo = job.pgo_stage.is_some();
 
                     // Recreate work dir for each job
-                    util::sync::recreate_dir(&job.work_dir)?;
+                    util::recreate_dir(&job.work_dir)?;
                     // Ensure pgo dir exists
                     if is_pgo {
                         let pgo_dir = PathBuf::from(format!("{}-pgo", job.build_dir.display()));
-                        util::sync::ensure_dir_exists(&pgo_dir)?;
+                        util::ensure_dir_exists(&pgo_dir)?;
                     }
 
                     if let Some(stage) = job.pgo_stage {

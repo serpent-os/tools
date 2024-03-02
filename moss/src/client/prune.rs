@@ -4,14 +4,12 @@
 
 use std::{
     collections::{HashMap, HashSet},
-    io,
+    fs, io,
     path::{Path, PathBuf},
 };
 
-use futures::{stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use thiserror::Error;
-use tokio::{fs, task};
 use tui::pretty::print_to_columns;
 
 use crate::{client::cache, db, environment, package, state, Installation, State};
@@ -48,14 +46,14 @@ impl Status {
 
 /// Prune old states using [`Strategy`] and garbage collect
 /// all cached data related to those states being removed
-pub async fn prune(
+pub fn prune(
     strategy: Strategy,
     state_db: &db::state::Database,
     install_db: &db::meta::Database,
     layout_db: &db::layout::Database,
     installation: &Installation,
 ) -> Result<(), Error> {
-    let state_ids = state_db.list_ids().await?;
+    let state_ids = state_db.list_ids()?;
 
     // Define each state as either Keep or Remove
     let states_by_status = match strategy {
@@ -99,7 +97,7 @@ pub async fn prune(
     // Get net refcount of each package and collect removal states
     for status in states_by_status {
         // Get metadata
-        let state = state_db.get(status.id()).await?;
+        let state = state_db.get(status.id())?;
 
         // Increment each package
         state.selections.iter().for_each(|selection| {
@@ -130,35 +128,33 @@ pub async fn prune(
     println!();
 
     // Prune these states / packages from all dbs
-    prune_databases(&removals, &package_removals, state_db, install_db, layout_db).await?;
+    prune_databases(&removals, &package_removals, state_db, install_db, layout_db)?;
 
     // Remove orphaned downloads
     remove_orphaned_files(
         // root
         installation.cache_path("downloads").join("v1"),
         // final set of hashes to compare against
-        install_db.file_hashes().await?,
+        install_db.file_hashes()?,
         // path builder using hash
         |hash| cache::download_path(installation, &hash).ok(),
-    )
-    .await?;
+    )?;
 
     // Remove orphaned assets
     remove_orphaned_files(
         // root
         installation.assets_path("v2"),
         // final set of hashes to compare against
-        layout_db.file_hashes().await?,
+        layout_db.file_hashes()?,
         // path builder using hash
         |hash| Some(cache::asset_path(installation, &hash)),
-    )
-    .await?;
+    )?;
 
     Ok(())
 }
 
 /// Removes the provided states & packages from the databases
-async fn prune_databases(
+fn prune_databases(
     states: &[State],
     packages: &[package::Id],
     state_db: &db::state::Database,
@@ -167,62 +163,57 @@ async fn prune_databases(
 ) -> Result<(), Error> {
     for chunk in &states.iter().map(|state| &state.id).chunks(environment::DB_BATCH_SIZE) {
         // Remove db states
-        state_db.batch_remove(chunk).await?;
+        state_db.batch_remove(chunk)?;
     }
     for chunk in &packages.iter().chunks(environment::DB_BATCH_SIZE) {
         // Remove db metadata
-        install_db.batch_remove(chunk).await?;
+        install_db.batch_remove(chunk)?;
     }
     for chunk in &packages.iter().chunks(environment::DB_BATCH_SIZE) {
         // Remove db layouts
-        layout_db.batch_remove(chunk).await?;
+        layout_db.batch_remove(chunk)?;
     }
 
     Ok(())
 }
 
 /// Removes all files under `root` that no longer exist in the provided `final_hashes` set
-async fn remove_orphaned_files(
+fn remove_orphaned_files(
     root: PathBuf,
     final_hashes: HashSet<String>,
     compute_path: impl Fn(String) -> Option<PathBuf>,
 ) -> Result<(), Error> {
     // Compute hashes to remove by (installed - final)
-    let installed_hashes = enumerate_file_hashes(&root).await?;
+    let installed_hashes = enumerate_file_hashes(&root)?;
     let hashes_to_remove = installed_hashes.difference(&final_hashes);
 
     // Remove each and it's parent dir if empty
-    stream::iter(hashes_to_remove)
-        .map(|hash| async {
-            // Compute path to file using hash
-            let Some(file) = compute_path(hash.clone()) else {
-                return Ok(());
-            };
+    hashes_to_remove.into_iter().try_for_each(|hash| {
+        // Compute path to file using hash
+        let Some(file) = compute_path(hash.clone()) else {
+            return Ok(());
+        };
 
-            // Remove if it exists
-            if fs::try_exists(&file).await? {
-                fs::remove_file(&file).await?;
-            }
+        // Remove if it exists
+        if file.exists() {
+            fs::remove_file(&file)?;
+        }
 
-            // Try to remove leading parent dirs if they're
-            // now empty
-            if let Some(parent) = file.parent() {
-                let _ = remove_empty_dirs(parent, &root).await;
-            }
+        // Try to remove leading parent dirs if they're
+        // now empty
+        if let Some(parent) = file.parent() {
+            let _ = remove_empty_dirs(parent, &root);
+        }
 
-            Ok(()) as Result<(), Error>
-        })
-        // Remove w/ concurrency!
-        .buffer_unordered(environment::MAX_DISK_CONCURRENCY)
-        .try_collect::<()>()
-        .await?;
+        Ok(()) as Result<(), Error>
+    })?;
 
     Ok(())
 }
 
 /// Returns all nested files under `root` and parses the file name as a hash
-async fn enumerate_file_hashes(root: impl Into<PathBuf>) -> Result<HashSet<String>, io::Error> {
-    let files = enumerate_files(root).await?;
+fn enumerate_file_hashes(root: impl AsRef<Path>) -> Result<HashSet<String>, io::Error> {
+    let files = enumerate_files(root)?;
 
     let path_to_hash = |path: PathBuf| {
         path.file_name()
@@ -235,9 +226,7 @@ async fn enumerate_file_hashes(root: impl Into<PathBuf>) -> Result<HashSet<Strin
 }
 
 /// Returns all nested files under `root`
-async fn enumerate_files(root: impl Into<PathBuf>) -> Result<Vec<PathBuf>, io::Error> {
-    use std::fs;
-
+fn enumerate_files(root: impl AsRef<Path>) -> Result<Vec<PathBuf>, io::Error> {
     use rayon::prelude::*;
 
     fn recurse(dir: impl AsRef<Path>) -> io::Result<Vec<PathBuf>> {
@@ -266,15 +255,13 @@ async fn enumerate_files(root: impl Into<PathBuf>) -> Result<Vec<PathBuf>, io::E
         Ok(files.into_iter().chain(nested_files).collect())
     }
 
-    let root = root.into();
-
-    task::spawn_blocking(|| recurse(root)).await.expect("join handle")
+    recurse(root)
 }
 
 /// Remove all empty folders from `starting` and moving up until `root`
 ///
 /// `root` must be a prefix / ancestor of `starting`
-async fn remove_empty_dirs(starting: &Path, root: &Path) -> Result<(), io::Error> {
+fn remove_empty_dirs(starting: &Path, root: &Path) -> Result<(), io::Error> {
     if !starting.starts_with(root) || !starting.is_dir() || !root.is_dir() {
         return Ok(());
     }
@@ -282,14 +269,14 @@ async fn remove_empty_dirs(starting: &Path, root: &Path) -> Result<(), io::Error
     let mut current = Some(starting);
 
     while let Some(dir) = current.take() {
-        if fs::try_exists(dir).await? {
-            let is_empty = fs::read_dir(&dir).await?.next_entry().await?.is_none();
+        if dir.exists() {
+            let is_empty = fs::read_dir(dir)?.count() == 0;
 
             if !is_empty {
                 return Ok(());
             }
 
-            fs::remove_dir(&dir).await?;
+            fs::remove_dir(dir)?;
         }
 
         if let Some(parent) = dir.parent() {

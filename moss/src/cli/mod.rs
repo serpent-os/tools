@@ -5,6 +5,7 @@
 use std::{env, path::PathBuf};
 
 use clap::{Arg, ArgAction, Command};
+use moss::runtime;
 use thiserror::Error;
 
 mod extract;
@@ -62,7 +63,7 @@ fn command() -> Command {
 }
 
 /// Process all CLI arguments
-pub async fn process() -> Result<(), Error> {
+pub fn process() -> Result<(), Error> {
     let args = replace_aliases(env::args());
     let matches = command().get_matches_from(args);
 
@@ -73,17 +74,20 @@ pub async fn process() -> Result<(), Error> {
 
     let root = matches.get_one::<PathBuf>("root").unwrap();
 
+    // Make async runtime available to all of moss
+    let _guard = runtime::init();
+
     match matches.subcommand() {
-        Some(("extract", args)) => extract::handle(args).await.map_err(Error::Extract),
-        Some(("index", args)) => index::handle(args).await.map_err(Error::Index),
-        Some(("info", args)) => info::handle(args).await.map_err(Error::Info),
-        Some(("inspect", args)) => inspect::handle(args).await.map_err(Error::Inspect),
-        Some(("install", args)) => install::handle(args, root).await.map_err(Error::Install),
-        Some(("list", args)) => list::handle(args).await.map_err(Error::List),
-        Some(("remove", args)) => remove::handle(args, root).await.map_err(Error::Remove),
-        Some(("repo", args)) => repo::handle(args, root).await.map_err(Error::Repo),
-        Some(("state", args)) => state::handle(args, root).await.map_err(Error::State),
-        Some(("sync", args)) => sync::handle(args, root).await.map_err(Error::Sync),
+        Some(("extract", args)) => extract::handle(args).map_err(Error::Extract),
+        Some(("index", args)) => index::handle(args).map_err(Error::Index),
+        Some(("info", args)) => info::handle(args).map_err(Error::Info),
+        Some(("inspect", args)) => inspect::handle(args).map_err(Error::Inspect),
+        Some(("install", args)) => install::handle(args, root).map_err(Error::Install),
+        Some(("list", args)) => list::handle(args).map_err(Error::List),
+        Some(("remove", args)) => remove::handle(args, root).map_err(Error::Remove),
+        Some(("repo", args)) => repo::handle(args, root).map_err(Error::Repo),
+        Some(("state", args)) => state::handle(args, root).map_err(Error::State),
+        Some(("sync", args)) => sync::handle(args, root).map_err(Error::Sync),
         Some(("version", _)) => {
             version::print();
             Ok(())

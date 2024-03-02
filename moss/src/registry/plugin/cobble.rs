@@ -2,13 +2,13 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::fs::File;
+use std::io;
 use std::{collections::HashMap, path::PathBuf};
 
 use crate::package::{self, meta, Meta, MissingMetaFieldError, Package};
-use crate::registry::job::Job;
-use crate::{stone, Provider};
-use ::stone::read::PayloadKind;
-use futures::StreamExt;
+use crate::Provider;
+use stone::read::PayloadKind;
 use thiserror::Error;
 
 // TODO:
@@ -20,22 +20,21 @@ pub struct Cobble {
 
 impl Cobble {
     /// Add a package to the cobble set
-    pub async fn add_package(&mut self, path: impl Into<PathBuf>) -> Result<meta::Id, Error> {
+    pub fn add_package(&mut self, path: impl Into<PathBuf>) -> Result<meta::Id, Error> {
         let path = path.into();
-        let (_, payloads) = stone::stream_payloads(&path).await?;
+        let mut file = File::open(&path)?;
+        let mut reader = stone::read(&mut file)?;
+        let mut payloads = reader.payloads()?;
 
         // Grab the metapayload
         let metadata = payloads
-            .filter_map(|result| async {
+            .find_map(|result| {
                 if let Ok(PayloadKind::Meta(meta)) = result {
                     Some(meta)
                 } else {
                     None
                 }
             })
-            .boxed()
-            .next()
-            .await
             .ok_or(Error::MissingMetaPayload)?;
 
         // Whack it into the cobbler
@@ -81,10 +80,6 @@ impl Cobble {
     pub fn priority(&self) -> u64 {
         u64::MAX
     }
-
-    pub fn fetch_item(&self, id: &package::Id) -> Job {
-        todo!()
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -109,8 +104,11 @@ pub enum Error {
     #[error("Missing metadata payload")]
     MissingMetaPayload,
 
+    #[error("stone read")]
+    StoneRead(#[from] stone::read::Error),
+
     #[error("io")]
-    Io(#[from] stone::read::Error),
+    Io(#[from] io::Error),
 
     #[error("metadata")]
     Metadata(#[from] MissingMetaFieldError),

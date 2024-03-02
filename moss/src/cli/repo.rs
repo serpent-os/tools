@@ -8,7 +8,7 @@ use clap::{arg, Arg, ArgAction, ArgMatches, Command};
 use itertools::Itertools;
 use moss::{
     repository::{self, Priority},
-    Installation, Repository,
+    runtime, Installation, Repository,
 };
 use thiserror::Error;
 use url::Url;
@@ -75,7 +75,7 @@ pub fn command() -> Command {
 }
 
 /// Handle subcommands to `repo`
-pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
+pub fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     let config = config::Manager::system(root, "moss");
 
     let handler = match args.subcommand() {
@@ -94,15 +94,15 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
 
     // dispatch to runtime handler function
     match handler {
-        Action::List(root) => list(root, config).await,
-        Action::Add(root, name, uri, comment, priority) => add(root, config, name, uri, comment, priority).await,
-        Action::Remove(root, name) => remove(root, config, name).await,
-        Action::Update(root, name) => update(root, config, name).await,
+        Action::List(root) => list(root, config),
+        Action::Add(root, name, uri, comment, priority) => add(root, config, name, uri, comment, priority),
+        Action::Remove(root, name) => remove(root, config, name),
+        Action::Update(root, name) => update(root, config, name),
     }
 }
 
-// Actual implementation of moss repo add, asynchronous
-async fn add(
+// Actual implementation of moss repo add
+fn add(
     root: &Path,
     config: config::Manager,
     name: String,
@@ -112,22 +112,20 @@ async fn add(
 ) -> Result<(), Error> {
     let installation = Installation::open(root);
 
-    let mut manager = repository::Manager::system(config, installation).await?;
+    let mut manager = repository::Manager::system(config, installation)?;
 
     let id = repository::Id::new(name);
 
-    manager
-        .add_repository(
-            id.clone(),
-            Repository {
-                description: comment,
-                uri,
-                priority,
-            },
-        )
-        .await?;
+    manager.add_repository(
+        id.clone(),
+        Repository {
+            description: comment,
+            uri,
+            priority,
+        },
+    )?;
 
-    manager.refresh_all().await?;
+    runtime::block_on(manager.refresh(&id))?;
 
     println!("{id} added");
 
@@ -135,9 +133,9 @@ async fn add(
 }
 
 /// List the repositories and pretty print them
-async fn list(root: &Path, config: config::Manager) -> Result<(), Error> {
+fn list(root: &Path, config: config::Manager) -> Result<(), Error> {
     let installation = Installation::open(root);
-    let manager = repository::Manager::system(config, installation).await?;
+    let manager = repository::Manager::system(config, installation)?;
 
     let configured_repos = manager.list();
     if configured_repos.len() == 0 {
@@ -153,26 +151,28 @@ async fn list(root: &Path, config: config::Manager) -> Result<(), Error> {
 }
 
 /// Update specific repos or all
-async fn update(root: &Path, config: config::Manager, which: Option<String>) -> Result<(), Error> {
+fn update(root: &Path, config: config::Manager, which: Option<String>) -> Result<(), Error> {
     let installation = Installation::open(root);
-    let mut manager = repository::Manager::system(config, installation).await?;
+    let mut manager = repository::Manager::system(config, installation)?;
 
-    match which {
-        Some(repo) => manager.refresh(&repository::Id::new(repo)).await?,
-        None => manager.refresh_all().await?,
-    }
+    runtime::block_on(async {
+        match which {
+            Some(repo) => manager.refresh(&repository::Id::new(repo)).await,
+            None => manager.refresh_all().await,
+        }
+    })?;
 
     Ok(())
 }
 
 /// Remove repo
-async fn remove(root: &Path, config: config::Manager, repo: String) -> Result<(), Error> {
+fn remove(root: &Path, config: config::Manager, repo: String) -> Result<(), Error> {
     let id = repository::Id::new(repo);
 
     let installation = Installation::open(root);
-    let mut manager = repository::Manager::system(config, installation).await?;
+    let mut manager = repository::Manager::system(config, installation)?;
 
-    match manager.remove(id.clone()).await? {
+    match manager.remove(id.clone())? {
         repository::manager::Removal::NotFound => {
             println!("{id} not found");
             process::exit(1);

@@ -5,7 +5,6 @@
 use std::{collections::HashSet, path::Path};
 
 use clap::{arg, ArgMatches, Command};
-use futures::StreamExt;
 use itertools::{Either, Itertools};
 use moss::{
     client::{self, Client},
@@ -31,7 +30,7 @@ pub fn command() -> Command {
 }
 
 /// Handle execution of `moss remove`
-pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
+pub fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     let pkgs = args
         .get_many::<String>("NAME")
         .into_iter()
@@ -41,9 +40,9 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     let yes = *args.get_one::<bool>("yes").unwrap();
 
     // Grab a client for the target, enumerate packages
-    let client = Client::new(environment::NAME, root).await?;
+    let client = Client::new(environment::NAME, root)?;
 
-    let installed = client.registry.list_installed(Flags::NONE).collect::<Vec<_>>().await;
+    let installed = client.registry.list_installed(Flags::NONE).collect::<Vec<_>>();
     let installed_ids = installed.iter().map(|p| p.id.clone()).collect::<HashSet<_>>();
 
     // Separate packages between installed / not installed (or invalid)
@@ -65,17 +64,16 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     // Add all installed packages to transaction
     let mut transaction = client
         .registry
-        .transaction_with_installed(installed_ids.clone().into_iter().collect())
-        .await?;
+        .transaction_with_installed(installed_ids.clone().into_iter().collect())?;
 
     // Remove all pkgs for removal
-    transaction.remove(for_removal).await;
+    transaction.remove(for_removal);
 
     // Finalized tx has all reverse deps removed
     let finalized = transaction.finalize().cloned().collect::<HashSet<_>>();
 
     // Resolve all removed packages, where removed is (installed - finalized)
-    let removed = client.resolve_packages(installed_ids.difference(&finalized)).await?;
+    let removed = client.resolve_packages(installed_ids.difference(&finalized))?;
 
     println!("The following package(s) will be removed:");
     println!();
@@ -103,7 +101,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     // it's value from the previous state
     let new_state_pkgs = {
         let previous_selections = match client.installation.active_state {
-            Some(id) => client.state_db.get(&id).await?.selections,
+            Some(id) => client.state_db.get(&id)?.selections,
             None => vec![],
         };
 
@@ -130,7 +128,7 @@ pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     };
 
     // Apply state
-    client.apply_state(&new_state_pkgs, "Remove").await?;
+    client.apply_state(&new_state_pkgs, "Remove")?;
 
     Ok(())
 }

@@ -5,7 +5,6 @@
 use std::path::Path;
 
 use clap::{arg, ArgAction, ArgMatches, Command};
-use futures::{stream, StreamExt, TryFutureExt, TryStreamExt};
 use moss::{
     client::{self, prune, Client},
     environment, state,
@@ -29,35 +28,35 @@ pub fn command() -> Command {
         )
 }
 
-pub async fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
+pub fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     match args.subcommand() {
-        Some(("list", _)) => list(root).await,
-        Some(("prune", args)) => prune(args, root).await,
+        Some(("list", _)) => list(root),
+        Some(("prune", args)) => prune(args, root),
         _ => unreachable!(),
     }
 }
 
 /// List all known states, newest first
-pub async fn list(root: &Path) -> Result<(), Error> {
-    let client = Client::new(environment::NAME, root).await?;
+pub fn list(root: &Path) -> Result<(), Error> {
+    let client = Client::new(environment::NAME, root)?;
 
-    let state_ids = client.state_db.list_ids().await?;
+    let state_ids = client.state_db.list_ids()?;
 
-    let mut states = stream::iter(state_ids.iter().map(|(id, _)| id))
-        .then(|id| client.state_db.get(id).map_err(Error::StateDB))
-        .try_collect::<Vec<_>>()
-        .await?;
+    let mut states = state_ids
+        .iter()
+        .map(|(id, _)| client.state_db.get(id).map_err(Error::StateDB))
+        .collect::<Result<Vec<_>, _>>()?;
 
     states.reverse();
     states.into_iter().for_each(print_state);
     Ok(())
 }
 
-pub async fn prune(args: &ArgMatches, root: &Path) -> Result<(), Error> {
+pub fn prune(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     let keep = *args.get_one::<u64>("keep").unwrap();
 
-    let client = Client::new(environment::NAME, root).await?;
-    client.prune(prune::Strategy::KeepRecent(keep)).await?;
+    let client = Client::new(environment::NAME, root)?;
+    client.prune(prune::Strategy::KeepRecent(keep))?;
 
     Ok(())
 }
