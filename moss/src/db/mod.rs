@@ -2,10 +2,12 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{future::Future, sync::Arc};
+use std::{
+    future::Future,
+    sync::{Arc, Mutex},
+};
 
 use sqlx::Sqlite;
-use tokio::sync::Mutex;
 
 use crate::runtime;
 
@@ -25,9 +27,8 @@ impl Pool {
     where
         F: Future<Output = T>,
     {
-        runtime::block_on(async {
-            let pool = self.0.lock().await.clone();
-            f(pool).await
-        })
+        let _guard = self.0.lock().expect("mutex guard");
+        let pool = _guard.clone();
+        runtime::block_on(f(pool))
     }
 }
