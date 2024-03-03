@@ -29,18 +29,13 @@ fn destroy() {
     drop(rt);
 }
 
+/// Drop the Guard to drop the runtime!
 #[must_use = "runtime is dropped with guard"]
 pub struct Guard;
 
-impl Guard {
-    pub fn destroy(self) {
-        destroy();
-    }
-}
-
 impl Drop for Guard {
     fn drop(&mut self) {
-        destroy();
+        destroy()
     }
 }
 

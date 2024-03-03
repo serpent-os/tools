@@ -113,7 +113,7 @@ impl Builder {
         root::populate(self, repos)?;
         upstream::sync(&self.recipe, &self.paths)?;
 
-        rt.destroy();
+        drop(rt);
         // We want to ensure no threads exist before
         // cloning into container. Sometimes a deadlock
         // occurs which appears related to a race condition
