@@ -8,7 +8,10 @@
 //!
 //! Note that currently we only load from `/usr/share/moss/triggers/{tx,sys.d}/*.yaml`
 //! and do not yet support local triggers
-use std::{path::Path, process};
+use std::{
+    path::{Path, PathBuf},
+    process,
+};
 
 use container::Container;
 use itertools::Itertools;
@@ -46,8 +49,52 @@ impl config::Config for SystemTrigger {
 /// Defines the scope of triggers
 #[derive(Clone, Copy, Debug)]
 pub(super) enum TriggerScope<'a> {
-    Transaction(&'a Installation),
-    System(&'a Installation),
+    Transaction(&'a Installation, &'a super::Scope),
+    System(&'a Installation, &'a super::Scope),
+}
+
+impl<'a> TriggerScope<'a> {
+    // Determine the correct root directory
+    fn root_dir(&self) -> PathBuf {
+        match self {
+            TriggerScope::Transaction(install, scope) => match scope {
+                super::Scope::Stateful => install.staging_dir().clone(),
+                super::Scope::Ephemeral { blit_root } => blit_root.clone(),
+            },
+            TriggerScope::System(install, scope) => match scope {
+                super::Scope::Stateful => install.root.clone(),
+                super::Scope::Ephemeral { blit_root } => blit_root.clone(),
+            },
+        }
+    }
+
+    /// Join "host" paths, outside the staging filesystem. Ensure no sandbox break for ephemeral
+    fn host_path(&self, path: impl AsRef<Path>) -> PathBuf {
+        match self {
+            TriggerScope::Transaction(install, scope) => match scope {
+                super::Scope::Stateful => install.root.join(path),
+                super::Scope::Ephemeral { blit_root } => blit_root.join(path),
+            },
+            TriggerScope::System(install, scope) => match scope {
+                super::Scope::Stateful => install.root.join(path),
+                super::Scope::Ephemeral { blit_root } => blit_root.join(path),
+            },
+        }
+    }
+
+    /// Join guest paths, inside the staging filesystem. Ensure no sandbox break for ephemeral
+    fn guest_path(&self, path: impl AsRef<Path>) -> PathBuf {
+        match self {
+            TriggerScope::Transaction(install, scope) => match scope {
+                super::Scope::Stateful => install.staging_path(path),
+                super::Scope::Ephemeral { blit_root } => blit_root.join(path),
+            },
+            TriggerScope::System(install, scope) => match scope {
+                super::Scope::Stateful => install.root.join(path),
+                super::Scope::Ephemeral { blit_root } => blit_root.join(path),
+            },
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -66,12 +113,14 @@ pub(super) fn triggers<'a>(
 
     // Load appropriate triggers from their locations and convert back to a vec of Trigger
     let triggers = match scope {
-        TriggerScope::Transaction(install) => config::Manager::custom(install.staging_dir().join(trigger_root))
-            .load::<TransactionTrigger>()
-            .into_iter()
-            .map(|t| t.0)
-            .collect_vec(),
-        TriggerScope::System(install) => config::Manager::custom(install.root.join(trigger_root))
+        TriggerScope::Transaction(install, client_scope) => {
+            config::Manager::custom(scope.root_dir().join(trigger_root))
+                .load::<TransactionTrigger>()
+                .into_iter()
+                .map(|t| t.0)
+                .collect_vec()
+        }
+        TriggerScope::System(install, client_scope) => config::Manager::custom(scope.root_dir().join(trigger_root))
             .load::<SystemTrigger>()
             .into_iter()
             .map(|t| t.0)
@@ -92,18 +141,18 @@ pub(super) fn triggers<'a>(
 impl<'a> TriggerRunner<'a> {
     pub fn execute(&self) -> Result<(), Error> {
         match self.scope {
-            TriggerScope::Transaction(install) => {
+            TriggerScope::Transaction(install, client_scope) => {
                 // TODO: Add caching support via /var/
                 let isolation = Container::new(install.isolation_dir())
                     .networking(false)
                     .override_accounts(false)
-                    .bind_ro(install.root.join("etc"), "/etc")
-                    .bind_rw(install.staging_path("usr"), "/usr")
+                    .bind_ro(self.scope.host_path("etc"), "/etc")
+                    .bind_rw(self.scope.guest_path("usr"), "/usr")
                     .work_dir("/");
 
                 Ok(isolation.run(|| execute_trigger_directly(&self.trigger))?)
             }
-            TriggerScope::System(install) => {
+            TriggerScope::System(install, client_scope) => {
                 // OK, if the root == `/` then we can run directly, otherwise we need to containerise with RW.
                 if install.root.to_string_lossy() == "/" {
                     Ok(execute_trigger_directly(&self.trigger)?)
@@ -111,9 +160,10 @@ impl<'a> TriggerRunner<'a> {
                     let isolation = Container::new(install.isolation_dir())
                         .networking(false)
                         .override_accounts(false)
-                        .bind_rw(install.root.join("etc"), "/etc")
-                        .bind_rw(install.root.join("usr"), "/usr")
+                        .bind_rw(self.scope.host_path("etc"), "/etc")
+                        .bind_rw(self.scope.guest_path("usr"), "/usr")
                         .work_dir("/");
+
                     Ok(isolation.run(|| execute_trigger_directly(&self.trigger))?)
                 }
             }

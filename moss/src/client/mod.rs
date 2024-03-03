@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
-    fs, io,
+    fs::{self, create_dir_all},
+    io,
     os::{fd::RawFd, unix::fs::symlink},
     path::{Path, PathBuf},
     time::Duration,
@@ -219,7 +220,10 @@ impl Client {
                 record_os_release(&self.installation.staging_dir(), Some(state.id))?;
 
                 // Run all of the transaction triggers
-                let triggers = postblit::triggers(postblit::TriggerScope::Transaction(&self.installation), &fstree)?;
+                let triggers = postblit::triggers(
+                    postblit::TriggerScope::Transaction(&self.installation, &self.scope),
+                    &fstree,
+                )?;
                 create_root_links(&self.installation.isolation_dir())?;
                 for trigger in triggers {
                     trigger.execute()?;
@@ -235,7 +239,8 @@ impl Client {
                 }
 
                 // At this point we're allowed to run system triggers
-                let sys_triggers = postblit::triggers(postblit::TriggerScope::System(&self.installation), &fstree)?;
+                let sys_triggers =
+                    postblit::triggers(postblit::TriggerScope::System(&self.installation, &self.scope), &fstree)?;
                 for trigger in sys_triggers {
                     trigger.execute()?;
                 }
@@ -245,6 +250,25 @@ impl Client {
             Scope::Ephemeral { blit_root } => {
                 record_os_release(blit_root, None)?;
                 create_root_links(blit_root)?;
+                create_root_links(&self.installation.isolation_dir())?;
+
+                let etc = blit_root.join("etc");
+                create_dir_all(etc)?;
+
+                // ephemeral tx triggers
+                let triggers = postblit::triggers(
+                    postblit::TriggerScope::Transaction(&self.installation, &self.scope),
+                    &fstree,
+                )?;
+                for trigger in triggers {
+                    trigger.execute()?;
+                }
+                // ephemeral system triggers
+                let sys_triggers =
+                    postblit::triggers(postblit::TriggerScope::System(&self.installation, &self.scope), &fstree)?;
+                for trigger in sys_triggers {
+                    trigger.execute()?;
+                }
                 Ok(None)
             }
         }
@@ -629,6 +653,7 @@ BUG_REPORT_URL="https://github.com/serpent-os""#,
     Ok(())
 }
 
+#[derive(Clone, Debug)]
 enum Scope {
     Stateful,
     Ephemeral { blit_root: PathBuf },
