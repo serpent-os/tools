@@ -1,4 +1,4 @@
--- Add migration script here
+-- Your SQL goes here
 CREATE TABLE IF NOT EXISTS meta (
     package TEXT NOT NULL PRIMARY KEY,
     name TEXT NOT NULL,
@@ -12,23 +12,26 @@ CREATE TABLE IF NOT EXISTS meta (
     homepage TEXT NOT NULL,
     uri TEXT NULL,
     hash TEXT NULL,
-    download_size INT NULL
+    download_size BIGINT NULL
 );
 
 CREATE TABLE IF NOT EXISTS meta_licenses (
     package TEXT NOT NULL,
     license TEXT NOT NULL,
+    PRIMARY KEY (package, license),
     FOREIGN KEY (package) REFERENCES meta(package) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS meta_dependencies (
     package TEXT NOT NULL,
     dependency TEXT NOT NULL,
+    PRIMARY KEY (package, dependency),
     FOREIGN KEY (package) REFERENCES meta(package) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS meta_providers (
     package TEXT NOT NULL,
     provider TEXT NOT NULL,
+    PRIMARY KEY (package, provider),
     FOREIGN KEY (package) REFERENCES meta(package) ON DELETE CASCADE
 );

@@ -237,7 +237,7 @@ fn open_meta_db(identifier: &str, repo: &Repository, installation: &Installation
 
     fs::create_dir_all(&dir).map_err(Error::CreateDir)?;
 
-    let db = meta::Database::new(dir.join("db"), installation.read_only())?;
+    let db = meta::Database::new(dir.join("db").to_str().unwrap_or_default())?;
 
     Ok(db)
 }

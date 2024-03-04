@@ -169,7 +169,7 @@ fn read_state_id(root: &Path) -> Option<state::Id> {
     let usr_path = root.join("usr");
     let state_path = root.join("usr").join(".stateID");
 
-    if let Some(id) = fs::read_to_string(state_path).ok().and_then(|s| s.parse::<i64>().ok()) {
+    if let Some(id) = fs::read_to_string(state_path).ok().and_then(|s| s.parse::<i32>().ok()) {
         return Some(state::Id::from(id));
     } else if let Ok(usr_target) = usr_path.read_link() {
         return read_legacy_state_id(&usr_target);
@@ -183,7 +183,7 @@ fn read_legacy_state_id(usr_target: &Path) -> Option<state::Id> {
     if usr_target.ends_with("usr") {
         let parent = usr_target.parent()?;
         let base = parent.file_name()?;
-        let id = base.to_str()?.parse::<i64>().ok()?;
+        let id = base.to_str()?.parse::<i32>().ok()?;
 
         return Some(state::Id::from(id));
     }

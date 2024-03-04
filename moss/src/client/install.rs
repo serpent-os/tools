@@ -84,7 +84,7 @@ pub fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<(), Erro
     let new_state_pkgs = {
         // Only use previous state in stateful mode
         let previous_selections = match client.installation.active_state {
-            Some(id) if !client.is_ephemeral() => client.state_db.get(&id)?.selections,
+            Some(id) if !client.is_ephemeral() => client.state_db.get(id)?.selections,
             _ => vec![],
         };
         let missing_selections = missing.iter().map(|p| Selection {
@@ -149,14 +149,8 @@ pub enum Error {
     #[error("transaction")]
     Transaction(#[from] transaction::Error),
 
-    #[error("install db")]
-    InstallDB(#[from] crate::db::meta::Error),
-
-    #[error("layout db")]
-    LayoutDB(#[from] crate::db::layout::Error),
-
-    #[error("state db")]
-    StateDB(#[from] crate::db::state::Error),
+    #[error("db")]
+    DB(#[from] crate::db::Error),
 
     #[error("string processing")]
     Dialog(#[from] tui::dialoguer::Error),
