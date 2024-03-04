@@ -96,7 +96,7 @@ pub fn list(manager: profile::Manager) -> Result<(), Error> {
         println!("{id}:");
 
         for (id, repo) in profile
-            .collections
+            .repositories
             .iter()
             .sorted_by(|(_, a), (_, b)| a.priority.cmp(&b.priority).reverse())
         {
@@ -118,7 +118,7 @@ pub fn add<'a>(
     manager.save_profile(
         id.clone(),
         Profile {
-            collections: repository::Map::with(repos),
+            repositories: repository::Map::with(repos),
         },
     )?;
 
