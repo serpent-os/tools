@@ -19,7 +19,7 @@ pub const fn host() -> Architecture {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, strum::Display)]
 #[strum(serialize_all = "lowercase")]
 pub enum Architecture {
     X86_64,
@@ -37,7 +37,7 @@ impl Architecture {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Display)]
 pub enum BuildTarget {
     #[display(fmt = "{_0}")]
     Native(Architecture),
