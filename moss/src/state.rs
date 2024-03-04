@@ -6,7 +6,7 @@ use std::io::Write;
 
 use chrono::{DateTime, Utc};
 use derive_more::{Display, From, Into};
-use tui::{pretty, Stylize};
+use tui::{pretty, Styled};
 
 use crate::package;
 

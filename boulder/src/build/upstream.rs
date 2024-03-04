@@ -15,7 +15,7 @@ use nix::unistd::{linkat, LinkatFlags};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
-use tui::{MultiProgress, ProgressBar, ProgressStyle, Stylize};
+use tui::{MultiProgress, ProgressBar, ProgressStyle, Styled};
 use url::Url;
 
 use crate::{util, Paths, Recipe};

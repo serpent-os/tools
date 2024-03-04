@@ -18,7 +18,7 @@ use thiserror::Error;
 use tui::{
     dialoguer::{theme::ColorfulTheme, Confirm},
     pretty::print_to_columns,
-    Stylize,
+    Styled,
 };
 
 pub fn command() -> Command {

@@ -13,7 +13,7 @@ use moss::{
     environment,
     package::Flags,
 };
-use tui::Stylize;
+use tui::Styled;
 
 pub fn command() -> Command {
     Command::new("list")

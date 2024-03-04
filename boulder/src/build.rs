@@ -21,7 +21,7 @@ use stone_recipe::{
     Script,
 };
 use thiserror::Error;
-use tui::Stylize;
+use tui::Styled;
 
 pub mod job;
 pub mod pgo;

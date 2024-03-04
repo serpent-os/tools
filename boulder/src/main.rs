@@ -4,7 +4,7 @@
 
 use std::error::Error;
 
-use tui::Stylize;
+use tui::Styled;
 
 mod cli;
 

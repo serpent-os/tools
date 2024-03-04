@@ -9,7 +9,7 @@ use std::{
 
 use moss::{Dependency, Provider};
 use stone::write::digest;
-use tui::{ProgressBar, ProgressStyle, Stylize};
+use tui::{ProgressBar, ProgressStyle, Styled};
 
 use super::collect::{Collector, PathInfo};
 use crate::{Paths, Recipe};

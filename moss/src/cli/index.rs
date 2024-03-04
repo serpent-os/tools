@@ -16,7 +16,7 @@ use moss::{
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
-use tui::{MultiProgress, ProgressBar, ProgressStyle, Stylize};
+use tui::{MultiProgress, ProgressBar, ProgressStyle, Styled};
 
 pub fn command() -> Command {
     Command::new("index")

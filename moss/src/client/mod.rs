@@ -21,7 +21,7 @@ use nix::{
 };
 use stone::{payload::layout, read::PayloadKind};
 use thiserror::Error;
-use tui::{MultiProgress, ProgressBar, ProgressStyle, Stylize};
+use tui::{MultiProgress, ProgressBar, ProgressStyle, Styled};
 use vfs::tree::{builder::TreeBuilder, BlitFile, Element};
 
 use self::install::install;
