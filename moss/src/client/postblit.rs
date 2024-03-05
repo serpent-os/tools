@@ -13,16 +13,12 @@ use std::{
     process,
 };
 
+use crate::Installation;
 use container::Container;
 use itertools::Itertools;
 use serde::Deserialize;
 use thiserror::Error;
-use triggers::{
-    format::{Handler, Trigger},
-    TriggerCommand,
-};
-
-use crate::Installation;
+use triggers::format::{CompiledHandler, Handler, Trigger};
 
 use super::PendingFile;
 
@@ -100,7 +96,7 @@ impl<'a> TriggerScope<'a> {
 #[derive(Debug)]
 pub(super) struct TriggerRunner<'a> {
     scope: TriggerScope<'a>,
-    trigger: TriggerCommand,
+    trigger: CompiledHandler,
 }
 
 /// Construct an iterator of executable triggers for the given
@@ -172,8 +168,8 @@ impl<'a> TriggerRunner<'a> {
 }
 
 /// Internal executor for triggers.
-fn execute_trigger_directly(trigger: &TriggerCommand) -> Result<(), Error> {
-    match &trigger.handler {
+fn execute_trigger_directly(trigger: &CompiledHandler) -> Result<(), Error> {
+    match trigger.handler() {
         Handler::Run { run, args } => {
             let cmd = process::Command::new(run).args(args).current_dir("/").output()?;
 

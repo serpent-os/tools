@@ -4,7 +4,7 @@
 
 //! System trigger management facilities
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use format::Trigger;
 use thiserror::Error;
@@ -15,14 +15,7 @@ pub mod format;
 pub struct Collection<'a> {
     handlers: Vec<ExtractedHandler>,
     triggers: BTreeMap<String, &'a Trigger>,
-    hits: Vec<(String, fnmatch::Match, format::Handler)>,
-}
-
-// Return type: Map a handler to a set of matching files.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct TriggerCommand {
-    pub handler: format::Handler,
-    files: Vec<String>,
+    hits: BTreeMap<String, BTreeSet<format::CompiledHandler>>,
 }
 
 #[derive(Debug)]
@@ -64,7 +57,7 @@ impl<'a> Collection<'a> {
         Ok(Self {
             handlers,
             triggers: trigger_set,
-            hits: vec![],
+            hits: BTreeMap::new(),
         })
     }
 
@@ -73,22 +66,29 @@ impl<'a> Collection<'a> {
         let results = paths.into_iter().flat_map(|p| {
             self.handlers
                 .iter()
-                .filter_map(move |h| h.pattern.match_path(&p).map(|m| (h.id.clone(), m, h.handler.clone())))
+                .filter_map(move |h| h.pattern.match_path(&p).map(|m| (h.id.clone(), h.handler.compiled(&m))))
         });
-        self.hits.extend(results);
+
+        for (id, handler) in results {
+            if let Some(map) = self.hits.get_mut(&id) {
+                map.insert(handler);
+            } else {
+                self.hits.insert(id, BTreeSet::from_iter([handler]));
+            }
+        }
     }
 
     /// Bake the trigger collection into a sane dependency order
-    pub fn bake(&self) -> Result<Vec<TriggerCommand>, Error> {
-        let mut graph: dag::Dag<String> = dag::Dag::new();
+    pub fn bake(&mut self) -> Result<Vec<format::CompiledHandler>, Error> {
+        let mut graph = dag::Dag::new();
 
-        // install first..
-        for (id, _, _) in self.hits.iter() {
+        // ensure all keys are in place
+        for id in self.hits.keys() {
             let _ = graph.add_node_or_get_index(id.clone());
         }
 
-        // OK, now lets order by deps..
-        for (id, _, _) in self.hits.iter() {
+        // add dependency ordering for the toplevel IDs
+        for id in self.hits.keys() {
             let lookup = self
                 .triggers
                 .get(id)
@@ -118,33 +118,11 @@ impl<'a> Collection<'a> {
         }
 
         // Recollect in dependency order
-        let built_triggers = graph
+        let results = graph
             .topo()
-            .flat_map(|i| self.hits.iter().filter(move |(id, _, _)| i == id))
+            .filter_map(|i| self.hits.remove(i))
+            .flatten()
             .collect::<Vec<_>>();
-
-        let mut runnables: BTreeMap<format::Handler, TriggerCommand> = BTreeMap::new();
-        for (_, hit, handler) in built_triggers.iter() {
-            let handler = handler.substituted(hit);
-
-            if let Some(store) = runnables.get_mut(&handler) {
-                store.files.push(hit.path.clone());
-            } else {
-                runnables.insert(
-                    handler.clone(),
-                    TriggerCommand {
-                        handler,
-                        files: vec![hit.path.clone()],
-                    },
-                );
-            }
-        }
-
-        let dep_preserved = built_triggers
-            .into_iter()
-            .filter_map(|(_, _, h)| runnables.remove(h))
-            .collect::<Vec<_>>();
-
-        Ok(dep_preserved)
+        Ok(results)
     }
 }

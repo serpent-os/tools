@@ -23,9 +23,18 @@ pub enum Handler {
     Delete { delete: Vec<String> },
 }
 
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct CompiledHandler(Handler);
+
+impl CompiledHandler {
+    pub fn handler(&self) -> &Handler {
+        &self.0
+    }
+}
+
 impl Handler {
     /// Substitute all paths using matched variables
-    pub fn substituted(&self, with_match: &fnmatch::Match) -> Handler {
+    pub fn compiled(&self, with_match: &fnmatch::Match) -> CompiledHandler {
         match self {
             Handler::Run { run, args } => {
                 let mut run = run.clone();
@@ -42,9 +51,9 @@ impl Handler {
                         a
                     })
                     .collect();
-                Handler::Run { run, args }
+                CompiledHandler(Handler::Run { run, args })
             }
-            Handler::Delete { delete } => Handler::Delete { delete: delete.clone() },
+            Handler::Delete { delete } => CompiledHandler(Handler::Delete { delete: delete.clone() }),
         }
     }
 }
