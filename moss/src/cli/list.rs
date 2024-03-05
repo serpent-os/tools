@@ -49,12 +49,12 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
     let root = args.get_one::<PathBuf>("root").unwrap().clone();
 
     let (filter_flags, sync) = match args.subcommand() {
-        Some(("available", _)) => (Flags::AVAILABLE, None),
+        Some(("available", _)) => (Flags::new().with_available(), None),
         Some(("installed", args)) => {
             let flags = if *args.get_one::<bool>("explicit").unwrap() {
-                Flags::INSTALLED | Flags::EXPLICIT
+                Flags::new().with_installed().with_explicit()
             } else {
-                Flags::INSTALLED
+                Flags::new().with_installed()
             };
             (flags, None)
         }
@@ -65,7 +65,7 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
                 Sync::All
             };
 
-            (Flags::INSTALLED, Some(sync))
+            (Flags::new().with_installed(), Some(sync))
         }
         _ => unreachable!(),
     };
@@ -75,7 +75,7 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
     let pkgs = client.registry.list(filter_flags).collect::<Vec<_>>();
 
     let sync_available = if sync.is_some() {
-        client.registry.list(Flags::AVAILABLE).collect::<Vec<_>>()
+        client.registry.list(Flags::new().with_available()).collect::<Vec<_>>()
     } else {
         vec![]
     };
@@ -113,8 +113,8 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
                     release: p.meta.source_release.to_string(),
                 },
                 summary: p.meta.summary,
-                explicit: if filter_flags == Flags::INSTALLED {
-                    p.flags.contains(Flags::EXPLICIT)
+                explicit: if filter_flags == Flags::new().with_installed() {
+                    p.flags.explicit
                 } else {
                     true
                 },

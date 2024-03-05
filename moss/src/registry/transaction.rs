@@ -137,19 +137,19 @@ impl<'a> Transaction<'a> {
         match filter {
             ProviderFilter::All(provider) => self
                 .registry
-                .by_provider(&provider, package::Flags::AVAILABLE)
+                .by_provider(&provider, package::Flags::new().with_available())
                 .next()
                 .map(|p| p.id)
                 .ok_or(Error::NoCandidate(provider.to_string())),
             ProviderFilter::InstalledOnly(provider) => self
                 .registry
-                .by_provider(&provider, package::Flags::INSTALLED)
+                .by_provider(&provider, package::Flags::new().with_installed())
                 .next()
                 .map(|p| p.id)
                 .ok_or(Error::NoCandidate(provider.to_string())),
             ProviderFilter::Selections(provider) => self
                 .registry
-                .by_provider(&provider, package::Flags::NONE)
+                .by_provider(&provider, package::Flags::default())
                 .find_map(|p| {
                     if self.packages.node_exists(&p.id) {
                         Some(p.id)

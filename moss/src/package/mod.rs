@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use bitflags::bitflags;
 use derive_more::{AsRef, Display, From, Into};
 use itertools::Itertools;
 
@@ -51,20 +50,59 @@ impl Ord for Package {
     }
 }
 
-bitflags! {
-    /// Flags indicating the status of a [`Package`]
-    #[derive(Debug, Clone,Copy, PartialEq, Eq)]
-    pub struct Flags: u8 {
-        /// No filter flags
-        const NONE = 0;
-        /// Package is available for installation
-        const AVAILABLE = 1 << 1;
-        /// Package is already installed
-        const INSTALLED = 1 << 2;
-        /// Available as from-source build
-        const SOURCE = 1 << 3;
-        /// Package is explicitly installed (use with [`Flags::INSTALLED`])
-        const EXPLICIT = 1 << 4;
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Flags {
+    /// Package is available for installation.
+    pub available: bool,
+    /// Package is already installed.
+    pub installed: bool,
+    /// Available as from-source build.
+    pub source: bool,
+    /// Package is explicitly installed (use with [`Flags::installed`]).
+    pub explicit: bool,
+}
+
+impl Flags {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns a copy of [`Flags`] with available set to true.
+    pub fn with_available(&self) -> Self {
+        Self {
+            available: true,
+            ..*self
+        }
+    }
+
+    /// Returns a copy of [`Flags`] with installed set to true.
+    pub fn with_installed(&self) -> Self {
+        Self {
+            installed: true,
+            ..*self
+        }
+    }
+
+    /// Returns a copy of [`Flags`] with source set to true.
+    pub fn with_source(&self) -> Self {
+        Self { source: true, ..*self }
+    }
+
+    /// Returns a copy of [`Flags`] with explicit set to true.
+    pub fn with_explicit(&self) -> Self {
+        Self {
+            explicit: true,
+            ..*self
+        }
+    }
+
+    /// Returns whether this flag set contains another flag set.
+    pub fn contains(&self, other: Self) -> bool {
+        (self.bits() & other.bits()) == other.bits()
+    }
+
+    fn bits(&self) -> u32 {
+        (self.available as u32) | (self.installed as u32) << 1 | (self.source as u32) << 2 | (self.explicit as u32) << 3
     }
 }
 

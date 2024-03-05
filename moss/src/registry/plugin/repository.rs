@@ -39,7 +39,7 @@ impl Repository {
                         .map(|url| url.to_string()),
                     ..meta
                 },
-                flags: package::Flags::AVAILABLE,
+                flags: package::Flags::new().with_available(),
             }),
             Err(db::meta::Error::RowNotFound) => None,
             Err(error) => {
@@ -50,7 +50,7 @@ impl Repository {
     }
 
     fn query(&self, flags: package::Flags, filter: Option<db::meta::Filter>) -> Vec<Package> {
-        if flags.contains(package::Flags::AVAILABLE) || flags == package::Flags::NONE {
+        if flags.available || flags == package::Flags::default() {
             // TODO: Error handling
             let packages = match self.active.db.query(filter) {
                 Ok(packages) => packages,
@@ -65,7 +65,7 @@ impl Repository {
                 .map(|(id, meta)| Package {
                     id,
                     meta,
-                    flags: package::Flags::AVAILABLE,
+                    flags: package::Flags::new().with_available(),
                 })
                 .collect()
         } else {

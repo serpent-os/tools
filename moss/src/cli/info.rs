@@ -42,14 +42,17 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
 
     for pkg in pkgs {
         let lookup = Provider::from_name(&pkg).unwrap();
-        let resolved = client.registry.by_provider(&lookup, Flags::NONE).collect::<Vec<_>>();
+        let resolved = client
+            .registry
+            .by_provider(&lookup, Flags::default())
+            .collect::<Vec<_>>();
         if resolved.is_empty() {
             return Err(Error::NotFound(pkg));
         }
         for candidate in resolved {
             print_package(&candidate);
 
-            if candidate.flags.contains(Flags::INSTALLED) && show_files {
+            if candidate.flags.installed && show_files {
                 let vfs = client.vfs([&candidate.id])?;
                 print_files(vfs);
             }
