@@ -243,7 +243,7 @@ impl Plain {
         let path = self.path(paths);
 
         if let Some(parent) = path.parent().map(Path::to_path_buf) {
-            runtime::unblock(move || util::recreate_dir(&parent)).await?;
+            runtime::unblock(move || util::ensure_dir_exists(&parent)).await?;
         }
 
         if path.exists() {
@@ -337,10 +337,10 @@ impl Git {
         let final_path_string = final_path.display().to_string();
 
         if let Some(parent) = clone_path.parent().map(Path::to_path_buf) {
-            runtime::unblock(move || util::recreate_dir(&parent)).await?;
+            runtime::unblock(move || util::ensure_dir_exists(&parent)).await?;
         }
         if let Some(parent) = final_path.parent().map(Path::to_path_buf) {
-            runtime::unblock(move || util::recreate_dir(&parent)).await?;
+            runtime::unblock(move || util::ensure_dir_exists(&parent)).await?;
         }
 
         if self.ref_exists(&final_path).await? {
