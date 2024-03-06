@@ -5,7 +5,7 @@
 use std::collections::HashSet;
 use std::io;
 
-use moss::{repository, runtime};
+use moss::{repository, runtime, Installation};
 use stone_recipe::{tuning::Toolchain, Upstream};
 use thiserror::Error;
 
@@ -21,8 +21,9 @@ pub fn populate(builder: &Builder, repositories: repository::Map) -> Result<(), 
     util::recreate_dir(&rootfs)?;
 
     // Create the moss client
+    let installation = Installation::open(&builder.env.moss_dir)?;
     let mut moss_client =
-        moss::Client::with_explicit_repositories("boulder", &builder.env.moss_dir, repositories)?.ephemeral(&rootfs)?;
+        moss::Client::with_explicit_repositories("boulder", installation, repositories)?.ephemeral(&rootfs)?;
 
     // Ensure all configured repos have been initialized (important since users
     // might add profile configs from an editor)
@@ -168,6 +169,8 @@ pub enum Error {
     MossClient(#[from] moss::client::Error),
     #[error("moss install")]
     MossInstall(#[from] moss::client::install::Error),
+    #[error("moss installation")]
+    MossInstallation(#[from] moss::installation::Error),
     #[error("container")]
     Container(#[from] container::Error),
 }

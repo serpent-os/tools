@@ -5,7 +5,7 @@
 use std::{env, path::PathBuf};
 
 use clap::{Arg, ArgAction, Command};
-use moss::runtime;
+use moss::{installation, runtime, Installation};
 use thiserror::Error;
 
 mod extract;
@@ -41,6 +41,14 @@ fn command() -> Command {
                 .value_parser(clap::value_parser!(PathBuf)),
         )
         .arg(
+            Arg::new("cache")
+                .long("cache")
+                .global(true)
+                .help("Cache directory")
+                .action(ArgAction::Set)
+                .value_parser(clap::value_parser!(PathBuf)),
+        )
+        .arg(
             Arg::new("yes")
                 .short('y')
                 .long("yes-all")
@@ -73,21 +81,27 @@ pub fn process() -> Result<(), Error> {
     }
 
     let root = matches.get_one::<PathBuf>("root").unwrap();
+    let cache = matches.get_one::<PathBuf>("cache");
 
     // Make async runtime available to all of moss
     let _guard = runtime::init();
 
+    let mut installation = Installation::open(root)?;
+    if let Some(dir) = cache {
+        installation = installation.with_cache_dir(dir)?;
+    }
+
     match matches.subcommand() {
         Some(("extract", args)) => extract::handle(args).map_err(Error::Extract),
         Some(("index", args)) => index::handle(args).map_err(Error::Index),
-        Some(("info", args)) => info::handle(args).map_err(Error::Info),
+        Some(("info", args)) => info::handle(args, installation).map_err(Error::Info),
         Some(("inspect", args)) => inspect::handle(args).map_err(Error::Inspect),
-        Some(("install", args)) => install::handle(args, root).map_err(Error::Install),
-        Some(("list", args)) => list::handle(args).map_err(Error::List),
-        Some(("remove", args)) => remove::handle(args, root).map_err(Error::Remove),
-        Some(("repo", args)) => repo::handle(args, root).map_err(Error::Repo),
-        Some(("state", args)) => state::handle(args, root).map_err(Error::State),
-        Some(("sync", args)) => sync::handle(args, root).map_err(Error::Sync),
+        Some(("install", args)) => install::handle(args, installation).map_err(Error::Install),
+        Some(("list", args)) => list::handle(args, installation).map_err(Error::List),
+        Some(("remove", args)) => remove::handle(args, installation).map_err(Error::Remove),
+        Some(("repo", args)) => repo::handle(args, installation).map_err(Error::Repo),
+        Some(("state", args)) => state::handle(args, installation).map_err(Error::State),
+        Some(("sync", args)) => sync::handle(args, installation).map_err(Error::Sync),
         Some(("version", _)) => {
             version::print();
             Ok(())
@@ -162,4 +176,7 @@ pub enum Error {
 
     #[error("sync")]
     Sync(#[from] sync::Error),
+
+    #[error("installation")]
+    Installation(#[from] installation::Error),
 }

@@ -7,7 +7,7 @@ use std::{collections::HashMap, io};
 use boulder::{profile, Env, Profile};
 use clap::Parser;
 use itertools::Itertools;
-use moss::{repository, runtime, Repository};
+use moss::{repository, runtime, Installation, Repository};
 use thiserror::Error;
 use url::Url;
 
@@ -132,7 +132,8 @@ pub fn add<'a>(
 pub fn update<'a>(env: &'a Env, manager: profile::Manager<'a>, profile: &profile::Id) -> Result<(), Error> {
     let repos = manager.repositories(profile)?.clone();
 
-    let mut moss_client = moss::Client::with_explicit_repositories("boulder", &env.moss_dir, repos)?;
+    let installation = Installation::open(&env.moss_dir)?;
+    let mut moss_client = moss::Client::with_explicit_repositories("boulder", installation, repos)?;
     runtime::block_on(moss_client.refresh_repositories())?;
 
     println!("Profile {profile} updated");
@@ -147,6 +148,8 @@ pub enum Error {
     Profile(#[from] profile::Error),
     #[error("moss client")]
     MossClient(#[from] moss::client::Error),
+    #[error("moss installation")]
+    MossInstallation(#[from] moss::installation::Error),
     #[error("io")]
     Io(#[from] io::Error),
 }

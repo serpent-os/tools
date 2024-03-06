@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::borrow::Cow;
+use std::collections::BTreeSet;
 use std::path::PathBuf;
-use std::{collections::BTreeSet, path::Path};
 
 use clap::{arg, value_parser, ArgMatches, Command};
 use moss::registry::transaction;
@@ -14,7 +14,7 @@ use moss::{
     package::{self},
     Package,
 };
-use moss::{environment, runtime};
+use moss::{environment, runtime, Installation};
 use thiserror::Error;
 
 use tui::dialoguer::theme::ColorfulTheme;
@@ -38,11 +38,11 @@ pub fn command() -> Command {
         )
 }
 
-pub fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
+pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
     let yes_all = *args.get_one::<bool>("yes").unwrap();
     let upgrade_only = *args.get_one::<bool>("upgrade-only").unwrap();
 
-    let mut client = Client::new(environment::NAME, root)?;
+    let mut client = Client::new(environment::NAME, installation)?;
 
     // Make ephemeral if a blit target was provided
     if let Some(blit_target) = args.get_one::<PathBuf>("to").cloned() {

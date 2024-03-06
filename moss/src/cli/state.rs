@@ -2,12 +2,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::path::Path;
-
 use clap::{arg, ArgAction, ArgMatches, Command};
 use moss::{
     client::{self, prune, Client},
-    environment, state,
+    environment, state, Installation,
 };
 use thiserror::Error;
 use tui::Styled;
@@ -28,17 +26,17 @@ pub fn command() -> Command {
         )
 }
 
-pub fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
+pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
     match args.subcommand() {
-        Some(("list", _)) => list(root),
-        Some(("prune", args)) => prune(args, root),
+        Some(("list", _)) => list(installation),
+        Some(("prune", args)) => prune(args, installation),
         _ => unreachable!(),
     }
 }
 
 /// List all known states, newest first
-pub fn list(root: &Path) -> Result<(), Error> {
-    let client = Client::new(environment::NAME, root)?;
+pub fn list(installation: Installation) -> Result<(), Error> {
+    let client = Client::new(environment::NAME, installation)?;
 
     let state_ids = client.state_db.list_ids()?;
 
@@ -52,10 +50,10 @@ pub fn list(root: &Path) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn prune(args: &ArgMatches, root: &Path) -> Result<(), Error> {
+pub fn prune(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
     let keep = *args.get_one::<u64>("keep").unwrap();
 
-    let client = Client::new(environment::NAME, root)?;
+    let client = Client::new(environment::NAME, installation)?;
     client.prune(prune::Strategy::KeepRecent(keep))?;
 
     Ok(())
