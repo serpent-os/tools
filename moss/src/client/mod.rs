@@ -187,12 +187,59 @@ impl Client {
         Ok(metadata)
     }
 
+    /// Activates the provided state and runs system triggers
+    /// once applied. The current state gets archived.
+    ///
+    /// Returns the old state that was archived
+    pub fn activate_state(&self, id: state::Id) -> Result<state::Id, Error> {
+        // Fetch the new state
+        let new = self.state_db.get(&id).map_err(|_| Error::StateDoesntExist(id))?;
+
+        // Get old (current) state
+        let Some(old) = self.installation.active_state else {
+            return Err(Error::NoActiveState);
+        };
+
+        if new.id == old {
+            return Err(Error::StateAlreadyActive(id));
+        }
+
+        let staging_dir = self.installation.staging_dir();
+
+        // Ensure staging dir exists
+        if !staging_dir.exists() {
+            fs::create_dir(&staging_dir)?;
+        }
+
+        // Move new (archived) state to staging
+        fs::rename(self.installation.root_path(new.id.to_string()), &staging_dir)?;
+
+        // Promote staging
+        self.promote_staging()?;
+
+        // Archive old state
+        self.archive_state(old)?;
+
+        // Build VFS from new state selections
+        // to build triggers from
+        let fstree = self.vfs(new.selections.iter().map(|selection| &selection.package))?;
+
+        // Run system triggers
+        let sys_triggers =
+            postblit::triggers(postblit::TriggerScope::System(&self.installation, &self.scope), &fstree)?;
+        for trigger in sys_triggers {
+            trigger.execute()?;
+        }
+
+        Ok(old)
+    }
+
     /// Create a new recorded state from the provided packages
     /// provided packages and write that state ID to the installation
     /// Then blit the filesystem, promote it, finally archiving the active ID
     ///
     /// Returns `None` if the client is ephemeral
-    pub fn apply_state(&self, selections: &[Selection], summary: impl ToString) -> Result<Option<State>, Error> {
+    pub fn new_state(&self, selections: &[Selection], summary: impl ToString) -> Result<Option<State>, Error> {
         let old_state = self.installation.active_state;
 
         let fstree = self.blit_root(selections.iter().map(|s| &s.package), old_state.map(state::Id::next))?;
@@ -757,8 +804,14 @@ fn build_registry(
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("root must have an active state")]
+    NoActiveState,
     #[error("Corrupted package")]
     CorruptedPackage,
+    #[error("state {0} already active")]
+    StateAlreadyActive(state::Id),
+    #[error("state {0} doesn't exist")]
+    StateDoesntExist(state::Id),
     #[error("No metadata found for package {0:?}")]
     MissingMetadata(package::Id),
     #[error("Ephemeral client not allowed on installation root")]
