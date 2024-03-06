@@ -15,6 +15,7 @@ pub fn command() -> Command {
         .about("Manage state")
         .long_about("Manage state ...")
         .subcommand_required(true)
+        .subcommand(Command::new("active").about("List the active state"))
         .subcommand(Command::new("list").about("List all states"))
         .subcommand(
             Command::new("prune").about("Prune old states").arg(
@@ -35,11 +36,25 @@ pub fn command() -> Command {
 
 pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
     match args.subcommand() {
+        Some(("active", _)) => active(installation),
         Some(("list", _)) => list(installation),
         Some(("prune", args)) => prune(args, installation),
         Some(("activate", args)) => activate(args, installation),
         _ => unreachable!(),
     }
+}
+
+/// List the active state
+pub fn active(installation: Installation) -> Result<(), Error> {
+    if let Some(id) = installation.active_state {
+        let client = Client::new(environment::NAME, installation)?;
+
+        let state = client.state_db.get(&id)?;
+
+        print_state(state);
+    }
+
+    Ok(())
 }
 
 /// List all known states, newest first
