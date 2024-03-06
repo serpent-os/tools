@@ -27,7 +27,7 @@ use vfs::tree::{builder::TreeBuilder, BlitFile, Element};
 use self::install::install;
 use self::prune::prune;
 use crate::{
-    db, environment, package,
+    db, environment, installation, package,
     registry::plugin::{self, Plugin},
     repository, runtime,
     state::{self, Selection},
@@ -57,33 +57,26 @@ pub struct Client {
 
 impl Client {
     /// Construct a new Client
-    pub fn new(client_name: impl ToString, root: impl Into<PathBuf>) -> Result<Client, Error> {
-        Self::build(client_name, root, None)
+    pub fn new(client_name: impl ToString, installation: Installation) -> Result<Client, Error> {
+        Self::build(client_name, installation, None)
     }
 
     /// Construct a new Client with explicit repositories
     pub fn with_explicit_repositories(
         client_name: impl ToString,
-        root: impl Into<PathBuf>,
+        installation: Installation,
         repositories: repository::Map,
     ) -> Result<Client, Error> {
-        Self::build(client_name, root, Some(repositories))
+        Self::build(client_name, installation, Some(repositories))
     }
 
     fn build(
         client_name: impl ToString,
-        root: impl Into<PathBuf>,
+        installation: Installation,
         repositories: Option<repository::Map>,
     ) -> Result<Client, Error> {
-        let root = root.into();
-
-        if !root.exists() || !root.is_dir() {
-            return Err(Error::RootInvalid);
-        }
-
         let name = client_name.to_string();
-        let config = config::Manager::system(&root, "moss");
-        let installation = Installation::open(root);
+        let config = config::Manager::system(&installation.root, "moss");
         let install_db = db::meta::Database::new(installation.db_path("install"), installation.read_only())?;
         let state_db = db::state::Database::new(&installation)?;
         let layout_db = db::layout::Database::new(&installation)?;
@@ -768,12 +761,12 @@ pub enum Error {
     CorruptedPackage,
     #[error("No metadata found for package {0:?}")]
     MissingMetadata(package::Id),
-    #[error("Root is invalid")]
-    RootInvalid,
     #[error("Ephemeral client not allowed on installation root")]
     EphemeralInstallationRoot,
     #[error("Operation not allowed with ephemeral client")]
     EphemeralProhibitedOperation,
+    #[error("installation")]
+    Installation(#[from] installation::Error),
     #[error("cache")]
     Cache(#[from] cache::Error),
     #[error("repository manager")]

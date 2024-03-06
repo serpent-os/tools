@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{path::Path, process};
+use std::process;
 
 use clap::{arg, Arg, ArgAction, ArgMatches, Command};
 use itertools::Itertools;
@@ -14,15 +14,15 @@ use thiserror::Error;
 use url::Url;
 
 /// Control flow for the subcommands
-enum Action<'a> {
+enum Action {
     // Root
-    List(&'a Path),
+    List,
     // Root, Id, Url, Comment
-    Add(&'a Path, String, Url, String, Priority),
+    Add(String, Url, String, Priority),
     // Root, Id
-    Remove(&'a Path, String),
+    Remove(String),
     // Root, Id
-    Update(&'a Path, Option<String>),
+    Update(Option<String>),
 }
 
 /// Return a command for handling `repo` subcommands
@@ -75,43 +75,40 @@ pub fn command() -> Command {
 }
 
 /// Handle subcommands to `repo`
-pub fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
-    let config = config::Manager::system(root, "moss");
+pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
+    let config = config::Manager::system(&installation.root, "moss");
 
     let handler = match args.subcommand() {
         Some(("add", cmd_args)) => Action::Add(
-            root,
             cmd_args.get_one::<String>("NAME").cloned().unwrap(),
             cmd_args.get_one::<Url>("URI").cloned().unwrap(),
             cmd_args.get_one::<String>("comment").cloned().unwrap(),
             Priority::new(*cmd_args.get_one::<u64>("priority").unwrap()),
         ),
-        Some(("list", _)) => Action::List(root),
-        Some(("remove", cmd_args)) => Action::Remove(root, cmd_args.get_one::<String>("NAME").cloned().unwrap()),
-        Some(("update", cmd_args)) => Action::Update(root, cmd_args.get_one::<String>("NAME").cloned()),
+        Some(("list", _)) => Action::List,
+        Some(("remove", cmd_args)) => Action::Remove(cmd_args.get_one::<String>("NAME").cloned().unwrap()),
+        Some(("update", cmd_args)) => Action::Update(cmd_args.get_one::<String>("NAME").cloned()),
         _ => unreachable!(),
     };
 
     // dispatch to runtime handler function
     match handler {
-        Action::List(root) => list(root, config),
-        Action::Add(root, name, uri, comment, priority) => add(root, config, name, uri, comment, priority),
-        Action::Remove(root, name) => remove(root, config, name),
-        Action::Update(root, name) => update(root, config, name),
+        Action::List => list(installation, config),
+        Action::Add(name, uri, comment, priority) => add(installation, config, name, uri, comment, priority),
+        Action::Remove(name) => remove(installation, config, name),
+        Action::Update(name) => update(installation, config, name),
     }
 }
 
 // Actual implementation of moss repo add
 fn add(
-    root: &Path,
+    installation: Installation,
     config: config::Manager,
     name: String,
     uri: Url,
     comment: String,
     priority: Priority,
 ) -> Result<(), Error> {
-    let installation = Installation::open(root);
-
     let mut manager = repository::Manager::system(config, installation)?;
 
     let id = repository::Id::new(name);
@@ -133,8 +130,7 @@ fn add(
 }
 
 /// List the repositories and pretty print them
-fn list(root: &Path, config: config::Manager) -> Result<(), Error> {
-    let installation = Installation::open(root);
+fn list(installation: Installation, config: config::Manager) -> Result<(), Error> {
     let manager = repository::Manager::system(config, installation)?;
 
     let configured_repos = manager.list();
@@ -151,8 +147,7 @@ fn list(root: &Path, config: config::Manager) -> Result<(), Error> {
 }
 
 /// Update specific repos or all
-fn update(root: &Path, config: config::Manager, which: Option<String>) -> Result<(), Error> {
-    let installation = Installation::open(root);
+fn update(installation: Installation, config: config::Manager, which: Option<String>) -> Result<(), Error> {
     let mut manager = repository::Manager::system(config, installation)?;
 
     runtime::block_on(async {
@@ -166,10 +161,9 @@ fn update(root: &Path, config: config::Manager, which: Option<String>) -> Result
 }
 
 /// Remove repo
-fn remove(root: &Path, config: config::Manager, repo: String) -> Result<(), Error> {
+fn remove(installation: Installation, config: config::Manager, repo: String) -> Result<(), Error> {
     let id = repository::Id::new(repo);
 
-    let installation = Installation::open(root);
     let mut manager = repository::Manager::system(config, installation)?;
 
     match manager.remove(id.clone())? {

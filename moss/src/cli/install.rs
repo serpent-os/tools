@@ -2,10 +2,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use clap::{arg, value_parser, ArgMatches, Command};
-use moss::{client::Client, environment};
+use moss::{client::Client, environment, Installation};
 
 pub use moss::client::install::Error;
 
@@ -27,7 +27,7 @@ pub fn command() -> Command {
 }
 
 /// Handle execution of `moss install`
-pub fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
+pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
     let pkgs = args
         .get_many::<String>("NAME")
         .into_iter()
@@ -37,7 +37,7 @@ pub fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     let yes = *args.get_one::<bool>("yes").unwrap();
 
     // Grab a client for the root
-    let mut client = Client::new(environment::NAME, root)?;
+    let mut client = Client::new(environment::NAME, installation)?;
 
     // Make ephemeral if a blit target was provided
     if let Some(blit_target) = args.get_one::<PathBuf>("to").cloned() {

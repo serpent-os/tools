@@ -9,6 +9,7 @@ use std::{
 
 use log::{trace, warn};
 use nix::unistd::{access, AccessFlags, Uid};
+use thiserror::Error;
 
 use crate::state;
 
@@ -36,6 +37,10 @@ pub struct Installation {
 
     /// Detected currently active state (optional)
     pub active_state: Option<state::Id>,
+
+    /// Custom cache directory location,
+    /// otherwise derived from root
+    pub cache_dir: Option<PathBuf>,
 }
 
 impl Installation {
@@ -43,8 +48,12 @@ impl Installation {
     /// This will query the potential active state if found,
     /// and determine the mutability per the current user identity
     /// and ACL permissions.
-    pub fn open(root: impl Into<PathBuf>) -> Self {
+    pub fn open(root: impl Into<PathBuf>) -> Result<Self, Error> {
         let root: PathBuf = root.into();
+
+        if !root.exists() || !root.is_dir() {
+            return Err(Error::RootInvalid);
+        }
 
         let active_state = read_state_id(&root);
 
@@ -71,11 +80,25 @@ impl Installation {
         trace!("Mutability: {mutability}");
         trace!("Root dir: {root:?}");
 
-        Self {
+        Ok(Self {
             root,
             mutability,
             active_state,
+            cache_dir: None,
+        })
+    }
+
+    pub fn with_cache_dir(self, dir: impl Into<PathBuf>) -> Result<Self, Error> {
+        let dir = dir.into();
+
+        if !dir.exists() || !dir.is_dir() {
+            return Err(Error::CacheInvalid);
         }
+
+        Ok(Self {
+            cache_dir: Some(dir),
+            ..self
+        })
     }
 
     /// Return true if we lack write access
@@ -93,9 +116,14 @@ impl Installation {
         self.moss_path("db").join(path)
     }
 
-    /// Build a cache path relative to the moss root
+    /// Build a cache path relative to the moss root, or
+    /// from the custom cache dir, if provided
     pub fn cache_path(&self, path: impl AsRef<Path>) -> PathBuf {
-        self.moss_path("cache").join(path)
+        if let Some(dir) = self.cache_dir.as_ref() {
+            dir.join(path)
+        } else {
+            self.moss_path("cache").join(path)
+        }
     }
 
     /// Build an asset path relative to the moss root
@@ -192,4 +220,12 @@ fn ensure_cachedir_tag(path: &Path) {
 # For information about cache directory tags see https://bford.info/cachedir/"#,
         );
     }
+}
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Root is invalid")]
+    RootInvalid,
+    #[error("Cache dir is invalid")]
+    CacheInvalid,
 }

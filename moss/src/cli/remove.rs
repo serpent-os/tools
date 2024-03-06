@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{collections::HashSet, path::Path};
+use std::collections::HashSet;
 
 use clap::{arg, ArgMatches, Command};
 use itertools::{Either, Itertools};
@@ -12,7 +12,7 @@ use moss::{
     package::Flags,
     registry::transaction,
     state::Selection,
-    Provider,
+    Installation, Provider,
 };
 use thiserror::Error;
 use tui::{
@@ -30,7 +30,7 @@ pub fn command() -> Command {
 }
 
 /// Handle execution of `moss remove`
-pub fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
+pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
     let pkgs = args
         .get_many::<String>("NAME")
         .into_iter()
@@ -40,7 +40,7 @@ pub fn handle(args: &ArgMatches, root: &Path) -> Result<(), Error> {
     let yes = *args.get_one::<bool>("yes").unwrap();
 
     // Grab a client for the target, enumerate packages
-    let client = Client::new(environment::NAME, root)?;
+    let client = Client::new(environment::NAME, installation)?;
 
     let installed = client.registry.list_installed(Flags::default()).collect::<Vec<_>>();
     let installed_ids = installed.iter().map(|p| p.id.clone()).collect::<HashSet<_>>();

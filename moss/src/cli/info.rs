@@ -2,15 +2,13 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::path::PathBuf;
-
 use clap::{arg, ArgMatches, Command};
 use itertools::Itertools;
 use moss::{
     client::{self, Client},
     environment,
     package::Flags,
-    Package, Provider,
+    Installation, Package, Provider,
 };
 use stone::payload::layout;
 use thiserror::Error;
@@ -28,7 +26,7 @@ pub fn command() -> Command {
 }
 
 /// For all arguments, try to match a package
-pub fn handle(args: &ArgMatches) -> Result<(), Error> {
+pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
     let pkgs = args
         .get_many::<String>("NAME")
         .into_iter()
@@ -37,8 +35,7 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
         .collect::<Vec<_>>();
     let show_files = args.get_flag("files");
 
-    let root = args.get_one::<PathBuf>("root").unwrap().clone();
-    let client = Client::new(environment::NAME, root)?;
+    let client = Client::new(environment::NAME, installation)?;
 
     for pkg in pkgs {
         let lookup = Provider::from_name(&pkg).unwrap();

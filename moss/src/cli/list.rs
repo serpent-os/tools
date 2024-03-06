@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::path::PathBuf;
-
 use clap::{arg, ArgMatches, Command};
 use itertools::Itertools;
 use thiserror::Error;
@@ -12,6 +10,7 @@ use moss::{
     client::{self, Client},
     environment,
     package::Flags,
+    Installation,
 };
 use tui::Styled;
 
@@ -45,9 +44,7 @@ enum Sync {
 }
 
 /// Handle listing by filter
-pub fn handle(args: &ArgMatches) -> Result<(), Error> {
-    let root = args.get_one::<PathBuf>("root").unwrap().clone();
-
+pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
     let (filter_flags, sync) = match args.subcommand() {
         Some(("available", _)) => (Flags::new().with_available(), None),
         Some(("installed", args)) => {
@@ -71,7 +68,7 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
     };
 
     // Grab a client for the target, enumerate packages
-    let client = Client::new(environment::NAME, root)?;
+    let client = Client::new(environment::NAME, installation)?;
     let pkgs = client.registry.list(filter_flags).collect::<Vec<_>>();
 
     let sync_available = if sync.is_some() {
