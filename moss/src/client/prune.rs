@@ -23,27 +23,6 @@ pub enum Strategy {
     Remove(state::Id),
 }
 
-/// The status of a state
-enum Status {
-    /// Keep the state
-    Keep(state::Id),
-    /// Remove the state
-    Remove(state::Id),
-}
-
-impl Status {
-    fn id(&self) -> &state::Id {
-        match self {
-            Status::Keep(id) => id,
-            Status::Remove(id) => id,
-        }
-    }
-
-    fn is_removal(&self) -> bool {
-        matches!(self, Self::Remove(_))
-    }
-}
-
 /// Prune old states using [`Strategy`] and garbage collect
 /// all cached data related to those states being removed
 pub fn prune(
@@ -61,8 +40,8 @@ pub fn prune(
 
     let state_ids = state_db.list_ids()?;
 
-    // Define each state as either Keep or Remove
-    let states_by_status = match strategy {
+    // Find each state we need to remove
+    let removal_ids = match strategy {
         Strategy::KeepRecent(keep) => {
             // Filter for all states before the current
             let old_states = state_ids
@@ -80,38 +59,31 @@ pub fn prune(
                 .into_iter()
                 .sorted_by_key(|(_, created)| *created)
                 .enumerate()
-                .map(|(idx, (id, _))| {
-                    if idx < num_to_remove {
-                        Status::Remove(*id)
-                    } else {
-                        Status::Keep(*id)
-                    }
-                })
+                .filter_map(|(idx, (id, _))| if idx < num_to_remove { Some(*id) } else { None })
                 .collect::<Vec<_>>()
         }
         Strategy::Remove(remove) => state_ids
             .iter()
             // Remove if this id actually exists
-            .find_map(|(id, _)| (*id == remove).then_some(Status::Remove(remove)))
+            .find_map(|(id, _)| (*id == remove).then_some(remove))
             .into_iter()
             .collect(),
     };
 
     // Bail if there's no states to remove
-    if !states_by_status.iter().any(Status::is_removal) {
+    if removal_ids.is_empty() {
         // TODO: Print no states to be removed
         return Ok(());
     }
 
     // Keep track of how many active states are using a package
     let mut packages_counts = HashMap::<package::Id, usize>::new();
-    // Collects the states we will remove
     let mut removals = vec![];
 
-    // Get net refcount of each package and collect removal states
-    for status in states_by_status {
+    // Get net refcount of each package in all states
+    for (id, _) in state_ids {
         // Get metadata
-        let state = state_db.get(status.id())?;
+        let state = state_db.get(&id)?;
 
         // Increment each package
         state.selections.iter().for_each(|selection| {
@@ -119,9 +91,9 @@ pub fn prune(
         });
 
         // Decrement if removal
-        if status.is_removal() {
+        if removal_ids.contains(&id) {
             // Ensure we're not pruning the active state!!
-            if status.id() == &current_state {
+            if id == current_state {
                 return Err(Error::PruneCurrent);
             }
 
