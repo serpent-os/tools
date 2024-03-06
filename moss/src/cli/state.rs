@@ -24,12 +24,20 @@ pub fn command() -> Command {
                     .value_parser(clap::value_parser!(u64).range(1..)),
             ),
         )
+        .subcommand(
+            Command::new("activate").about("Activate a state").arg(
+                arg!(<ID> "State id to be activated")
+                    .action(ArgAction::Set)
+                    .value_parser(clap::value_parser!(u64)),
+            ),
+        )
 }
 
 pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
     match args.subcommand() {
         Some(("list", _)) => list(installation),
         Some(("prune", args)) => prune(args, installation),
+        Some(("activate", args)) => activate(args, installation),
         _ => unreachable!(),
     }
 }
@@ -55,6 +63,21 @@ pub fn prune(args: &ArgMatches, installation: Installation) -> Result<(), Error>
 
     let client = Client::new(environment::NAME, installation)?;
     client.prune(prune::Strategy::KeepRecent(keep))?;
+
+    Ok(())
+}
+
+pub fn activate(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
+    let new_id = *args.get_one::<u64>("ID").unwrap() as i64;
+
+    let client = Client::new(environment::NAME, installation)?;
+    let old_id = client.activate_state(new_id.into())?;
+
+    println!(
+        "State {} activated {}",
+        new_id.to_string().bold(),
+        format!("({old_id} archived)").dim()
+    );
 
     Ok(())
 }

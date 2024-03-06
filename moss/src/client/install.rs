@@ -99,7 +99,7 @@ pub fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<(), Erro
     };
 
     // Perfect, apply state.
-    client.apply_state(&new_state_pkgs, "Install")?;
+    client.new_state(&new_state_pkgs, "Install")?;
 
     Ok(())
 }
