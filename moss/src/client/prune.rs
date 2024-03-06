@@ -169,6 +169,15 @@ pub fn prune(
         |hash| Some(cache::asset_path(installation, &hash)),
     )?;
 
+    // Remove each state's archive folder
+    for state in removals {
+        let archive_path = installation.root_path(state.id.to_string());
+
+        if archive_path.exists() {
+            fs::remove_dir_all(&archive_path)?;
+        }
+    }
+
     Ok(())
 }
 
