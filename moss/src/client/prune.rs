@@ -10,7 +10,10 @@ use std::{
 
 use itertools::Itertools;
 use thiserror::Error;
-use tui::pretty::print_to_columns;
+use tui::{
+    dialoguer::{theme::ColorfulTheme, Confirm},
+    pretty::print_to_columns,
+};
 
 use crate::{client::cache, db, environment, package, state, Installation, State};
 
@@ -18,7 +21,7 @@ use crate::{client::cache, db, environment, package, state, Installation, State}
 #[derive(Debug, Clone, Copy)]
 pub enum Strategy {
     /// Keep the most recent N states, remove the rest
-    KeepRecent(u64),
+    KeepRecent { keep: u64, include_newer: bool },
     /// Removes a specific state
     Remove(state::Id),
 }
@@ -31,6 +34,7 @@ pub fn prune(
     install_db: &db::meta::Database,
     layout_db: &db::layout::Database,
     installation: &Installation,
+    yes: bool,
 ) -> Result<(), Error> {
     // Only prune if the moss root has an active state (otherwise
     // it's probably borked or not setup yet)
@@ -42,20 +46,26 @@ pub fn prune(
 
     // Find each state we need to remove
     let removal_ids = match strategy {
-        Strategy::KeepRecent(keep) => {
-            // Filter for all states before the current
-            let old_states = state_ids
+        Strategy::KeepRecent { keep, include_newer } => {
+            // Filter for all removal candidates
+            let candidates = state_ids
                 .iter()
-                .filter(|(id, _)| *id < current_state)
+                .filter(|(id, _)| {
+                    if include_newer {
+                        *id != current_state
+                    } else {
+                        *id < current_state
+                    }
+                })
                 .collect::<Vec<_>>();
-            // Deduct current state from num to keep
-            let old_limit = (keep as usize).saturating_sub(1);
+            // Deduct current state from num candidates to keep
+            let candidate_limit = (keep as usize).saturating_sub(1);
 
-            // Calculate how many old states over the limit we are
-            let num_to_remove = old_states.len().saturating_sub(old_limit);
+            // Calculate how many candidate states over the limit we are
+            let num_to_remove = candidates.len().saturating_sub(candidate_limit);
 
             // Sort ascending and assign first `num_to_remove` as `Status::Remove`
-            old_states
+            candidates
                 .into_iter()
                 .sorted_by_key(|(_, created)| *created)
                 .enumerate()
@@ -117,6 +127,18 @@ pub fn prune(
     println!();
     print_to_columns(&removals.iter().map(state::ColumnDisplay).collect::<Vec<_>>());
     println!();
+
+    let result = if yes {
+        true
+    } else {
+        Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(" Do you wish to continue? ")
+            .default(false)
+            .interact()?
+    };
+    if !result {
+        return Err(Error::Cancelled);
+    }
 
     // Prune these states / packages from all dbs
     prune_databases(&removals, &package_removals, state_db, install_db, layout_db)?;
@@ -295,6 +317,8 @@ fn remove_empty_dirs(starting: &Path, root: &Path) -> Result<(), io::Error> {
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("cancelled")]
+    Cancelled,
     #[error("no active state found")]
     NoActiveState,
     #[error("cannot prune the currently active state")]
@@ -307,4 +331,6 @@ pub enum Error {
     StateDB(#[from] db::state::Error),
     #[error("io")]
     Io(#[from] io::Error),
+    #[error("string processing")]
+    Dialog(#[from] tui::dialoguer::Error),
 }

@@ -156,7 +156,7 @@ impl Client {
     }
 
     /// Prune states with the provided [`prune::Strategy`]
-    pub fn prune(&self, strategy: prune::Strategy) -> Result<(), Error> {
+    pub fn prune(&self, strategy: prune::Strategy, yes: bool) -> Result<(), Error> {
         if self.scope.is_ephemeral() {
             return Err(Error::EphemeralProhibitedOperation);
         }
@@ -167,6 +167,7 @@ impl Client {
             &self.install_db,
             &self.layout_db,
             &self.installation,
+            yes,
         )?;
         Ok(())
     }
