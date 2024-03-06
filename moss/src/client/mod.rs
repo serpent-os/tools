@@ -242,7 +242,7 @@ impl Client {
     pub fn new_state(&self, selections: &[Selection], summary: impl ToString) -> Result<Option<State>, Error> {
         let old_state = self.installation.active_state;
 
-        let fstree = self.blit_root(selections.iter().map(|s| &s.package), old_state.map(state::Id::next))?;
+        let fstree = self.blit_root(selections.iter().map(|s| &s.package))?;
 
         match &self.scope {
             Scope::Stateful => {
@@ -519,7 +519,6 @@ impl Client {
     fn blit_root<'a>(
         &self,
         packages: impl IntoIterator<Item = &'a package::Id>,
-        state_id: Option<state::Id>,
     ) -> Result<vfs::tree::Tree<PendingFile>, Error> {
         let progress = ProgressBar::new(1).with_style(
             ProgressStyle::with_template("\n|{bar:20.red/blue}| {pos}/{len} {msg}")
@@ -688,7 +687,14 @@ BUG_REPORT_URL="https://github.com/serpent-os""#,
         tx = state_id.unwrap_or_default()
     );
 
-    fs::write(root.join("usr").join("lib").join("os-release"), os_release)?;
+    // It's possible this doesn't exist if
+    // we remove all packages (=
+    let dir = root.join("usr").join("lib");
+    if !dir.exists() {
+        fs::create_dir(&dir)?;
+    }
+
+    fs::write(dir.join("os-release"), os_release)?;
 
     Ok(())
 }
