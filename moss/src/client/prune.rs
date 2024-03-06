@@ -53,24 +53,38 @@ pub fn prune(
     layout_db: &db::layout::Database,
     installation: &Installation,
 ) -> Result<(), Error> {
+    // Only prune if the moss root has an active state (otherwise
+    // it's probably borked or not setup yet)
+    let Some(current_state) = installation.active_state else {
+        return Err(Error::NoActiveState);
+    };
+
     let state_ids = state_db.list_ids()?;
 
     // Define each state as either Keep or Remove
     let states_by_status = match strategy {
         Strategy::KeepRecent(keep) => {
-            // Calculate how many states over the limit we are
-            let num_to_remove = state_ids.len().saturating_sub(keep as usize);
+            // Filter for all states before the current
+            let old_states = state_ids
+                .iter()
+                .filter(|(id, _)| *id < current_state)
+                .collect::<Vec<_>>();
+            // Deduct current state from num to keep
+            let old_limit = (keep as usize).saturating_sub(1);
+
+            // Calculate how many old states over the limit we are
+            let num_to_remove = old_states.len().saturating_sub(old_limit);
 
             // Sort ascending and assign first `num_to_remove` as `Status::Remove`
-            state_ids
+            old_states
                 .into_iter()
                 .sorted_by_key(|(_, created)| *created)
                 .enumerate()
                 .map(|(idx, (id, _))| {
                     if idx < num_to_remove {
-                        Status::Remove(id)
+                        Status::Remove(*id)
                     } else {
-                        Status::Keep(id)
+                        Status::Keep(*id)
                     }
                 })
                 .collect::<Vec<_>>()
@@ -106,6 +120,11 @@ pub fn prune(
 
         // Decrement if removal
         if status.is_removal() {
+            // Ensure we're not pruning the active state!!
+            if status.id() == &current_state {
+                return Err(Error::PruneCurrent);
+            }
+
             state.selections.iter().for_each(|selection| {
                 *packages_counts.entry(selection.package.clone()).or_default() -= 1;
             });
@@ -233,6 +252,10 @@ fn enumerate_files(root: impl AsRef<Path>) -> Result<Vec<PathBuf>, io::Error> {
         let mut dirs = vec![];
         let mut files = vec![];
 
+        if !dir.as_ref().exists() {
+            return Ok(vec![]);
+        }
+
         let contents = fs::read_dir(dir)?;
 
         for entry in contents {
@@ -291,6 +314,10 @@ fn remove_empty_dirs(starting: &Path, root: &Path) -> Result<(), io::Error> {
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("no active state found")]
+    NoActiveState,
+    #[error("cannot prune the currently active state")]
+    PruneCurrent,
     #[error("layout db")]
     LayoutDB(#[from] db::layout::Error),
     #[error("meta db")]
