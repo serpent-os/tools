@@ -18,7 +18,14 @@ pub fn command() -> Command {
         .subcommand(Command::new("active").about("List the active state"))
         .subcommand(Command::new("list").about("List all states"))
         .subcommand(
-            Command::new("prune").about("Prune old states").arg(
+            Command::new("activate").about("Activate a state").arg(
+                arg!(<ID> "State id to be activated")
+                    .action(ArgAction::Set)
+                    .value_parser(clap::value_parser!(u64)),
+            ),
+        )
+        .subcommand(
+            Command::new("prune").about("Prune archived states").arg(
                 arg!(-k --keep "Keep this many states")
                     .action(ArgAction::Set)
                     .default_value("10")
@@ -26,8 +33,8 @@ pub fn command() -> Command {
             ),
         )
         .subcommand(
-            Command::new("activate").about("Activate a state").arg(
-                arg!(<ID> "State id to be activated")
+            Command::new("remove").about("Remove an archived state").arg(
+                arg!(<ID> "State id to be removed")
                     .action(ArgAction::Set)
                     .value_parser(clap::value_parser!(u64)),
             ),
@@ -38,8 +45,9 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
     match args.subcommand() {
         Some(("active", _)) => active(installation),
         Some(("list", _)) => list(installation),
-        Some(("prune", args)) => prune(args, installation),
         Some(("activate", args)) => activate(args, installation),
+        Some(("prune", args)) => prune(args, installation),
+        Some(("remove", args)) => remove(args, installation),
         _ => unreachable!(),
     }
 }
@@ -73,15 +81,6 @@ pub fn list(installation: Installation) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn prune(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
-    let keep = *args.get_one::<u64>("keep").unwrap();
-
-    let client = Client::new(environment::NAME, installation)?;
-    client.prune(prune::Strategy::KeepRecent(keep))?;
-
-    Ok(())
-}
-
 pub fn activate(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
     let new_id = *args.get_one::<u64>("ID").unwrap() as i64;
 
@@ -93,6 +92,24 @@ pub fn activate(args: &ArgMatches, installation: Installation) -> Result<(), Err
         new_id.to_string().bold(),
         format!("({old_id} archived)").dim()
     );
+
+    Ok(())
+}
+
+pub fn prune(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
+    let keep = *args.get_one::<u64>("keep").unwrap();
+
+    let client = Client::new(environment::NAME, installation)?;
+    client.prune(prune::Strategy::KeepRecent(keep))?;
+
+    Ok(())
+}
+
+pub fn remove(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
+    let id = *args.get_one::<u64>("ID").unwrap() as i64;
+
+    let client = Client::new(environment::NAME, installation)?;
+    client.prune(prune::Strategy::Remove(id.into()))?;
 
     Ok(())
 }
