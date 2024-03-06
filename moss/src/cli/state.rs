@@ -25,12 +25,18 @@ pub fn command() -> Command {
             ),
         )
         .subcommand(
-            Command::new("prune").about("Prune archived states").arg(
-                arg!(-k --keep "Keep this many states")
-                    .action(ArgAction::Set)
-                    .default_value("10")
-                    .value_parser(clap::value_parser!(u64).range(1..)),
-            ),
+            Command::new("prune")
+                .about("Prune archived states")
+                .arg(
+                    arg!(-k --keep "Keep this many states")
+                        .action(ArgAction::Set)
+                        .default_value("10")
+                        .value_parser(clap::value_parser!(u64).range(1..)),
+                )
+                .arg(
+                    arg!(--"include-newer" "Include states newer than the active state when pruning")
+                        .action(ArgAction::SetTrue),
+                ),
         )
         .subcommand(
             Command::new("remove").about("Remove an archived state").arg(
@@ -98,18 +104,21 @@ pub fn activate(args: &ArgMatches, installation: Installation) -> Result<(), Err
 
 pub fn prune(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
     let keep = *args.get_one::<u64>("keep").unwrap();
+    let include_newer = args.get_flag("include-newer");
+    let yes = args.get_flag("yes");
 
     let client = Client::new(environment::NAME, installation)?;
-    client.prune(prune::Strategy::KeepRecent(keep))?;
+    client.prune(prune::Strategy::KeepRecent { keep, include_newer }, yes)?;
 
     Ok(())
 }
 
 pub fn remove(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
     let id = *args.get_one::<u64>("ID").unwrap() as i64;
+    let yes = args.get_flag("yes");
 
     let client = Client::new(environment::NAME, installation)?;
-    client.prune(prune::Strategy::Remove(id.into()))?;
+    client.prune(prune::Strategy::Remove(id.into()), yes)?;
 
     Ok(())
 }
