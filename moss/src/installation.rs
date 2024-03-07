@@ -224,8 +224,8 @@ fn ensure_cachedir_tag(path: &Path) {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("Root is invalid")]
+    #[error("root is invalid")]
     RootInvalid,
-    #[error("Cache dir is invalid")]
+    #[error("cache directory is invalid")]
     CacheInvalid,
 }
