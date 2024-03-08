@@ -85,6 +85,21 @@ impl Repository {
     pub fn query_name(&self, package_name: &package::Name, flags: package::Flags) -> Vec<Package> {
         self.query(flags, Some(db::meta::Filter::Name(package_name.clone())))
     }
+
+    pub fn query_provider_id_only(&self, provider: &Provider, flags: package::Flags) -> Vec<package::Id> {
+        if flags.available || flags == package::Flags::default() {
+            // TODO: Error handling
+            match self.active.db.provider_packages(provider) {
+                Ok(packages) => packages,
+                Err(error) => {
+                    warn!("failed to query repository packages: {error}");
+                    vec![]
+                }
+            }
+        } else {
+            vec![]
+        }
+    }
 }
 
 impl PartialEq for Repository {

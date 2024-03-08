@@ -309,6 +309,23 @@ impl Database {
         })
     }
 
+    pub fn provider_packages(&self, provider: &Provider) -> Result<Vec<package::Id>, Error> {
+        self.pool.exec(|pool| async move {
+            let packages = sqlx::query_as::<_, (String,)>(
+                "
+                SELECT DISTINCT package
+                FROM meta_providers
+                WHERE provider = ?;
+                ",
+            )
+            .bind(provider.to_string())
+            .fetch_all(&pool)
+            .await?;
+
+            Ok(packages.into_iter().map(|(id,)| id.into()).collect())
+        })
+    }
+
     pub fn file_hashes(&self) -> Result<HashSet<String>, Error> {
         self.pool.exec(|pool| async move {
             let hashes = sqlx::query_as::<_, (String,)>(
