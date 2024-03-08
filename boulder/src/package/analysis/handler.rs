@@ -1,4 +1,4 @@
-use std::{path::PathBuf, process::Command};
+use std::{fs, path::PathBuf, process::Command};
 
 use moss::{dependency, Dependency, Provider};
 
@@ -34,13 +34,15 @@ pub fn ignore_blocked(_bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Re
 }
 
 pub fn binary(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Response, BoxError> {
-    if info.target_path.starts_with("/usr/bin") {
+    let is_foreign_link = info.path.is_symlink() && fs::read_link(&info.path).is_err();
+
+    if info.target_path.starts_with("/usr/bin") && !is_foreign_link {
         let provider = Provider {
             kind: dependency::Kind::Binary,
             name: info.file_name().to_string(),
         };
         bucket.providers.insert(provider);
-    } else if info.target_path.starts_with("/usr/sbin") {
+    } else if info.target_path.starts_with("/usr/sbin") && !is_foreign_link {
         let provider = Provider {
             kind: dependency::Kind::SystemBinary,
             name: info.file_name().to_string(),
