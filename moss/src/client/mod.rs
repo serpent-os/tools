@@ -735,7 +735,7 @@ impl BlitFile for PendingFile {
     }
 
     /// Resolve the target path, including the missing `/usr` prefix
-    fn path(&self) -> PathBuf {
+    fn path(&self) -> String {
         let result = match &self.layout.entry {
             layout::Entry::Regular(_, target) => target.clone(),
             layout::Entry::Symlink(_, target) => target.clone(),
@@ -745,28 +745,28 @@ impl BlitFile for PendingFile {
             layout::Entry::Fifo(target) => target.clone(),
             layout::Entry::Socket(target) => target.clone(),
         };
-        PathBuf::from("/usr").join(result)
+
+        vfs::path::join("/usr", &result)
     }
 
     /// Clone the node to a reparented path, for symlink resolution
-    fn cloned_to(&self, path: PathBuf) -> Self {
+    fn cloned_to(&self, path: String) -> Self {
         let mut new = self.clone();
-        let strpath = path.to_string_lossy().to_string();
         new.layout.entry = match &self.layout.entry {
-            layout::Entry::Regular(source, _) => layout::Entry::Regular(*source, strpath),
-            layout::Entry::Symlink(source, _) => layout::Entry::Symlink(source.clone(), strpath),
-            layout::Entry::Directory(_) => layout::Entry::Directory(strpath),
-            layout::Entry::CharacterDevice(_) => layout::Entry::CharacterDevice(strpath),
-            layout::Entry::BlockDevice(_) => layout::Entry::BlockDevice(strpath),
-            layout::Entry::Fifo(_) => layout::Entry::Fifo(strpath),
-            layout::Entry::Socket(_) => layout::Entry::Socket(strpath),
+            layout::Entry::Regular(source, _) => layout::Entry::Regular(*source, path),
+            layout::Entry::Symlink(source, _) => layout::Entry::Symlink(source.clone(), path),
+            layout::Entry::Directory(_) => layout::Entry::Directory(path),
+            layout::Entry::CharacterDevice(_) => layout::Entry::CharacterDevice(path),
+            layout::Entry::BlockDevice(_) => layout::Entry::BlockDevice(path),
+            layout::Entry::Fifo(_) => layout::Entry::Fifo(path),
+            layout::Entry::Socket(_) => layout::Entry::Socket(path),
         };
         new
     }
 }
 
-impl From<PathBuf> for PendingFile {
-    fn from(value: PathBuf) -> Self {
+impl From<String> for PendingFile {
+    fn from(value: String) -> Self {
         PendingFile {
             id: Default::default(),
             layout: layout::Layout {
@@ -774,7 +774,7 @@ impl From<PathBuf> for PendingFile {
                 gid: 0,
                 mode: 0o755,
                 tag: 0,
-                entry: layout::Entry::Directory(value.to_string_lossy().to_string()),
+                entry: layout::Entry::Directory(value),
             },
         }
     }
@@ -782,7 +782,7 @@ impl From<PathBuf> for PendingFile {
 
 impl ToString for PendingFile {
     fn to_string(&self) -> String {
-        self.path().to_string_lossy().to_string()
+        self.path()
     }
 }
 
