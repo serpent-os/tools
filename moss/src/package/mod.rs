@@ -116,11 +116,12 @@ impl<I> Sorted<I> {
 }
 
 /// Iterate in sorted order
-impl<I> IntoIterator for Sorted<I>
+impl<I, T> IntoIterator for Sorted<I>
 where
-    I: IntoIterator<Item = Package>,
+    I: IntoIterator<Item = T>,
+    T: Ord,
 {
-    type Item = Package;
+    type Item = T;
     type IntoIter = std::vec::IntoIter<Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {

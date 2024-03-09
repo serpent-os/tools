@@ -505,11 +505,9 @@ impl Client {
         packages: impl IntoIterator<Item = &'a package::Id>,
     ) -> Result<vfs::Tree<PendingFile>, Error> {
         let mut tbuild = TreeBuilder::new();
-        for id in packages.into_iter() {
-            let layouts = self.layout_db.query(id)?;
-            for layout in layouts {
-                tbuild.push(PendingFile { id: id.clone(), layout });
-            }
+        let layouts = self.layout_db.query(packages)?;
+        for (id, layout) in layouts {
+            tbuild.push(PendingFile { id: id.clone(), layout });
         }
         tbuild.bake();
         let tree = tbuild.tree()?;

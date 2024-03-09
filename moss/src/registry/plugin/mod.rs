@@ -74,6 +74,25 @@ impl Plugin {
         })
     }
 
+    pub fn query_provider_id_only(
+        &self,
+        provider: &Provider,
+        flags: package::Flags,
+    ) -> package::Sorted<Vec<package::Id>> {
+        package::Sorted::new(match self {
+            Plugin::Active(plugin) => plugin.query_provider_id_only(provider, flags),
+            Plugin::Cobble(plugin) => plugin
+                .query_provider(provider, flags)
+                .into_iter()
+                .map(|p| p.id)
+                .collect(),
+            Plugin::Repository(plugin) => plugin.query_provider_id_only(provider, flags),
+
+            #[cfg(test)]
+            Plugin::Test(plugin) => plugin.query_provider_id_only(provider, flags),
+        })
+    }
+
     /// Returns a list of packages with matching `package_name` and `flags`
     pub fn query_name(&self, package_name: &package::Name, flags: package::Flags) -> package::Sorted<Vec<Package>> {
         package::Sorted::new(match self {
@@ -132,6 +151,15 @@ pub mod test {
             self.packages
                 .iter()
                 .filter(|p| p.meta.providers.contains(provider) && p.flags.contains(flags))
+                .cloned()
+                .collect()
+        }
+
+        pub fn query_provider_id_only(&self, provider: &Provider, flags: package::Flags) -> Vec<package::Id> {
+            self.packages
+                .iter()
+                .filter(|p| p.meta.providers.contains(provider) && p.flags.contains(flags))
+                .map(|p| &p.id)
                 .cloned()
                 .collect()
         }

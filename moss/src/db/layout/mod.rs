@@ -180,11 +180,15 @@ impl Database {
         })
     }
 
-    /// Retrieve all entries for a given package by ID
-    pub fn query(&self, package: &package::Id) -> Result<Vec<payload::Layout>, Error> {
+    /// Retrieve all entries for the given packages
+    pub fn query<'a>(
+        &self,
+        packages: impl IntoIterator<Item = &'a package::Id>,
+    ) -> Result<impl Iterator<Item = (package::Id, payload::Layout)>, Error> {
         self.pool.exec(|pool| async move {
-            let query = sqlx::query_as::<_, encoding::Layout>(
-                "SELECT package_id,
+            let mut query_builder = sqlx::QueryBuilder::new(
+                "SELECT 
+                   package_id,
                    uid,
                    gid,
                    mode,
@@ -192,37 +196,45 @@ impl Database {
                    entry_type,
                    entry_value1,
                    entry_value2
-                FROM layout WHERE package_id = ?",
-            )
-            .bind(package.to_string());
+                FROM layout WHERE package_id IN (",
+            );
 
-            let layouts = query.fetch_all(&pool).await?;
+            let mut separated = query_builder.separated(", ");
+            for package in packages.into_iter() {
+                separated.push_bind(package.to_string());
+            }
+            separated.push_unseparated(");");
 
-            Ok(layouts
-                .into_iter()
-                .filter_map(|layout| {
-                    let encoding::Layout {
-                        package_id,
-                        uid,
-                        gid,
-                        mode,
-                        tag,
-                        entry_type,
-                        entry_value1,
-                        entry_value2,
-                    } = layout;
+            let layouts = query_builder
+                .build_query_as::<encoding::Layout>()
+                .fetch_all(&pool)
+                .await?;
 
-                    let entry = encoding::decode_entry(entry_type, entry_value1, entry_value2)?;
+            Ok(layouts.into_iter().filter_map(|layout| {
+                let encoding::Layout {
+                    package_id,
+                    uid,
+                    gid,
+                    mode,
+                    tag,
+                    entry_type,
+                    entry_value1,
+                    entry_value2,
+                } = layout;
 
-                    Some(payload::Layout {
+                let entry = encoding::decode_entry(entry_type, entry_value1, entry_value2)?;
+
+                Some((
+                    package_id,
+                    payload::Layout {
                         uid,
                         gid,
                         mode,
                         tag,
                         entry,
-                    })
-                })
-                .collect())
+                    },
+                ))
+            }))
         })
     }
 }

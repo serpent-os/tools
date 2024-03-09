@@ -30,9 +30,9 @@ impl Registry {
         self.plugins.push(plugin);
     }
 
-    fn query<'a, I>(&'a self, query: impl Fn(&'a Plugin) -> I + Copy + 'a) -> impl Iterator<Item = Package> + 'a
+    fn query<'a, T, I>(&'a self, query: impl Fn(&'a Plugin) -> I + Copy + 'a) -> impl Iterator<Item = T> + 'a
     where
-        I: IntoIterator<Item = Package> + 'a,
+        I: IntoIterator<Item = T> + 'a,
     {
         self.plugins
             .iter()
@@ -47,6 +47,15 @@ impl Registry {
         flags: package::Flags,
     ) -> impl Iterator<Item = Package> + 'a {
         self.query(move |plugin| plugin.query_provider(provider, flags))
+    }
+
+    /// Optimized version of `by_provider` returning [`package::Id`] only
+    pub fn by_provider_id_only<'a>(
+        &'a self,
+        provider: &'a Provider,
+        flags: package::Flags,
+    ) -> impl Iterator<Item = package::Id> + 'a {
+        self.query(move |plugin| plugin.query_provider_id_only(provider, flags))
     }
 
     /// Return a sorted stream of [`Package`] by name
