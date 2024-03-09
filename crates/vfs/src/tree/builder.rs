@@ -3,11 +3,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 //! Build a vfs tree incrementally
-use std::{
-    collections::{BTreeMap, HashMap},
-    path::PathBuf,
-};
+use std::collections::{BTreeMap, HashMap};
 
+use crate::path;
 use crate::tree::{Kind, Tree};
 
 use super::{BlitFile, Error};
@@ -18,13 +16,13 @@ pub struct TreeBuilder<T: BlitFile> {
     explicit: Vec<T>,
 
     // Implicitly created paths
-    implicit_dirs: BTreeMap<PathBuf, T>,
+    implicit_dirs: BTreeMap<String, T>,
 }
 
 /// Special sort algorithm for files by directory
 fn sorted_paths<T: BlitFile>(a: &T, b: &T) -> std::cmp::Ordering {
-    let a_path_len = a.path().to_string_lossy().to_string().matches('/').count();
-    let b_path_len = b.path().to_string_lossy().to_string().matches('/').count();
+    let a_path_len = a.path().matches('/').count();
+    let b_path_len = b.path().matches('/').count();
     if a_path_len != b_path_len {
         a_path_len.cmp(&b_path_len)
     } else {
@@ -51,18 +49,13 @@ impl<T: BlitFile> TreeBuilder<T> {
         let path = item.path();
 
         // Find all parent paths
-        if let Some(parent) = path.parent() {
-            let mut leading_path: Option<PathBuf> = None;
+        if let Some(parent) = path::parent(&path) {
+            let mut leading_path: Option<String> = None;
             // Build a set of parent paths skipping `/`, yielding `usr`, `usr/bin`, etc.
-            let components = parent
-                .components()
-                .map(|p| p.as_os_str().to_string_lossy().to_string())
-                //.skip(1)
-                .collect::<Vec<_>>();
-            for component in components {
+            for component in path::components(parent) {
                 let full_path = match leading_path {
-                    Some(fp) => fp.join(&component),
-                    None => PathBuf::from(&component),
+                    Some(fp) => path::join(&fp, component),
+                    None => component.to_string(),
                 };
                 leading_path = Some(full_path.clone());
                 self.implicit_dirs.insert(full_path.clone(), full_path.into());
@@ -89,7 +82,7 @@ impl<T: BlitFile> TreeBuilder<T> {
             .iter()
             .filter(|f| matches!(f.kind(), Kind::Directory))
             .chain(self.implicit_dirs.values())
-            .map(|d| (d.path().to_string_lossy().to_string(), d))
+            .map(|d| (d.path(), d))
             .collect::<BTreeMap<_, _>>();
 
         // build a set of redirects
@@ -102,19 +95,17 @@ impl<T: BlitFile> TreeBuilder<T> {
 
                 // Resolve the link.
                 let target = if target.starts_with('/') {
-                    target.into()
+                    target
                 } else {
-                    let parent = path.parent();
+                    let parent = path::parent(&path);
                     if let Some(parent) = parent {
-                        parent.join(target)
+                        path::join(parent, &target)
                     } else {
-                        target.into()
+                        target
                     }
                 };
-                let string_path = path.to_string_lossy().to_string();
-                let string_target = target.to_string_lossy().to_string();
-                if all_dirs.get(&string_target).is_some() {
-                    redirects.insert(string_path, string_target);
+                if all_dirs.get(&target).is_some() {
+                    redirects.insert(path, target);
                 }
             }
         }
@@ -134,14 +125,14 @@ impl<T: BlitFile> TreeBuilder<T> {
             let path = entry.path();
             let node = tree.new_node(entry.clone());
 
-            if let Some(parent) = path.parent() {
+            if let Some(parent) = path::parent(&path) {
                 tree.add_child_to_node(node, parent)?;
             }
         }
 
         // Reparent any symlink redirects.
         for (source_tree, target_tree) in redirects {
-            tree.reparent(source_tree, target_tree)?;
+            tree.reparent(&source_tree, &target_tree)?;
         }
         Ok(tree)
     }
@@ -151,17 +142,16 @@ impl<T: BlitFile> TreeBuilder<T> {
 mod tests {
     use super::{BlitFile, TreeBuilder};
     use crate::tree::Kind;
-    use std::path::PathBuf;
 
     #[derive(Clone, Default, Debug, PartialEq, Eq, PartialOrd, Ord)]
     struct CustomFile {
-        path: PathBuf,
+        path: String,
         kind: Kind,
         id: String,
     }
 
-    impl From<PathBuf> for CustomFile {
-        fn from(value: PathBuf) -> Self {
+    impl From<String> for CustomFile {
+        fn from(value: String) -> Self {
             Self {
                 path: value,
                 kind: Kind::Directory,
@@ -171,7 +161,7 @@ mod tests {
     }
 
     impl BlitFile for CustomFile {
-        fn path(&self) -> PathBuf {
+        fn path(&self) -> String {
             self.path.clone()
         }
 
@@ -184,9 +174,9 @@ mod tests {
         }
 
         /// Clone to new path portion
-        fn cloned_to(&self, path: PathBuf) -> Self {
+        fn cloned_to(&self, path: String) -> Self {
             Self {
-                path: path.clone(),
+                path,
                 kind: self.kind.clone(),
                 id: self.id.clone(),
             }

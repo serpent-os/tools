@@ -127,7 +127,7 @@ fn print_files(vfs: vfs::Tree<client::PendingFile>) {
     print_titled("Files");
     println!();
     for (path, meta) in files {
-        println!("  {}{}", path.display(), meta.unwrap_or_default().dim());
+        println!("  {path}{}", meta.unwrap_or_default().dim());
     }
 }
 
