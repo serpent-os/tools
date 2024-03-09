@@ -79,8 +79,19 @@ fn update(recipe: Option<PathBuf>, overwrite: bool, version: String, upstreams: 
         return Err(Error::OverwriteRecipeRequired);
     }
 
-    let input = if let Some(recipe) = &recipe {
-        fs::read_to_string(recipe).map_err(Error::Read)?
+    let input = if let Some(recipe_path) = &recipe {
+        // Resolve dir to dir + stone.yml
+        let recipe_path = if recipe_path.is_dir() {
+            recipe_path.join("stone.yml")
+        } else {
+            recipe_path.to_path_buf()
+        };
+
+        if !recipe_path.exists() {
+            return Err(Error::MissingRecipe(recipe_path));
+        }
+
+        fs::read_to_string(recipe_path).map_err(Error::Read)?
     } else {
         let mut bytes = vec![];
         io::stdin().lock().read_to_end(&mut bytes).map_err(Error::Read)?;
@@ -201,6 +212,8 @@ async fn fetch_hash(uri: Url) -> Result<String, Error> {
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("recipe file does not exist: {0:?}")]
+    MissingRecipe(PathBuf),
     #[error("Recipe file must be provided to use -w/--overwrite")]
     OverwriteRecipeRequired,
     #[error("Mismatch for upstream[{0}], expected {1} got {2}")]

@@ -21,6 +21,13 @@ pub struct Command {
 pub fn handle(command: Command, env: Env) -> Result<(), Error> {
     let Command { recipe: recipe_path } = command;
 
+    // Resolve dir to dir + stone.yml
+    let recipe_path = if recipe_path.is_dir() {
+        recipe_path.join("stone.yml")
+    } else {
+        recipe_path
+    };
+
     if !recipe_path.exists() {
         return Err(Error::MissingRecipe(recipe_path));
     }
