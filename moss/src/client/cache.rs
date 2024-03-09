@@ -182,8 +182,9 @@ impl Download {
             .flat_map(|p| &p.body)
             .collect::<Vec<_>>();
 
-        // If download was cached & all assets exist, we can skip unpacking
-        if self.was_cached && check_assets_exist(&indicies, &self.installation) {
+        // If we don't have any files to unpack OR download was cached
+        // & all assets exist, we can skip unpacking
+        if indicies.is_empty() || (self.was_cached && check_assets_exist(&indicies, &self.installation)) {
             return Ok(UnpackedAsset { payloads });
         }
 
