@@ -148,7 +148,7 @@ impl<'a> Transaction<'a> {
             ProviderFilter::Selections(provider) => self
                 .registry
                 .by_provider_id_only(&provider, package::Flags::default())
-                .find(|id| self.packages.node_exists(&id))
+                .find(|id| self.packages.node_exists(id))
                 .ok_or(Error::NoCandidate(provider.to_string())),
         }
     }
