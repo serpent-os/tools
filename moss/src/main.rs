@@ -2,32 +2,19 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::error::Error;
-
-use tui::Styled;
+use color_eyre::Result;
 
 mod cli;
 
 /// Main entry point
-fn main() {
-    if let Err(error) = cli::process() {
-        report_error(error);
-        std::process::exit(1);
-    }
-}
+fn main() -> Result<()> {
+    color_eyre::config::HookBuilder::default()
+        // .display_env_section(false)
+        .panic_section("Please report bugs to https://github.com/serpent-os/moss/issues/new")
+        .display_env_section(false)
+        .install()?;
 
-fn report_error(error: cli::Error) {
-    let sources = sources(&error);
-    let error = sources.join(": ");
-    eprintln!("{}: {error}", "Error".red());
-}
+    cli::process()?;
 
-fn sources(error: &cli::Error) -> Vec<String> {
-    let mut sources = vec![error.to_string()];
-    let mut source = error.source();
-    while let Some(error) = source.take() {
-        sources.push(error.to_string());
-        source = error.source();
-    }
-    sources
+    Ok(())
 }
