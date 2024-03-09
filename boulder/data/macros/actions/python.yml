@@ -31,3 +31,20 @@ actions:
         dependencies:
             - python
             - python-installer
+
+    # Compile .pyc bytecode files from any miscellaneous .py files in the install directory.
+    # TODO: Investigate whether providing additional -opt1.pyc and -opt2.pyc from increasing
+    #       the optimization level is worth it. Python itself has to be invoked with -O/-OO
+    #       in order to use opt1/opt2 .pyc files.
+    - python_compile:
+        command: |
+            function python_compile() {
+                if [ -z "$1" ]; then
+                    python -m compileall -q %(installroot) || exit 1
+                else
+                    python -m compileall -q $* || exit 1
+                fi
+            }
+            python_compile
+        dependencies:
+            - python
