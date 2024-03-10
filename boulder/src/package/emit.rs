@@ -87,6 +87,26 @@ impl<'a> Package<'a> {
     }
 }
 
+impl<'a> PartialEq for Package<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        self.name.eq(other.name)
+    }
+}
+
+impl<'a> Eq for Package<'a> {}
+
+impl<'a> PartialOrd for Package<'a> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<'a> Ord for Package<'a> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.name.cmp(&other.name)
+    }
+}
+
 pub fn emit(paths: &Paths, recipe: &Recipe, packages: &[Package]) -> Result<(), Error> {
     let mut manifest = Manifest::new(paths, recipe, architecture::host());
 

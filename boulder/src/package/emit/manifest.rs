@@ -19,7 +19,7 @@ pub struct Manifest<'a> {
     arch: Architecture,
     output_dir: PathBuf,
     build_deps: BTreeSet<String>,
-    packages: Vec<&'a Package<'a>>,
+    packages: BTreeSet<&'a Package<'a>>,
 }
 
 impl<'a> Manifest<'a> {
@@ -40,12 +40,12 @@ impl<'a> Manifest<'a> {
             output_dir,
             arch,
             build_deps,
-            packages: vec![],
+            packages: BTreeSet::new(),
         }
     }
 
     pub fn add_package(&mut self, package: &'a Package) {
-        self.packages.push(package);
+        self.packages.insert(package);
     }
 
     pub fn write_binary(&self) -> Result<(), Error> {
