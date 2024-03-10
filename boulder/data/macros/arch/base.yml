@@ -368,12 +368,15 @@ flags               :
 
     # Enable LTO optimisations (OFF)
     - lto-full:
-        c         : "-flto"
-        cxx       : "-flto"
-        ld        : "-flto"
+        gnu:
+            c         : "-flto=%(jobs)"
+            cxx       : "-flto=%(jobs)"
+            ld        : "-flto=%(jobs)"
         llvm:
+            c         : "-flto"
+            cxx       : "-flto"
             d         : "-flto=full"
-
+            ld        : "-flto"
 
     # Enable Thin-LTO optimisations (OFF)
     - lto-thin:
