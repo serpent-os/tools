@@ -174,7 +174,9 @@ fn emit_package(paths: &Paths, package: &Package) -> Result<(), Error> {
             .iter()
             .map(|p| p.layout.clone())
             .collect::<Vec<_>>();
-        writer.add_payload(layouts.as_slice())?;
+        if !layouts.is_empty() {
+            writer.add_payload(layouts.as_slice())?;
+        }
     }
 
     // Only add content payload if we have some files
