@@ -1,7 +1,7 @@
 actions:
 
     # Perform python setup and build with the default options
-    - python:
+    - python_setup:
         command: |
             test -e ./setup.py || ( echo "%%python: The ./setup.py script could not be found" ; exit 1 )
             python3 setup.py build
