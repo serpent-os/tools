@@ -454,8 +454,8 @@ impl Client {
                         .payloads
                         .iter()
                         .find_map(PayloadKind::layout)
-                        .map(|p| &p.body)
-                        .ok_or(Error::CorruptedPackage)?
+                        .map(|p| p.body.as_slice())
+                        .unwrap_or_default()
                         .chunks(environment::DB_BATCH_SIZE),
                 ) {
                     let entries = chunk.iter().map(|i| (package.id.clone(), i.clone())).collect_vec();
@@ -811,8 +811,6 @@ fn build_registry(
 pub enum Error {
     #[error("root must have an active state")]
     NoActiveState,
-    #[error("Corrupted package")]
-    CorruptedPackage,
     #[error("state {0} already active")]
     StateAlreadyActive(state::Id),
     #[error("state {0} doesn't exist")]
