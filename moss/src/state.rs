@@ -12,7 +12,7 @@ use crate::package;
 
 /// Unique identifier for [`State`]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, From, Into, Display)]
-pub struct Id(i64);
+pub struct Id(i32);
 
 impl Id {
     pub fn next(self) -> Self {
@@ -27,6 +27,14 @@ impl Id {
 pub enum Kind {
     /// Automatically constructed state
     Transaction,
+}
+
+impl TryFrom<String> for Kind {
+    type Error = strum::ParseError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

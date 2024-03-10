@@ -1,8 +1,8 @@
--- Add migration script here
+-- Your SQL goes here
 
 CREATE TABLE IF NOT EXISTS layout (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,  
-    package_id INTEGER NOT NULL,
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,  
+    package_id TEXT NOT NULL,
     uid INTEGER NOT NULL,
     gid INTEGER NOT NULL,
     mode INTEGER NOT NULL,

@@ -2,16 +2,21 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::collections::HashSet;
-use std::path::Path;
+use std::collections::{HashMap, HashSet};
 
-use sqlx::{sqlite::SqliteConnectOptions, Acquire};
-use sqlx::{Executor, QueryBuilder, Sqlite};
-use thiserror::Error;
+use diesel::prelude::*;
+use diesel::{Connection as _, SqliteConnection};
+use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 
-use super::Pool;
+use crate::db::Connection;
 use crate::package::{self, Meta};
-use crate::{runtime, Dependency, Provider};
+use crate::{Dependency, Provider};
+
+pub use super::Error;
+
+const MIGRATIONS: EmbeddedMigrations = embed_migrations!("src/db/meta/migrations");
+
+mod schema;
 
 #[derive(Debug, Clone, Copy)]
 enum Table {
@@ -28,317 +33,231 @@ pub enum Filter {
     Name(package::Name),
 }
 
-impl Filter {
-    fn append(&self, table: Table, query: &mut QueryBuilder<Sqlite>) {
-        match self {
-            Filter::Provider(p) => {
-                if let Table::Providers = table {
-                    query
-                        .push(
-                            "
-                            where provider =
-                            ",
-                        )
-                        .push_bind(p.to_string());
-                } else {
-                    query
-                        .push(
-                            "
-                            where package in
-                                (select distinct package from meta_providers where provider =
-                            ",
-                        )
-                        .push_bind(p.to_string())
-                        .push(")");
-                }
-            }
-            Filter::Dependency(d) => {
-                if let Table::Dependencies = table {
-                    query
-                        .push(
-                            "
-                            where dependency =
-                            ",
-                        )
-                        .push_bind(d.to_string());
-                } else {
-                    query
-                        .push(
-                            "
-                            where package in
-                                (select distinct package from meta_dependencies where dependency =
-                            ",
-                        )
-                        .push_bind(d.to_string())
-                        .push(")");
-                }
-            }
-            Filter::Name(n) => {
-                if let Table::Meta = table {
-                    query
-                        .push(
-                            "
-                            where name =
-                            ",
-                        )
-                        .push_bind(n.to_string());
-                } else {
-                    query
-                        .push(
-                            "
-                            where package in
-                                (select distinct package from meta where name =
-                            ",
-                        )
-                        .push_bind(n.to_string())
-                        .push(")");
-                }
-            }
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct Database {
-    pool: Pool,
+    conn: Connection,
 }
 
 impl Database {
-    pub fn new(path: impl AsRef<Path>, read_only: bool) -> Result<Self, Error> {
-        let options = sqlx::sqlite::SqliteConnectOptions::new()
-            .filename(path)
-            .create_if_missing(true)
-            .read_only(read_only)
-            .foreign_keys(true);
+    pub fn new(url: &str) -> Result<Self, Error> {
+        let mut conn = SqliteConnection::establish(url)?;
 
-        Self::connect(options)
-    }
+        conn.run_pending_migrations(MIGRATIONS).map_err(Error::Migration)?;
 
-    fn connect(options: SqliteConnectOptions) -> Result<Self, Error> {
-        runtime::block_on(async {
-            let pool = sqlx::SqlitePool::connect_with(options).await?;
-            sqlx::migrate!("src/db/meta/migrations").run(&pool).await?;
-            Ok(pool)
+        Ok(Database {
+            conn: Connection::new(conn),
         })
-        .map(|pool| Self { pool: Pool::new(pool) })
     }
 
     pub fn wipe(&self) -> Result<(), Error> {
-        self.pool.exec(|pool| async move {
-            // Other tables cascade delete so we only need to truncate `meta`
-            sqlx::query("DELETE FROM meta;").execute(&pool).await?;
+        self.conn.exec(|conn| {
+            // Cascading wipes other tables
+            diesel::delete(model::meta::table).execute(conn)?;
             Ok(())
         })
     }
 
-    pub fn query(&self, filter: Option<Filter>) -> Result<Vec<(package::Id, Meta)>, Error> {
-        self.pool.exec(|pool| async move {
-            let mut entry_query = sqlx::QueryBuilder::new(
-                "
-                SELECT package,
-                       name,
-                       version_identifier,
-                       source_release,
-                       build_release,
-                       architecture,
-                       summary,
-                       description,
-                       source_id,
-                       homepage,
-                       uri,
-                       hash,
-                       download_size
-                FROM meta
-            ",
-            );
-
-            let mut licenses_query = sqlx::QueryBuilder::new(
-                "
-                SELECT package, license
-                FROM meta_licenses
-                ",
-            );
-
-            let mut dependencies_query = sqlx::QueryBuilder::new(
-                "
-                SELECT package, dependency
-                FROM meta_dependencies
-                ",
-            );
-
-            let mut providers_query = sqlx::QueryBuilder::new(
-                "
-                SELECT package, provider
-                FROM meta_providers
-                ",
-            );
-
-            if let Some(filter) = filter {
-                filter.append(Table::Meta, &mut entry_query);
-                filter.append(Table::Licenses, &mut licenses_query);
-                filter.append(Table::Dependencies, &mut dependencies_query);
-                filter.append(Table::Providers, &mut providers_query);
-            }
-
-            let entries = entry_query.build_query_as::<encoding::Entry>().fetch_all(&pool).await?;
-            let licenses = licenses_query
-                .build_query_as::<encoding::License>()
-                .fetch_all(&pool)
-                .await?;
-            let dependencies = dependencies_query
-                .build_query_as::<encoding::Dependency>()
-                .fetch_all(&pool)
-                .await?;
-            let providers = providers_query
-                .build_query_as::<encoding::Provider>()
-                .fetch_all(&pool)
-                .await?;
-
-            Ok(entries
-                .into_iter()
-                .map(|entry| {
-                    (
-                        entry.id.clone(),
-                        Meta {
-                            name: entry.name,
-                            version_identifier: entry.version_identifier,
-                            source_release: entry.source_release as u64,
-                            build_release: entry.build_release as u64,
-                            architecture: entry.architecture,
-                            summary: entry.summary,
-                            description: entry.description,
-                            source_id: entry.source_id,
-                            homepage: entry.homepage,
-                            licenses: licenses
-                                .iter()
-                                .filter(|l| l.id == entry.id)
-                                .map(|l| l.license.clone())
-                                .collect(),
-                            dependencies: dependencies
-                                .iter()
-                                .filter(|l| l.id == entry.id)
-                                .map(|d| d.dependency.clone())
-                                .collect(),
-                            providers: providers
-                                .iter()
-                                .filter(|l| l.id == entry.id)
-                                .map(|p| p.provider.clone())
-                                .collect(),
-                            uri: entry.uri,
-                            hash: entry.hash,
-                            download_size: entry.download_size.map(|i| i as u64),
-                        },
-                    )
-                })
-                .collect())
-        })
-    }
-
     pub fn get(&self, package: &package::Id) -> Result<Meta, Error> {
-        self.pool.exec(|pool| async move {
-            let entry_query = sqlx::query_as::<_, encoding::Entry>(
-                "
-                SELECT package,
-                       name,
-                       version_identifier,
-                       source_release,
-                       build_release,
-                       architecture,
-                       summary,
-                       description,
-                       source_id,
-                       homepage,
-                       uri,
-                       hash,
-                       download_size
-                FROM meta
-                WHERE package = ?;
-                ",
-            )
-            .bind(package.to_string());
-
-            let licenses_query = sqlx::query_as::<_, encoding::License>(
-                "
-                SELECT package, license
-                FROM meta_licenses
-                WHERE package = ?;
-                ",
-            )
-            .bind(package.to_string());
-
-            let dependencies_query = sqlx::query_as::<_, encoding::Dependency>(
-                "
-                SELECT package, dependency
-                FROM meta_dependencies
-                WHERE package = ?;
-                ",
-            )
-            .bind(package.to_string());
-
-            let providers_query = sqlx::query_as::<_, encoding::Provider>(
-                "
-                SELECT package, provider
-                FROM meta_providers
-                WHERE package = ?;
-                ",
-            )
-            .bind(package.to_string());
-
-            let entry = entry_query.fetch_one(&pool).await?;
-            let licenses = licenses_query.fetch_all(&pool).await?;
-            let dependencies = dependencies_query.fetch_all(&pool).await?;
-            let providers = providers_query.fetch_all(&pool).await?;
+        self.conn.exec(|conn| {
+            let meta = model::meta::table
+                .select(model::Meta::as_select())
+                .find(package.to_string())
+                .first::<model::Meta>(conn)?;
+            let licenses = model::License::belonging_to(&meta)
+                .select(model::meta_licenses::license)
+                .load::<String>(conn)?;
+            let dependencies = model::Dependency::belonging_to(&meta)
+                .select(model::Dependency::as_select())
+                .load_iter(conn)?
+                .map(|d| Ok(d?.dependency))
+                .collect::<Result<_, Error>>()?;
+            let providers = model::Provider::belonging_to(&meta)
+                .select(model::Provider::as_select())
+                .load_iter(conn)?
+                .map(|p| Ok(p?.provider))
+                .collect::<Result<_, Error>>()?;
 
             Ok(Meta {
-                name: entry.name,
-                version_identifier: entry.version_identifier,
-                source_release: entry.source_release as u64,
-                build_release: entry.build_release as u64,
-                architecture: entry.architecture,
-                summary: entry.summary,
-                description: entry.description,
-                source_id: entry.source_id,
-                homepage: entry.homepage,
-                licenses: licenses.into_iter().map(|l| l.license).collect(),
-                dependencies: dependencies.into_iter().map(|d| d.dependency).collect(),
-                providers: providers.into_iter().map(|p| p.provider).collect(),
-                uri: entry.uri,
-                hash: entry.hash,
-                download_size: entry.download_size.map(|i| i as u64),
+                name: meta.name,
+                version_identifier: meta.version_identifier,
+                source_release: meta.source_release as u64,
+                build_release: meta.build_release as u64,
+                architecture: meta.architecture,
+                summary: meta.summary,
+                description: meta.description,
+                source_id: meta.source_id,
+                homepage: meta.homepage,
+                licenses,
+                dependencies,
+                providers,
+                uri: meta.uri,
+                hash: meta.hash,
+                download_size: meta.download_size.map(|size| size as u64),
             })
         })
     }
 
     pub fn provider_packages(&self, provider: &Provider) -> Result<Vec<package::Id>, Error> {
-        self.pool.exec(|pool| async move {
-            let packages = sqlx::query_as::<_, (String,)>(
-                "
-                SELECT DISTINCT package
-                FROM meta_providers
-                WHERE provider = ?;
-                ",
-            )
-            .bind(provider.to_string())
-            .fetch_all(&pool)
-            .await?;
+        self.conn.exec(|conn| {
+            model::meta_providers::table
+                .select(model::meta_providers::package)
+                .distinct()
+                .filter(model::meta_providers::provider.eq(provider.to_string()))
+                .load_iter::<String, _>(conn)?
+                .map(|result| {
+                    let id = result?;
+                    Ok(id.into())
+                })
+                .collect()
+        })
+    }
 
-            Ok(packages.into_iter().map(|(id,)| id.into()).collect())
+    pub fn query(&self, filter: Option<Filter>) -> Result<Vec<(package::Id, Meta)>, Error> {
+        self.conn.exec(|conn| {
+            let map_row = |result| {
+                let meta: model::Meta = result?;
+
+                Ok((
+                    meta.package.into(),
+                    Meta {
+                        name: meta.name,
+                        version_identifier: meta.version_identifier,
+                        source_release: meta.source_release as u64,
+                        build_release: meta.build_release as u64,
+                        architecture: meta.architecture,
+                        summary: meta.summary,
+                        description: meta.description,
+                        source_id: meta.source_id,
+                        homepage: meta.homepage,
+                        licenses: Default::default(),
+                        dependencies: Default::default(),
+                        providers: Default::default(),
+                        uri: meta.uri,
+                        hash: meta.hash,
+                        download_size: meta.download_size.map(|size| size as u64),
+                    },
+                ))
+            };
+
+            let mut entries: HashMap<package::Id, Meta> = match &filter {
+                Some(Filter::Provider(provider)) => model::meta::table
+                    .select(model::Meta::as_select())
+                    .inner_join(model::meta_providers::table)
+                    .filter(model::meta_providers::provider.eq(provider.to_string()))
+                    .load_iter::<model::Meta, _>(conn)?,
+                Some(Filter::Dependency(dependency)) => model::meta::table
+                    .select(model::Meta::as_select())
+                    .inner_join(model::meta_dependencies::table)
+                    .filter(model::meta_dependencies::dependency.eq(dependency.to_string()))
+                    .load_iter::<model::Meta, _>(conn)?,
+                Some(Filter::Name(name)) => model::meta::table
+                    .select(model::Meta::as_select())
+                    .filter(model::meta::name.eq(name.to_string()))
+                    .load_iter::<model::Meta, _>(conn)?,
+                None => model::meta::table
+                    .select(model::Meta::as_select())
+                    .load_iter::<model::Meta, _>(conn)?,
+            }
+            .map(map_row)
+            .collect::<Result<_, Error>>()?;
+
+            // Add licenses
+            match &filter {
+                Some(Filter::Provider(provider)) => model::meta_licenses::table
+                    .select(model::License::as_select())
+                    .inner_join(model::meta::table.inner_join(model::meta_providers::table))
+                    .filter(model::meta_providers::provider.eq(provider.to_string()))
+                    .load_iter::<model::License, _>(conn)?,
+                Some(Filter::Dependency(dependency)) => model::meta_licenses::table
+                    .select(model::License::as_select())
+                    .inner_join(model::meta::table.inner_join(model::meta_dependencies::table))
+                    .filter(model::meta_dependencies::dependency.eq(dependency.to_string()))
+                    .load_iter::<model::License, _>(conn)?,
+                Some(Filter::Name(name)) => model::meta_licenses::table
+                    .select(model::License::as_select())
+                    .inner_join(model::meta::table)
+                    .filter(model::meta::name.eq(name.to_string()))
+                    .load_iter::<model::License, _>(conn)?,
+                None => model::meta_licenses::table
+                    .select(model::License::as_select())
+                    .load_iter::<model::License, _>(conn)?,
+            }
+            .try_for_each::<_, Result<_, Error>>(|result| {
+                let row = result?;
+                if let Some(meta) = entries.get_mut(&row.package.into()) {
+                    meta.licenses.push(row.license);
+                }
+                Ok(())
+            })?;
+
+            // Add dependencies
+            match &filter {
+                Some(Filter::Provider(provider)) => model::meta_dependencies::table
+                    .select(model::Dependency::as_select())
+                    .inner_join(model::meta::table.inner_join(model::meta_providers::table))
+                    .filter(model::meta_providers::provider.eq(provider.to_string()))
+                    .load_iter::<model::Dependency, _>(conn)?,
+                Some(Filter::Dependency(dependency)) => model::meta_dependencies::table
+                    .select(model::Dependency::as_select())
+                    .filter(model::meta_dependencies::dependency.eq(dependency.to_string()))
+                    .load_iter::<model::Dependency, _>(conn)?,
+                Some(Filter::Name(name)) => model::meta_dependencies::table
+                    .select(model::Dependency::as_select())
+                    .inner_join(model::meta::table)
+                    .filter(model::meta::name.eq(name.to_string()))
+                    .load_iter::<model::Dependency, _>(conn)?,
+                None => model::meta_dependencies::table
+                    .select(model::Dependency::as_select())
+                    .load_iter::<model::Dependency, _>(conn)?,
+            }
+            .try_for_each::<_, Result<_, Error>>(|result| {
+                let row = result?;
+                if let Some(meta) = entries.get_mut(&row.package.into()) {
+                    meta.dependencies.insert(row.dependency);
+                }
+                Ok(())
+            })?;
+
+            // Add providers
+            match &filter {
+                Some(Filter::Provider(provider)) => model::meta_providers::table
+                    .select(model::Provider::as_select())
+                    .filter(model::meta_providers::provider.eq(provider.to_string()))
+                    .load_iter::<model::Provider, _>(conn)?,
+                Some(Filter::Dependency(dependency)) => model::meta_providers::table
+                    .select(model::Provider::as_select())
+                    .inner_join(model::meta::table.inner_join(model::meta_dependencies::table))
+                    .filter(model::meta_dependencies::dependency.eq(dependency.to_string()))
+                    .load_iter::<model::Provider, _>(conn)?,
+                Some(Filter::Name(name)) => model::meta_providers::table
+                    .select(model::Provider::as_select())
+                    .inner_join(model::meta::table)
+                    .filter(model::meta::name.eq(name.to_string()))
+                    .load_iter::<model::Provider, _>(conn)?,
+                None => model::meta_providers::table
+                    .select(model::Provider::as_select())
+                    .load_iter::<model::Provider, _>(conn)?,
+            }
+            .try_for_each::<_, Result<_, Error>>(|result| {
+                let row = result?;
+                if let Some(meta) = entries.get_mut(&row.package.into()) {
+                    meta.providers.insert(row.provider);
+                }
+                Ok(())
+            })?;
+
+            Ok(entries.into_iter().collect())
         })
     }
 
     pub fn file_hashes(&self) -> Result<HashSet<String>, Error> {
-        self.pool.exec(|pool| async move {
-            let hashes = sqlx::query_as::<_, (String,)>(
-                "
-                SELECT DISTINCT hash
-                FROM meta
-                WHERE hash IS NOT NULL;
-                ",
-            )
-            .fetch_all(&pool)
-            .await?;
-
-            Ok(hashes.into_iter().map(|(hash,)| hash).collect())
+        self.conn.exec(|conn| {
+            Ok(model::meta::table
+                .select(model::meta::hash.assume_not_null())
+                .filter(model::meta::hash.is_not_null())
+                .distinct()
+                .load_iter::<String, _>(conn)?
+                .collect::<Result<_, _>>()?)
         })
     }
 
@@ -347,127 +266,75 @@ impl Database {
     }
 
     pub fn batch_add(&self, packages: Vec<(package::Id, Meta)>) -> Result<(), Error> {
-        self.pool.exec(|pool| async move {
-            let mut transaction = pool.begin().await?;
-
-            // Remove package (other tables cascade)
-            batch_remove_impl(packages.iter().map(|(id, _)| id), transaction.acquire().await?).await?;
-
-            // Create entry
-            sqlx::QueryBuilder::new(
-                "
-                INSERT INTO meta (
-                    package,
-                    name,
-                    version_identifier,
-                    source_release,
-                    build_release,
-                    architecture,
-                    summary,
-                    description,
-                    source_id,
-                    homepage,
-                    uri,
-                    hash,
-                    download_size
-                )
-                ",
-            )
-            .push_values(&packages, |mut b, (id, meta)| {
-                let Meta {
-                    name,
-                    version_identifier,
-                    source_release,
-                    build_release,
-                    architecture,
-                    summary,
-                    description,
-                    source_id,
-                    homepage,
-                    uri,
-                    hash,
-                    download_size,
-                    ..
-                } = meta;
-
-                b.push_bind(id.to_string())
-                    .push_bind(name.to_string())
-                    .push_bind(version_identifier)
-                    .push_bind(*source_release as i64)
-                    .push_bind(*build_release as i64)
-                    .push_bind(architecture)
-                    .push_bind(summary)
-                    .push_bind(description)
-                    .push_bind(source_id)
-                    .push_bind(homepage)
-                    .push_bind(uri)
-                    .push_bind(hash)
-                    .push_bind(download_size.map(|i| i as i64));
-            })
-            .build()
-            .execute(transaction.acquire().await?)
-            .await?;
-
-            // Licenses
+        self.conn.exec(|conn| {
+            let ids = packages.iter().map(|(id, _)| id.as_ref()).collect::<Vec<_>>();
+            let entries = packages
+                .iter()
+                .map(|(package, meta)| model::NewMeta {
+                    package: package.as_ref(),
+                    name: meta.name.as_ref(),
+                    version_identifier: &meta.version_identifier,
+                    source_release: meta.source_release as i32,
+                    build_release: meta.build_release as i32,
+                    architecture: &meta.architecture,
+                    summary: &meta.summary,
+                    description: &meta.description,
+                    source_id: &meta.source_id,
+                    homepage: &meta.homepage,
+                    uri: meta.uri.as_deref(),
+                    hash: meta.hash.as_deref(),
+                    download_size: meta.download_size.map(|size| size as i64),
+                })
+                .collect::<Vec<_>>();
             let licenses = packages
                 .iter()
-                .flat_map(|(id, meta)| meta.licenses.iter().map(move |license| (id, license)))
-                .collect::<Vec<_>>();
-            if !licenses.is_empty() {
-                sqlx::QueryBuilder::new(
-                    "
-                    INSERT INTO meta_licenses (package, license)
-                    ",
-                )
-                .push_values(licenses, |mut b, (id, license)| {
-                    b.push_bind(id.to_string()).push_bind(license);
+                .flat_map(|(package, meta)| {
+                    meta.licenses.iter().map(|license| {
+                        (
+                            model::meta_licenses::package.eq(<package::Id as AsRef<str>>::as_ref(package)),
+                            model::meta_licenses::license.eq(license),
+                        )
+                    })
                 })
-                .build()
-                .execute(transaction.acquire().await?)
-                .await?;
-            }
-
-            // Dependencies
+                .collect::<Vec<_>>();
             let dependencies = packages
                 .iter()
-                .flat_map(|(id, meta)| meta.dependencies.iter().map(move |dependency| (id, dependency)))
-                .collect::<Vec<_>>();
-            if !dependencies.is_empty() {
-                sqlx::QueryBuilder::new(
-                    "
-                    INSERT INTO meta_dependencies (package, dependency)
-                    ",
-                )
-                .push_values(dependencies, |mut b, (id, dependency)| {
-                    b.push_bind(id.to_string()).push_bind(dependency.to_string());
+                .flat_map(|(package, meta)| {
+                    meta.dependencies.iter().map(|dependency| {
+                        (
+                            model::meta_dependencies::package.eq(<package::Id as AsRef<str>>::as_ref(package)),
+                            model::meta_dependencies::dependency.eq(dependency.to_string()),
+                        )
+                    })
                 })
-                .build()
-                .execute(transaction.acquire().await?)
-                .await?;
-            }
-
-            // Providers
+                .collect::<Vec<_>>();
             let providers = packages
                 .iter()
-                .flat_map(|(id, meta)| meta.providers.iter().map(move |provider| (id, provider)))
-                .collect::<Vec<_>>();
-            if !providers.is_empty() {
-                sqlx::QueryBuilder::new(
-                    "
-                    INSERT INTO meta_providers (package, provider)
-                    ",
-                )
-                .push_values(providers, |mut b, (id, provider)| {
-                    b.push_bind(id.to_string()).push_bind(provider.to_string());
+                .flat_map(|(package, meta)| {
+                    meta.providers.iter().map(|provider| {
+                        (
+                            model::meta_providers::package.eq(<package::Id as AsRef<str>>::as_ref(package)),
+                            model::meta_providers::provider.eq(provider.to_string()),
+                        )
+                    })
                 })
-                .build()
-                .execute(transaction.acquire().await?)
-                .await?;
-            }
+                .collect::<Vec<_>>();
 
-            transaction.commit().await?;
+            conn.transaction(|conn| {
+                batch_remove_impl(&ids, conn)?;
 
-            Ok(())
+                diesel::insert_into(model::meta::table).values(entries).execute(conn)?;
+                diesel::insert_into(model::meta_licenses::table)
+                    .values(licenses)
+                    .execute(conn)?;
+                diesel::insert_into(model::meta_dependencies::table)
+                    .values(dependencies)
+                    .execute(conn)?;
+                diesel::insert_into(model::meta_providers::table)
+                    .values(providers)
+                    .execute(conn)?;
+                Ok(())
+            })
         })
     }
 
@@ -476,66 +343,43 @@ impl Database {
     }
 
     pub fn batch_remove<'a>(&self, packages: impl IntoIterator<Item = &'a package::Id>) -> Result<(), Error> {
-        self.pool
-            .exec(|pool| async move { batch_remove_impl(packages, &pool).await })
+        self.conn.exec(|conn| {
+            let packages = packages
+                .into_iter()
+                .map(<package::Id as AsRef<str>>::as_ref)
+                .collect::<Vec<_>>();
+            batch_remove_impl(&packages, conn)?;
+            Ok(())
+        })
     }
 }
 
-async fn batch_remove_impl<'a>(
-    packages: impl IntoIterator<Item = &package::Id>,
-    connection: impl Executor<'a, Database = Sqlite>,
-) -> Result<(), Error> {
-    let mut query_builder = sqlx::QueryBuilder::new(
-        "
-        DELETE FROM meta
-        WHERE package IN (
-        ",
-    );
-
-    let mut separated = query_builder.separated(", ");
-    packages.into_iter().for_each(|package| {
-        separated.push_bind(package.to_string());
-    });
-    separated.push_unseparated(");");
-
-    query_builder.build().execute(connection).await?;
-
+fn batch_remove_impl(packages: &[&str], conn: &mut SqliteConnection) -> Result<(), Error> {
+    diesel::delete(model::meta::table.filter(model::meta::package.eq_any(packages))).execute(conn)?;
     Ok(())
 }
 
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error("Row not found")]
-    RowNotFound,
-    #[error("sqlx")]
-    Sqlx(#[source] sqlx::Error),
-    #[error("sqlx migration")]
-    Migrate(#[from] sqlx::migrate::MigrateError),
-}
+mod model {
+    use diesel::{
+        associations::{Associations, Identifiable},
+        deserialize::Queryable,
+        prelude::Insertable,
+        Selectable,
+    };
 
-impl From<sqlx::Error> for Error {
-    fn from(error: sqlx::Error) -> Self {
-        match error {
-            sqlx::Error::RowNotFound => Error::RowNotFound,
-            error => Error::Sqlx(error),
-        }
-    }
-}
-
-mod encoding {
-    use sqlx::FromRow;
-
+    pub use crate::db::meta::schema::{meta, meta_dependencies, meta_licenses, meta_providers};
     use crate::package;
 
-    #[derive(FromRow)]
-    pub struct Entry {
-        #[sqlx(rename = "package", try_from = "String")]
-        pub id: package::Id,
-        #[sqlx(try_from = "String")]
+    #[derive(Queryable, Selectable, Identifiable)]
+    #[diesel(table_name = meta)]
+    #[diesel(primary_key(package))]
+    pub struct Meta {
+        pub package: String,
+        #[diesel(deserialize_as = String)]
         pub name: package::Name,
         pub version_identifier: String,
-        pub source_release: i64,
-        pub build_release: i64,
+        pub source_release: i32,
+        pub build_release: i32,
         pub architecture: String,
         pub summary: String,
         pub description: String,
@@ -546,50 +390,65 @@ mod encoding {
         pub download_size: Option<i64>,
     }
 
-    #[derive(FromRow)]
+    #[derive(Queryable, Selectable, Identifiable, Associations)]
+    #[diesel(table_name = meta_licenses)]
+    #[diesel(primary_key(package, license))]
+    #[diesel(belongs_to(Meta, foreign_key = package))]
     pub struct License {
-        #[sqlx(rename = "package", try_from = "String")]
-        pub id: package::Id,
+        pub package: String,
         pub license: String,
     }
 
-    #[derive(FromRow)]
+    #[derive(Queryable, Selectable, Identifiable, Associations)]
+    #[diesel(table_name = meta_dependencies)]
+    #[diesel(primary_key(package, dependency))]
+    #[diesel(belongs_to(Meta, foreign_key = package))]
     pub struct Dependency {
-        #[sqlx(rename = "package", try_from = "String")]
-        pub id: package::Id,
-        #[sqlx(try_from = "&'a str")]
+        pub package: String,
+        #[diesel(deserialize_as = String)]
         pub dependency: crate::Dependency,
     }
 
-    #[derive(FromRow)]
+    #[derive(Queryable, Selectable, Identifiable, Associations)]
+    #[diesel(table_name = meta_providers)]
+    #[diesel(primary_key(package, provider))]
+    #[diesel(belongs_to(Meta, foreign_key = package))]
     pub struct Provider {
-        #[sqlx(rename = "package", try_from = "String")]
-        pub id: package::Id,
-        #[sqlx(try_from = "&'a str")]
+        pub package: String,
+        #[diesel(deserialize_as = String)]
         pub provider: crate::Provider,
     }
 
-    #[derive(FromRow)]
-    pub struct ProviderPackage {
-        #[sqlx(try_from = "String")]
-        pub package: package::Id,
+    #[derive(Insertable)]
+    #[diesel(table_name = meta)]
+    pub struct NewMeta<'a> {
+        pub package: &'a str,
+        pub name: &'a str,
+        pub version_identifier: &'a str,
+        pub source_release: i32,
+        pub build_release: i32,
+        pub architecture: &'a str,
+        pub summary: &'a str,
+        pub description: &'a str,
+        pub source_id: &'a str,
+        pub homepage: &'a str,
+        pub uri: Option<&'a str>,
+        pub hash: Option<&'a str>,
+        pub download_size: Option<i64>,
     }
 }
 
 #[cfg(test)]
 mod test {
-    use std::str::FromStr;
-
     use stone::read::PayloadKind;
 
     use crate::dependency::Kind;
 
     use super::*;
 
+    #[test]
     fn create_insert_select() {
-        let _guard = runtime::init();
-
-        let db = Database::connect(SqliteConnectOptions::from_str("sqlite::memory:").unwrap()).unwrap();
+        let db = Database::new(":memory:").unwrap();
 
         let bash_completion = include_bytes!("../../../../test/bash-completion-2.11-1-1-x86_64.stone");
 
@@ -613,12 +472,7 @@ mod test {
         let fetched = db.query(Some(lookup)).unwrap();
         assert_eq!(fetched.len(), 1);
 
-        db.pool
-            .exec({
-                let id = id.clone();
-                |pool| async move { batch_remove_impl([&id], &pool).await }
-            })
-            .unwrap();
+        db.remove(&id).unwrap();
 
         let result = db.get(&id);
 

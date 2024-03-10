@@ -120,7 +120,7 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
     // it's value from the previous state
     let new_selections = {
         let previous_selections = match client.installation.active_state {
-            Some(id) => client.state_db.get(&id)?.selections,
+            Some(id) => client.state_db.get(id)?.selections,
             None => vec![],
         };
 
@@ -227,8 +227,8 @@ pub enum Error {
     #[error("client")]
     Client(#[from] client::Error),
 
-    #[error("state db")]
-    StateDB(#[from] moss::db::state::Error),
+    #[error("db")]
+    DB(#[from] moss::db::Error),
 
     #[error("string processing")]
     Dialog(#[from] tui::dialoguer::Error),

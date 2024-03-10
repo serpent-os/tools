@@ -77,9 +77,9 @@ impl Client {
     ) -> Result<Client, Error> {
         let name = client_name.to_string();
         let config = config::Manager::system(&installation.root, "moss");
-        let install_db = db::meta::Database::new(installation.db_path("install"), installation.read_only())?;
-        let state_db = db::state::Database::new(&installation)?;
-        let layout_db = db::layout::Database::new(&installation)?;
+        let install_db = db::meta::Database::new(installation.db_path("install").to_str().unwrap_or_default())?;
+        let state_db = db::state::Database::new(installation.db_path("state").to_str().unwrap_or_default())?;
+        let layout_db = db::layout::Database::new(installation.db_path("layout").to_str().unwrap_or_default())?;
 
         let repositories = if let Some(repos) = repositories {
             repository::Manager::explicit(&name, repos, installation.clone())?
@@ -194,7 +194,7 @@ impl Client {
     /// Returns the old state that was archived
     pub fn activate_state(&self, id: state::Id) -> Result<state::Id, Error> {
         // Fetch the new state
-        let new = self.state_db.get(&id).map_err(|_| Error::StateDoesntExist(id))?;
+        let new = self.state_db.get(id).map_err(|_| Error::StateDoesntExist(id))?;
 
         // Get old (current) state
         let Some(old) = self.installation.active_state else {
@@ -248,7 +248,7 @@ impl Client {
         match &self.scope {
             Scope::Stateful => {
                 // Add to db
-                let state = self.state_db.add(selections, Some(summary.to_string()), None)?;
+                let state = self.state_db.add(selections, Some(&summary.to_string()), None)?;
 
                 // Write state id
                 {
@@ -791,7 +791,7 @@ fn build_registry(
     statedb: &db::state::Database,
 ) -> Result<Registry, Error> {
     let state = match installation.active_state {
-        Some(id) => Some(statedb.get(&id)?),
+        Some(id) => Some(statedb.get(id)?),
         None => None,
     };
 
@@ -829,12 +829,8 @@ pub enum Error {
     Cache(#[from] cache::Error),
     #[error("repository manager")]
     Repository(#[from] repository::manager::Error),
-    #[error("meta db")]
-    Meta(#[from] db::meta::Error),
-    #[error("layout db")]
-    Layout(#[from] db::layout::Error),
-    #[error("state db")]
-    State(#[from] db::state::Error),
+    #[error("db")]
+    Meta(#[from] db::Error),
     #[error("prune")]
     Prune(#[from] prune::Error),
     #[error("io")]

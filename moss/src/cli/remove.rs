@@ -101,7 +101,7 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
     // it's value from the previous state
     let new_state_pkgs = {
         let previous_selections = match client.installation.active_state {
-            Some(id) => client.state_db.get(&id)?.selections,
+            Some(id) => client.state_db.get(id)?.selections,
             None => vec![],
         };
 
@@ -147,8 +147,8 @@ pub enum Error {
     #[error("transaction")]
     Transaction(#[from] transaction::Error),
 
-    #[error("state db")]
-    StateDB(#[from] moss::db::state::Error),
+    #[error("db")]
+    DB(#[from] moss::db::Error),
 
     #[error("io")]
     Io(#[from] std::io::Error),

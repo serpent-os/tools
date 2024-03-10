@@ -93,7 +93,7 @@ pub fn prune(
     // Get net refcount of each package in all states
     for (id, _) in state_ids {
         // Get metadata
-        let state = state_db.get(&id)?;
+        let state = state_db.get(id)?;
 
         // Increment each package
         state.selections.iter().for_each(|selection| {
@@ -323,12 +323,8 @@ pub enum Error {
     NoActiveState,
     #[error("cannot prune the currently active state")]
     PruneCurrent,
-    #[error("layout db")]
-    LayoutDB(#[from] db::layout::Error),
-    #[error("meta db")]
-    MetaDB(#[from] db::meta::Error),
-    #[error("state db")]
-    StateDB(#[from] db::state::Error),
+    #[error("db")]
+    DB(#[from] db::Error),
     #[error("io")]
     Io(#[from] io::Error),
     #[error("string processing")]

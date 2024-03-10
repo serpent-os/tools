@@ -63,7 +63,7 @@ pub fn active(installation: Installation) -> Result<(), Error> {
     if let Some(id) = installation.active_state {
         let client = Client::new(environment::NAME, installation)?;
 
-        let state = client.state_db.get(&id)?;
+        let state = client.state_db.get(id)?;
 
         print_state(state);
     }
@@ -78,8 +78,8 @@ pub fn list(installation: Installation) -> Result<(), Error> {
     let state_ids = client.state_db.list_ids()?;
 
     let mut states = state_ids
-        .iter()
-        .map(|(id, _)| client.state_db.get(id).map_err(Error::StateDB))
+        .into_iter()
+        .map(|(id, _)| client.state_db.get(id).map_err(Error::DB))
         .collect::<Result<Vec<_>, _>>()?;
 
     states.reverse();
@@ -88,7 +88,7 @@ pub fn list(installation: Installation) -> Result<(), Error> {
 }
 
 pub fn activate(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
-    let new_id = *args.get_one::<u64>("ID").unwrap() as i64;
+    let new_id = *args.get_one::<u64>("ID").unwrap() as i32;
 
     let client = Client::new(environment::NAME, installation)?;
     let old_id = client.activate_state(new_id.into())?;
@@ -114,7 +114,7 @@ pub fn prune(args: &ArgMatches, installation: Installation) -> Result<(), Error>
 }
 
 pub fn remove(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
-    let id = *args.get_one::<u64>("ID").unwrap() as i64;
+    let id = *args.get_one::<u64>("ID").unwrap() as i32;
     let yes = args.get_flag("yes");
 
     let client = Client::new(environment::NAME, installation)?;
@@ -147,6 +147,6 @@ pub enum Error {
     #[error("client")]
     Client(#[from] client::Error),
 
-    #[error("state db")]
-    StateDB(#[from] moss::db::state::Error),
+    #[error("db")]
+    DB(#[from] moss::db::Error),
 }

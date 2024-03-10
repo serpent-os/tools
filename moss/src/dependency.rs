@@ -122,11 +122,11 @@ impl FromStr for Dependency {
     }
 }
 
-impl<'a> TryFrom<&'a str> for Dependency {
+impl TryFrom<String> for Dependency {
     type Error = ParseError;
 
-    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
-        Self::from_str(value)
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::from_str(value.as_str())
     }
 }
 
@@ -172,11 +172,11 @@ impl FromStr for Provider {
     }
 }
 
-impl<'a> TryFrom<&'a str> for Provider {
+impl TryFrom<String> for Provider {
     type Error = ParseError;
 
-    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
-        Self::from_str(value)
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::from_str(value.as_str())
     }
 }
 
