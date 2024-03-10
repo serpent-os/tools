@@ -45,7 +45,7 @@ tokio-stream = { version = "0.1.14", features = ["time"] }
 tokio-util = { version = "0.7.9", features = ["io"] }
 url = { version = "2.5.0", features = ["serde"] }
 xxhash-rust = { version = "0.8.10", features = ["xxh3"] }
-zstd = "0.12.4"
+zstd = { version = "0.12.4", features = [ "zstdmt" ] }
 
 [profile.release]
 lto = 'thin'

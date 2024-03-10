@@ -45,9 +45,15 @@ impl<W: Write> Writer<W, ()> {
         Ok(())
     }
 
-    pub fn with_content<B>(self, buffer: B, pledged_size: Option<u64>) -> Result<Writer<W, Content<B>>, Error> {
+    pub fn with_content<B>(
+        self,
+        buffer: B,
+        pledged_size: Option<u64>,
+        num_workers: u32,
+    ) -> Result<Writer<W, Content<B>>, Error> {
         let mut encoder = zstd::Encoder::new()?;
         encoder.set_pledged_size(pledged_size)?;
+        encoder.set_num_workers(num_workers)?;
 
         Ok(Writer {
             writer: self.writer,

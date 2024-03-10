@@ -92,7 +92,7 @@ impl<T: Write> WriteExt for T {}
 
 #[cfg(test)]
 mod test {
-    use std::io::Cursor;
+    use std::{io::Cursor, thread};
 
     use super::*;
 
@@ -120,7 +120,11 @@ mod test {
         let mut temp_content_buffer: Vec<u8> = vec![];
         let mut writer = Writer::new(&mut out_stone, header::v1::FileType::Binary)
             .unwrap()
-            .with_content(Cursor::new(&mut temp_content_buffer), Some(content_buffer.len() as u64))
+            .with_content(
+                Cursor::new(&mut temp_content_buffer),
+                Some(content_buffer.len() as u64),
+                thread::available_parallelism().map(|n| n.get()).unwrap_or(1) as u32,
+            )
             .unwrap();
 
         writer.add_payload(meta.body.as_slice()).unwrap();
