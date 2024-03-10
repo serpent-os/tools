@@ -79,7 +79,8 @@ impl Kind {
             Kind::Uint32(_) => std::mem::size_of::<u32>(),
             Kind::Int64(_) => std::mem::size_of::<i64>(),
             Kind::Uint64(_) => std::mem::size_of::<u64>(),
-            Kind::String(s) => s.len(),
+            // nul terminator
+            Kind::String(s) => s.len() + 1,
             // Plus dep size
             Kind::Dependency(_, s) => s.len() + 1,
             // Plus dep size
@@ -242,8 +243,7 @@ impl Record for Meta {
             Kind::Uint64(i) => writer.write_u64(*i)?,
             Kind::String(s) => {
                 writer.write_all(s.as_bytes())?;
-                // TODO: Do we want to add null byte?
-                // writer.write_u8(b'\0')?;
+                writer.write_u8(b'\0')?;
             }
             Kind::Dependency(dep, s) | Kind::Provider(dep, s) => {
                 writer.write_u8(*dep as u8)?;
