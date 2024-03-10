@@ -34,22 +34,29 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
     let Command {
         profile,
         output,
-        recipe,
+        recipe: recipe_path,
         ccache,
     } = command;
+
+    // Resolve dir to dir + stone.yml
+    let recipe_path = if recipe_path.is_dir() {
+        recipe_path.join("stone.yml")
+    } else {
+        recipe_path
+    };
 
     if !output.exists() {
         return Err(Error::MissingOutput(output));
     }
-    if !recipe.exists() {
-        return Err(Error::MissingRecipe(recipe));
+    if !recipe_path.exists() {
+        return Err(Error::MissingRecipe(recipe_path));
     }
 
     let mut timing = Timing::default();
 
     let timer = timing.begin(timing::Kind::Startup);
 
-    let builder = Builder::new(&recipe, env, profile, ccache)?;
+    let builder = Builder::new(&recipe_path, env, profile, ccache)?;
     builder.setup()?;
 
     timing.finish(timer);
