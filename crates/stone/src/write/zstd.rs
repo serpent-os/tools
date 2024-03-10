@@ -47,7 +47,7 @@ impl<'a, W: Write> Write for Writer<'a, W> {
         while !finished {
             let mut output_buffer = OutBuffer::around(&mut self.encoder.output);
 
-            let remaining = self
+            let _status = self
                 .encoder
                 .context
                 .compress_stream2(&mut output_buffer, &mut input, ZSTD_EndDirective::ZSTD_e_continue)
@@ -55,7 +55,7 @@ impl<'a, W: Write> Write for Writer<'a, W> {
 
             self.writer.write_all(output_buffer.as_slice())?;
 
-            finished = remaining == 0;
+            finished = input.pos() == input.src.len();
         }
 
         Ok(input.pos)
@@ -94,6 +94,13 @@ impl Encoder {
     pub fn set_pledged_size(&mut self, pledged_size: Option<u64>) -> Result<()> {
         self.context
             .set_pledged_src_size(pledged_size)
+            .map_err(map_error_code)?;
+        Ok(())
+    }
+
+    pub fn set_num_workers(&mut self, num_workers: u32) -> Result<()> {
+        self.context
+            .set_parameter(CParameter::NbWorkers(num_workers))
             .map_err(map_error_code)?;
         Ok(())
     }

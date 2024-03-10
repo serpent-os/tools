@@ -14,7 +14,7 @@ use tui::{ProgressBar, ProgressStyle, Styled};
 
 use self::manifest::Manifest;
 use super::analysis;
-use crate::{architecture, Architecture, Paths, Recipe};
+use crate::{architecture, util, Architecture, Paths, Recipe};
 
 mod manifest;
 
@@ -166,7 +166,7 @@ fn emit_package(paths: &Paths, package: &Package) -> Result<(), Error> {
         .open(&temp_content_path)?;
 
     // Convert to content writer using pledged size = total size of all files
-    let mut writer = writer.with_content(&mut temp_content, Some(total_file_size))?;
+    let mut writer = writer.with_content(&mut temp_content, Some(total_file_size), util::num_cpus().get() as u32)?;
 
     for file in sorted_files {
         let file = File::open(&file.path)?;
