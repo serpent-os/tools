@@ -6,10 +6,12 @@ use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
-use futures::{stream, StreamExt, TryFutureExt, TryStreamExt};
+use futures::{stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use thiserror::Error;
+use tui::{MultiProgress, ProgressBar, ProgressStyle, Styled};
 use xxhash_rust::xxh3::xxh3_64;
 
 use crate::db::meta;
@@ -119,29 +121,8 @@ impl Manager {
         Ok(())
     }
 
-    /// Refresh all [`Repository`]'s by fetching it's latest index
-    /// file and updating it's associated meta database
-    pub async fn refresh_all(&mut self) -> Result<(), Error> {
-        // Fetch index files asynchronously
-        let fetched = stream::iter(&self.repositories)
-            .map(|(_, state)| {
-                fetch_index(self.source.identifier(), state, &self.installation)
-                    .and_then(move |file| async move { Ok((state.clone(), file)) })
-            })
-            .buffer_unordered(environment::MAX_NETWORK_CONCURRENCY)
-            .try_collect::<Vec<_>>()
-            .await?;
-
-        // Add each file to its meta_db
-        for (state, file) in fetched {
-            runtime::unblock(move || update_meta_db(&state, &file)).await?;
-        }
-
-        Ok(())
-    }
-
     /// Refresh a [`Repository`] by Id
-    pub async fn refresh(&mut self, id: &repository::Id) -> Result<(), Error> {
+    pub async fn refresh(&self, id: &repository::Id) -> Result<(), Error> {
         if let Some(repo) = self.repositories.get(id).cloned() {
             let file = fetch_index(self.source.identifier(), &repo, &self.installation).await?;
             runtime::unblock(move || update_meta_db(&repo, &file)).await?;
@@ -151,38 +132,90 @@ impl Manager {
         }
     }
 
+    /// Refresh all [`Repository`]'s by fetching it's latest index
+    /// file and updating it's associated meta database
+    pub async fn refresh_all(&mut self) -> Result<(), Error> {
+        let mpb = MultiProgress::new();
+
+        // Fetch index files asynchronously and then
+        // update to DB
+        stream::iter(self.repositories.keys())
+            .map(|id| async {
+                let pb = mpb.add(
+                    ProgressBar::new_spinner()
+                        .with_style(
+                            ProgressStyle::with_template(" {spinner} {wide_msg}")
+                                .unwrap()
+                                .tick_chars("--=≡■≡=--"),
+                        )
+                        .with_message(format!("{} {}", "Refreshing".blue(), *id)),
+                );
+                pb.enable_steady_tick(Duration::from_millis(150));
+
+                self.refresh(id).await?;
+
+                pb.println(format!("{} {}", "Refreshed".green(), *id));
+
+                Ok(())
+            })
+            .buffer_unordered(environment::MAX_NETWORK_CONCURRENCY)
+            .try_collect()
+            .await
+    }
+
     /// Ensures all repositories are initialized - index file downloaded and meta db
     /// populated.
     ///
     /// This is useful to call when initializing the moss client in-case users added configs
     /// manually outside the CLI
-    pub async fn ensure_all_initialized(&mut self) -> Result<(), Error> {
-        let uninitialized = self.repositories.iter().filter_map(|(id, state)| {
-            let index_file =
-                cache_dir(self.source.identifier(), &state.repository, &self.installation).join("stone.index");
+    pub async fn ensure_all_initialized(&mut self) -> Result<usize, Error> {
+        let uninitialized = self
+            .repositories
+            .iter()
+            .filter_map(|(id, state)| {
+                let index_file =
+                    cache_dir(self.source.identifier(), &state.repository, &self.installation).join("stone.index");
 
-            if !index_file.exists() {
-                Some(state)
-            } else {
-                None
-            }
-        });
-
-        let fetched = stream::iter(uninitialized)
-            .map(|state| {
-                fetch_index(self.source.identifier(), state, &self.installation)
-                    .and_then(move |file| async move { Ok((state.clone(), file)) })
+                if !index_file.exists() {
+                    Some(id)
+                } else {
+                    None
+                }
             })
-            .buffer_unordered(environment::MAX_NETWORK_CONCURRENCY)
-            .try_collect::<Vec<_>>()
-            .await?;
+            .collect::<Vec<_>>();
 
-        // Add each file to its meta_db
-        for (state, file) in fetched {
-            runtime::unblock(move || update_meta_db(&state, &file)).await?;
+        if uninitialized.is_empty() {
+            return Ok(0);
         }
 
-        Ok(())
+        let mpb = MultiProgress::new();
+
+        // Fetch index files asynchronously and then
+        // update to DB
+        stream::iter(&uninitialized)
+            .map(|id| async {
+                let pb = mpb.add(
+                    ProgressBar::new_spinner()
+                        .with_style(
+                            ProgressStyle::with_template(" {spinner} {wide_msg}")
+                                .unwrap()
+                                .tick_chars("--=≡■≡=--"),
+                        )
+                        .with_message(format!("{} {}", "Refreshing".blue(), *id)),
+                );
+                pb.enable_steady_tick(Duration::from_millis(150));
+
+                self.refresh(id).await?;
+
+                pb.println(format!("{} {}", "Refreshed".green(), *id));
+
+                Ok(()) as Result<_, Error>
+            })
+            .buffer_unordered(environment::MAX_NETWORK_CONCURRENCY)
+            .try_collect::<()>()
+            .await?;
+
+        Ok(uninitialized.len())
     }
 
     /// Returns the active repositories held by this manager
