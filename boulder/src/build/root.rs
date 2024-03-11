@@ -3,22 +3,19 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::collections::HashSet;
-use std::io;
+use std::{fs, io};
 
 use moss::{repository, runtime, Installation};
 use stone_recipe::{tuning::Toolchain, Upstream};
 use thiserror::Error;
 
 use crate::build::Builder;
-use crate::{container, util};
+use crate::{container, timing, util, Timing};
 
-pub fn populate(builder: &Builder, repositories: repository::Map) -> Result<(), Error> {
+pub fn populate(builder: &Builder, repositories: repository::Map, timing: &mut Timing) -> Result<(), Error> {
     let packages = packages(builder);
 
     let rootfs = builder.paths.rootfs().host;
-
-    // Recreate root
-    util::recreate_dir(&rootfs)?;
 
     // Create the moss client
     let installation = Installation::open(&builder.env.moss_dir)?;
@@ -30,33 +27,45 @@ pub fn populate(builder: &Builder, repositories: repository::Map) -> Result<(), 
     runtime::block_on(moss_client.ensure_repos_initialized())?;
 
     // Install packages
-    moss_client.install(&packages, true)?;
+    let install_timing = moss_client.install(&packages, true)?;
+
+    timing.record(timing::Populate::Resolve, install_timing.resolve);
+    timing.record(timing::Populate::Fetch, install_timing.fetch);
+    timing.record(timing::Populate::Blit, install_timing.blit);
 
     Ok(())
 }
 
 pub fn clean(builder: &Builder) -> Result<(), Error> {
     // Dont't need to clean if it doesn't exist
-    if !builder.paths.build().host.exists() {
+    if !builder.paths.rootfs().host.exists() {
         return Ok(());
     }
 
-    // We recreate inside the container so we don't
+    // We remove certain paths inside the container so we don't
     // get permissions error if this is a rootless build
     // and there's subuid mappings into the user namespace
     container::exec(&builder.paths, false, || {
-        // Recreate `install` dir
-        util::recreate_dir(&builder.paths.install().guest)?;
+        // Remove install dir
+        let install_dir = builder.paths.install().guest;
+        if install_dir.exists() {
+            fs::remove_dir_all(install_dir)?;
+        }
 
         for target in &builder.targets {
             for job in &target.jobs {
-                // Recerate build dir
-                util::recreate_dir(&job.build_dir)?;
+                if job.build_dir.exists() {
+                    // Remove build dir
+                    fs::remove_dir_all(&job.build_dir)?;
+                }
             }
         }
 
         Ok(()) as Result<_, io::Error>
     })?;
+
+    // Now we can safely recreate the rootfs
+    util::recreate_dir(&builder.paths.rootfs().host)?;
 
     Ok(())
 }

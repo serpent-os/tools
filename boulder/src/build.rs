@@ -99,10 +99,11 @@ impl Builder {
         })
     }
 
-    pub fn setup(&self) -> Result<(), Error> {
+    pub fn setup(&self, timing: &mut Timing, initialize_timer: timing::Timer) -> Result<(), Error> {
         // Remove old artifacts
         util::recreate_dir(&self.paths.artefacts().host).map_err(Error::RecreateArtefactsDir)?;
 
+        // Clean (recreate) rootfs
         root::clean(self)?;
 
         let rt = runtime::init();
@@ -110,8 +111,17 @@ impl Builder {
         let profiles = profile::Manager::new(&self.env);
         let repos = profiles.repositories(&self.profile)?.clone();
 
-        root::populate(self, repos)?;
+        timing.finish(initialize_timer);
+
+        // Populate rootfs
+        root::populate(self, repos, timing)?;
+
+        let timer = timing.begin(timing::Kind::Fetch);
+
+        // Sync (fetch & share) upstreams to rootfs
         upstream::sync(&self.recipe, &self.paths)?;
+
+        timing.finish(timer);
 
         drop(rt);
         // We want to ensure no threads exist before
