@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::time::{Duration, Instant};
+
 use thiserror::Error;
 use tui::{
     dialoguer::{theme::ColorfulTheme, Confirm},
@@ -17,7 +19,10 @@ use crate::{
     Package, Provider,
 };
 
-pub fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<(), Error> {
+pub fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<Timing, Error> {
+    let mut timing = Timing::default();
+    let mut instant = Instant::now();
+
     // Resolve input packages
     let input = resolve_input(pkgs, client)?;
 
@@ -42,6 +47,8 @@ pub fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<(), Erro
         .filter(|p| client.is_ephemeral() || !is_installed(p))
         .collect::<Vec<_>>();
 
+    timing.resolve = instant.elapsed();
+
     // If no new packages exist, exit and print
     // packages already installed
     if missing.is_empty() {
@@ -56,7 +63,7 @@ pub fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<(), Erro
             print_to_columns(&installed);
         }
 
-        return Ok(());
+        return Ok(timing);
     }
 
     println!("The following package(s) will be installed:");
@@ -77,8 +84,13 @@ pub fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<(), Erro
         return Err(Error::Cancelled);
     }
 
+    instant = Instant::now();
+
     // Cache packages
     runtime::block_on(client.cache_packages(&missing))?;
+
+    timing.fetch = instant.elapsed();
+    instant = Instant::now();
 
     // Calculate the new state of packages (old_state + missing)
     let new_state_pkgs = {
@@ -101,7 +113,9 @@ pub fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<(), Erro
     // Perfect, apply state.
     client.new_state(&new_state_pkgs, "Install")?;
 
-    Ok(())
+    timing.blit = instant.elapsed();
+
+    Ok(timing)
 }
 
 /// Resolves the package arguments as valid input packages. Returns an error
@@ -133,6 +147,13 @@ fn find_packages(id: &str, client: &Client) -> (String, Option<Package>) {
 
     // First only, pre-sorted
     (id.into(), result)
+}
+
+#[derive(Default)]
+pub struct Timing {
+    pub resolve: Duration,
+    pub fetch: Duration,
+    pub blit: Duration,
 }
 
 #[derive(Debug, Error)]
