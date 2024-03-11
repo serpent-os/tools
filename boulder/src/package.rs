@@ -59,7 +59,7 @@ impl<'a> Packager<'a> {
         // Hasher used for calculating file digests
         let mut hasher = digest::Hasher::new();
 
-        let timer = timing.begin(timing::Kind::Analysis);
+        let timer = timing.begin(timing::Kind::Analyze);
 
         // Collect all paths under install root
         let paths = self
@@ -75,7 +75,7 @@ impl<'a> Packager<'a> {
 
         timing.finish(timer);
 
-        let timer = timing.begin(timing::Kind::Packaging);
+        let timer = timing.begin(timing::Kind::Emit);
 
         // Combine the package definition with the analysis results
         // for that package. We will use this to emit the package stones & manifests.

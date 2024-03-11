@@ -38,6 +38,9 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
         ccache,
     } = command;
 
+    let mut timing = Timing::default();
+    let timer = timing.begin(timing::Kind::Initialize);
+
     // Resolve dir to dir + stone.yml
     let recipe_path = if recipe_path.is_dir() {
         recipe_path.join("stone.yml")
@@ -52,14 +55,8 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
         return Err(Error::MissingRecipe(recipe_path));
     }
 
-    let mut timing = Timing::default();
-
-    let timer = timing.begin(timing::Kind::Startup);
-
     let builder = Builder::new(&recipe_path, env, profile, ccache)?;
-    builder.setup()?;
-
-    timing.finish(timer);
+    builder.setup(&mut timing, timer)?;
 
     let paths = &builder.paths;
     let networking = builder.recipe.parsed.options.networking;
