@@ -133,10 +133,10 @@ impl Client {
 
     /// Ensures all repositories have been initialized by ensuring their stone indexes
     /// are downloaded and added to the meta db
-    pub async fn ensure_repos_initialized(&mut self) -> Result<(), Error> {
-        self.repositories.ensure_all_initialized().await?;
+    pub async fn ensure_repos_initialized(&mut self) -> Result<usize, Error> {
+        let num_initialized = self.repositories.ensure_all_initialized().await?;
         self.registry = build_registry(&self.installation, &self.repositories, &self.install_db, &self.state_db)?;
-        Ok(())
+        Ok(num_initialized)
     }
 
     /// Reload all configured repositories and refreshes their index file, then update
