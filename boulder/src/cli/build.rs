@@ -24,6 +24,8 @@ pub struct Command {
         default_value = "false"
     )]
     ccache: bool,
+    #[arg(long, default_value = "false", help = "Update profile repositories before building")]
+    update: bool,
     #[arg(short, long, default_value = ".", help = "Directory to store build results")]
     output: PathBuf,
     #[arg(default_value = "./stone.yml", help = "Path to recipe file")]
@@ -36,6 +38,7 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
         output,
         recipe: recipe_path,
         ccache,
+        update,
     } = command;
 
     let mut timing = Timing::default();
@@ -56,7 +59,7 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
     }
 
     let builder = Builder::new(&recipe_path, env, profile, ccache)?;
-    builder.setup(&mut timing, timer)?;
+    builder.setup(&mut timing, timer, update)?;
 
     let paths = &builder.paths;
     let networking = builder.recipe.parsed.options.networking;

@@ -99,7 +99,7 @@ impl Builder {
         })
     }
 
-    pub fn setup(&self, timing: &mut Timing, initialize_timer: timing::Timer) -> Result<(), Error> {
+    pub fn setup(&self, timing: &mut Timing, initialize_timer: timing::Timer, update_repos: bool) -> Result<(), Error> {
         // Remove old artifacts
         util::recreate_dir(&self.paths.artefacts().host).map_err(Error::RecreateArtefactsDir)?;
 
@@ -111,10 +111,8 @@ impl Builder {
         let profiles = profile::Manager::new(&self.env);
         let repos = profiles.repositories(&self.profile)?.clone();
 
-        timing.finish(initialize_timer);
-
         // Populate rootfs
-        root::populate(self, repos, timing)?;
+        root::populate(self, repos, timing, initialize_timer, update_repos)?;
 
         let timer = timing.begin(timing::Kind::Fetch);
 

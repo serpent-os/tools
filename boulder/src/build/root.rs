@@ -12,7 +12,13 @@ use thiserror::Error;
 use crate::build::Builder;
 use crate::{container, timing, util, Timing};
 
-pub fn populate(builder: &Builder, repositories: repository::Map, timing: &mut Timing) -> Result<(), Error> {
+pub fn populate(
+    builder: &Builder,
+    repositories: repository::Map,
+    timing: &mut Timing,
+    initialize_timer: timing::Timer,
+    update_repos: bool,
+) -> Result<(), Error> {
     let packages = packages(builder);
 
     let rootfs = builder.paths.rootfs().host;
@@ -22,9 +28,18 @@ pub fn populate(builder: &Builder, repositories: repository::Map, timing: &mut T
     let mut moss_client =
         moss::Client::with_explicit_repositories("boulder", installation, repositories)?.ephemeral(&rootfs)?;
 
-    // Ensure all configured repos have been initialized (important since users
-    // might add profile configs from an editor)
-    runtime::block_on(moss_client.ensure_repos_initialized())?;
+    if update_repos {
+        runtime::block_on(moss_client.refresh_repositories())?;
+        println!();
+    } else {
+        // Ensure all configured repos have been initialized (important since users
+        // might add profile configs from an editor)
+        if runtime::block_on(moss_client.ensure_repos_initialized())? > 0 {
+            println!();
+        }
+    }
+
+    timing.finish(initialize_timer);
 
     // Install packages
     let install_timing = moss_client.install(&packages, true)?;
