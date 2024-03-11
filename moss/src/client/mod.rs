@@ -106,7 +106,7 @@ impl Client {
         matches!(self.scope, Scope::Ephemeral { .. })
     }
 
-    pub fn install(&mut self, packages: &[&str], yes: bool) -> Result<(), install::Error> {
+    pub fn install(&mut self, packages: &[&str], yes: bool) -> Result<install::Timing, install::Error> {
         install(self, packages, yes)
     }
 

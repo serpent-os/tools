@@ -44,5 +44,7 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
         client = client.ephemeral(blit_target)?;
     }
 
-    client.install(&pkgs, yes)
+    client.install(&pkgs, yes)?;
+
+    Ok(())
 }
