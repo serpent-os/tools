@@ -24,7 +24,12 @@ pub struct Command {
         default_value = "false"
     )]
     ccache: bool,
-    #[arg(long, default_value = "false", help = "Update profile repositories before building")]
+    #[arg(
+        short,
+        long,
+        default_value = "false",
+        help = "Update profile repositories before building"
+    )]
     update: bool,
     #[arg(short, long, default_value = ".", help = "Directory to store build results")]
     output: PathBuf,
