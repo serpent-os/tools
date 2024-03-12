@@ -26,6 +26,7 @@ pub fn command() -> Command {
         .visible_alias("up")
         .about("Sync packages")
         .long_about("Sync package selections with candidates from the highest priority repository")
+        .arg(arg!(-u --"update" "Update repositories before syncing"))
         .arg(arg!(--"upgrade-only" "Only sync packages that have a version upgrade"))
         .arg(
             arg!(--to <blit_target> "Blit this sync to the provided directory instead of the root")
@@ -40,6 +41,7 @@ pub fn command() -> Command {
 
 pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
     let yes_all = *args.get_one::<bool>("yes").unwrap();
+    let update = *args.get_one::<bool>("update").unwrap();
     let upgrade_only = *args.get_one::<bool>("upgrade-only").unwrap();
 
     let mut client = Client::new(environment::NAME, installation)?;
@@ -47,6 +49,11 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
     // Make ephemeral if a blit target was provided
     if let Some(blit_target) = args.get_one::<PathBuf>("to").cloned() {
         client = client.ephemeral(blit_target)?;
+    }
+
+    // Update repos if requested
+    if update {
+        runtime::block_on(client.refresh_repositories())?;
     }
 
     // Grab all the existing installed packages
