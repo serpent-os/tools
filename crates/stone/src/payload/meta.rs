@@ -81,10 +81,10 @@ impl Kind {
             Kind::Uint64(_) => std::mem::size_of::<u64>(),
             // nul terminator
             Kind::String(s) => s.len() + 1,
-            // Plus dep size
-            Kind::Dependency(_, s) => s.len() + 1,
-            // Plus dep size
-            Kind::Provider(_, s) => s.len() + 1,
+            // Plus dep size & nul terminator
+            Kind::Dependency(_, s) => s.len() + 2,
+            // Plus dep size & nul terminator
+            Kind::Provider(_, s) => s.len() + 2,
         }
     }
 }
@@ -248,8 +248,7 @@ impl Record for Meta {
             Kind::Dependency(dep, s) | Kind::Provider(dep, s) => {
                 writer.write_u8(*dep as u8)?;
                 writer.write_all(s.as_bytes())?;
-                // TODO: Do we want to add null byte?
-                // writer.write_u8(b'\0')?;
+                writer.write_u8(b'\0')?;
             }
         }
 
