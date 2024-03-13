@@ -95,9 +95,13 @@ struct Content {
 #[derive(Serialize)]
 #[serde(rename_all = "kebab-case")]
 struct Package {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     build_depends: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     depends: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     files: Vec<String>,
     name: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     provides: Vec<String>,
 }
