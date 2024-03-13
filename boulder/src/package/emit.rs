@@ -174,31 +174,41 @@ fn emit_package(paths: &Paths, package: &Package) -> Result<(), Error> {
             .iter()
             .map(|p| p.layout.clone())
             .collect::<Vec<_>>();
-        writer.add_payload(layouts.as_slice())?;
+        if !layouts.is_empty() {
+            writer.add_payload(layouts.as_slice())?;
+        }
     }
 
-    // Temp file for building content payload
-    let temp_content_path = format!("/tmp/{}.tmp", &filename);
-    let mut temp_content = File::options()
-        .read(true)
-        .append(true)
-        .create(true)
-        .open(&temp_content_path)?;
+    // Only add content payload if we have some files
+    if !sorted_files.is_empty() {
+        // Temp file for building content payload
+        let temp_content_path = format!("/tmp/{}.tmp", &filename);
+        let mut temp_content = File::options()
+            .read(true)
+            .append(true)
+            .create(true)
+            .open(&temp_content_path)?;
 
-    // Convert to content writer using pledged size = total size of all files
-    let mut writer = writer.with_content(&mut temp_content, Some(total_file_size), util::num_cpus().get() as u32)?;
+        // Convert to content writer using pledged size = total size of all files
+        let mut writer =
+            writer.with_content(&mut temp_content, Some(total_file_size), util::num_cpus().get() as u32)?;
 
-    for file in sorted_files {
-        let file = File::open(&file.path)?;
-        writer.add_content(&mut pb.wrap_read(&file))?;
+        for file in sorted_files {
+            let file = File::open(&file.path)?;
+            writer.add_content(&mut pb.wrap_read(&file))?;
+        }
+
+        // Finalize & flush
+        writer.finalize()?;
+        out_file.flush()?;
+
+        // Remove temp content file
+        fs::remove_file(temp_content_path)?;
+    } else {
+        // Finalize & flush
+        writer.finalize()?;
+        out_file.flush()?;
     }
-
-    // Finalize & flush
-    writer.finalize()?;
-    out_file.flush()?;
-
-    // Remove temp content file
-    fs::remove_file(temp_content_path)?;
 
     pb.println(format!("{} {filename}", "Emitted".green()));
     pb.finish_and_clear();
