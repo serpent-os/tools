@@ -4,6 +4,7 @@
 use std::{
     fs::{self, File},
     io::{self, Write},
+    num::NonZeroU64,
     time::Duration,
 };
 
@@ -21,7 +22,7 @@ mod manifest;
 #[derive(Debug)]
 pub struct Package<'a> {
     pub name: &'a str,
-    pub build_release: u64,
+    pub build_release: NonZeroU64,
     pub architecture: Architecture,
     pub source: &'a stone_recipe::Source,
     pub definition: &'a stone_recipe::Package,
@@ -34,14 +35,15 @@ impl<'a> Package<'a> {
         source: &'a stone_recipe::Source,
         template: &'a stone_recipe::Package,
         analysis: analysis::Bucket,
+        build_release: NonZeroU64,
     ) -> Self {
         Self {
             name,
-            build_release: 1,
             architecture: architecture::host(),
             source,
             definition: template,
             analysis,
+            build_release,
         }
     }
 
@@ -61,7 +63,7 @@ impl<'a> Package<'a> {
             name: self.name.to_string().into(),
             version_identifier: self.source.version.clone(),
             source_release: self.source.release,
-            build_release: self.build_release,
+            build_release: self.build_release.get(),
             architecture: self.architecture.to_string(),
             summary: self.definition.summary.clone().unwrap_or_default(),
             description: self.definition.description.clone().unwrap_or_default(),

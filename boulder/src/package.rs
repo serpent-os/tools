@@ -4,6 +4,7 @@
 use std::{
     collections::{hash_map, HashMap},
     fs, io,
+    num::NonZeroU64,
 };
 
 use itertools::Itertools;
@@ -25,6 +26,7 @@ pub struct Packager<'a> {
     recipe: &'a Recipe,
     packages: HashMap<String, Package>,
     collector: Collector,
+    build_release: NonZeroU64,
 }
 
 impl<'a> Packager<'a> {
@@ -33,6 +35,7 @@ impl<'a> Packager<'a> {
         recipe: &'a Recipe,
         macros: &'a Macros,
         targets: &'a [build::Target],
+        build_release: NonZeroU64,
     ) -> Result<Self, Error> {
         let mut collector = Collector::new(paths.install().guest);
 
@@ -52,6 +55,7 @@ impl<'a> Packager<'a> {
             recipe,
             collector,
             packages,
+            build_release,
         })
     }
 
@@ -88,7 +92,13 @@ impl<'a> Packager<'a> {
             .filter_map(|(name, package)| {
                 let bucket = analysis.buckets.remove(name)?;
 
-                Some(emit::Package::new(name, &self.recipe.parsed.source, package, bucket))
+                Some(emit::Package::new(
+                    name,
+                    &self.recipe.parsed.source,
+                    package,
+                    bucket,
+                    self.build_release,
+                ))
             })
             .collect::<Vec<_>>();
 
