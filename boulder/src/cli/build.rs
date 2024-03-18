@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::io;
+use std::num::NonZeroU64;
 use std::path::PathBuf;
 
 use boulder::build::{self, Builder};
@@ -35,6 +36,13 @@ pub struct Command {
     output: PathBuf,
     #[arg(default_value = "./stone.yml", help = "Path to recipe file")]
     recipe: PathBuf,
+    #[arg(
+        short,
+        long,
+        default_value = "1",
+        help = "Specify the build release number used for this build"
+    )]
+    build_release: NonZeroU64,
 }
 
 pub fn handle(command: Command, env: Env) -> Result<(), Error> {
@@ -44,6 +52,7 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
         recipe: recipe_path,
         ccache,
         update,
+        build_release,
     } = command;
 
     let mut timing = Timing::default();
@@ -73,7 +82,13 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
     container::exec::<Error>(paths, networking, || {
         builder.build(&mut timing)?;
 
-        let packager = Packager::new(&builder.paths, &builder.recipe, &builder.macros, &builder.targets)?;
+        let packager = Packager::new(
+            &builder.paths,
+            &builder.recipe,
+            &builder.macros,
+            &builder.targets,
+            build_release,
+        )?;
         packager.package(&mut timing)?;
 
         timing.print_table();
