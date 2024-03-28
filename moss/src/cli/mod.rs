@@ -16,6 +16,7 @@ mod install;
 mod list;
 mod remove;
 mod repo;
+mod search;
 mod state;
 mod sync;
 mod version;
@@ -65,6 +66,7 @@ fn command() -> Command {
         .subcommand(list::command())
         .subcommand(remove::command())
         .subcommand(repo::command())
+        .subcommand(search::command())
         .subcommand(state::command())
         .subcommand(sync::command())
         .subcommand(version::command())
@@ -100,6 +102,7 @@ pub fn process() -> Result<(), Error> {
         Some(("list", args)) => list::handle(args, installation).map_err(Error::List),
         Some(("remove", args)) => remove::handle(args, installation).map_err(Error::Remove),
         Some(("repo", args)) => repo::handle(args, installation).map_err(Error::Repo),
+        Some(("search", args)) => search::handle(args, installation).map_err(Error::Search),
         Some(("state", args)) => state::handle(args, installation).map_err(Error::State),
         Some(("sync", args)) => sync::handle(args, installation).map_err(Error::Sync),
         Some(("version", _)) => {
@@ -170,6 +173,9 @@ pub enum Error {
 
     #[error("repo")]
     Repo(#[from] repo::Error),
+
+    #[error("search")]
+    Search(#[from] search::Error),
 
     #[error("state")]
     State(#[from] state::Error),
