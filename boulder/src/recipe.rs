@@ -19,7 +19,7 @@ pub struct Recipe {
 
 impl Recipe {
     pub fn load(path: impl Into<PathBuf>) -> Result<Self, Error> {
-        let path = path.into();
+        let path = fs::canonicalize(path.into())?;
         let source = fs::read_to_string(&path)?;
         let parsed = stone_recipe::from_str(&source)?;
 
