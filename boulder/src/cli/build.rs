@@ -34,7 +34,7 @@ pub struct Command {
     update: bool,
     #[arg(short, long, default_value = ".", help = "Directory to store build results")]
     output: PathBuf,
-    #[arg(default_value = "./stone.yml", help = "Path to recipe file")]
+    #[arg(default_value = "./stone.yaml", help = "Path to recipe file")]
     recipe: PathBuf,
     #[arg(
         short,
