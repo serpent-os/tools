@@ -58,18 +58,8 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
     let mut timing = Timing::default();
     let timer = timing.begin(timing::Kind::Initialize);
 
-    // Resolve dir to dir + stone.yml
-    let recipe_path = if recipe_path.is_dir() {
-        recipe_path.join("stone.yml")
-    } else {
-        recipe_path
-    };
-
     if !output.exists() {
         return Err(Error::MissingOutput(output));
-    }
-    if !recipe_path.exists() {
-        return Err(Error::MissingRecipe(recipe_path));
     }
 
     let builder = Builder::new(&recipe_path, env, profile, ccache)?;
@@ -111,8 +101,6 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
 pub enum Error {
     #[error("output directory does not exist: {0:?}")]
     MissingOutput(PathBuf),
-    #[error("recipe file does not exist: {0:?}")]
-    MissingRecipe(PathBuf),
     #[error("build recipe")]
     Build(#[from] build::Error),
     #[error("package artifacts")]
