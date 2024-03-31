@@ -2,7 +2,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{fs, io, path::PathBuf};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 use thiserror::Error;
 
@@ -18,8 +21,8 @@ pub struct Recipe {
 }
 
 impl Recipe {
-    pub fn load(path: impl Into<PathBuf>) -> Result<Self, Error> {
-        let path = fs::canonicalize(path.into())?;
+    pub fn load(path: impl AsRef<Path>) -> Result<Self, Error> {
+        let path = resolve_path(path)?;
         let source = fs::read_to_string(&path)?;
         let parsed = stone_recipe::from_str(&source)?;
 
@@ -82,8 +85,24 @@ impl Recipe {
     }
 }
 
+pub fn resolve_path(path: impl AsRef<Path>) -> Result<PathBuf, Error> {
+    // Ensure it's absolute
+    let path = fs::canonicalize(&path).map_err(|_| Error::MissingRecipe(path.as_ref().to_path_buf()))?;
+
+    // Resolve dir to dir + stone.yml
+    let path = if path.is_dir() { path.join("stone.yml") } else { path };
+
+    if path.exists() {
+        Ok(path)
+    } else {
+        Err(Error::MissingRecipe(path))
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("recipe file does not exist: {0:?}")]
+    MissingRecipe(PathBuf),
     #[error("load recipe")]
     Load(#[from] io::Error),
     #[error("decode recipe")]

@@ -7,11 +7,11 @@ use std::{
     path::PathBuf,
 };
 
+use boulder::recipe;
 use clap::Parser;
 use futures::StreamExt;
 use moss::{request, runtime};
 use sha2::{Digest, Sha256};
-use stone_recipe::Recipe;
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 use url::Url;
@@ -80,18 +80,9 @@ fn update(recipe: Option<PathBuf>, overwrite: bool, version: String, upstreams: 
     }
 
     let input = if let Some(recipe_path) = &recipe {
-        // Resolve dir to dir + stone.yml
-        let recipe_path = if recipe_path.is_dir() {
-            recipe_path.join("stone.yml")
-        } else {
-            recipe_path.to_path_buf()
-        };
+        let path = recipe::resolve_path(recipe_path).map_err(Error::ResolvePath)?;
 
-        if !recipe_path.exists() {
-            return Err(Error::MissingRecipe(recipe_path));
-        }
-
-        fs::read_to_string(recipe_path).map_err(Error::Read)?
+        fs::read_to_string(path).map_err(Error::Read)?
     } else {
         let mut bytes = vec![];
         io::stdin().lock().read_to_end(&mut bytes).map_err(Error::Read)?;
@@ -99,7 +90,7 @@ fn update(recipe: Option<PathBuf>, overwrite: bool, version: String, upstreams: 
     };
 
     // Parsed allows us to access known values in a type safe way
-    let parsed: Recipe = serde_yaml::from_str(&input)?;
+    let parsed: recipe::Parsed = serde_yaml::from_str(&input)?;
     // Value allows us to access map keys in their original form
     let value: serde_yaml::Value = serde_yaml::from_str(&input)?;
 
@@ -212,12 +203,12 @@ async fn fetch_hash(uri: Url) -> Result<String, Error> {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("recipe file does not exist: {0:?}")]
-    MissingRecipe(PathBuf),
     #[error("Recipe file must be provided to use -w/--overwrite")]
     OverwriteRecipeRequired,
     #[error("Mismatch for upstream[{0}], expected {1} got {2}")]
     UpstreamMismatch(usize, &'static str, &'static str),
+    #[error("resolve recipe path")]
+    ResolvePath(#[source] recipe::Error),
     #[error("reading recipe")]
     Read(#[source] io::Error),
     #[error("writing recipe")]

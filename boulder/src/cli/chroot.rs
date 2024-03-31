@@ -21,17 +21,6 @@ pub struct Command {
 pub fn handle(command: Command, env: Env) -> Result<(), Error> {
     let Command { recipe: recipe_path } = command;
 
-    // Resolve dir to dir + stone.yml
-    let recipe_path = if recipe_path.is_dir() {
-        recipe_path.join("stone.yml")
-    } else {
-        recipe_path
-    };
-
-    if !recipe_path.exists() {
-        return Err(Error::MissingRecipe(recipe_path));
-    }
-
     let recipe = Recipe::load(recipe_path)?;
     let macros = Macros::load(&env)?;
     let paths = Paths::new(&recipe, env.cache_dir, "/mason")?;
@@ -86,8 +75,6 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("recipe file does not exist: {0:?}")]
-    MissingRecipe(PathBuf),
     #[error("build root doesn't exist, make sure to run build first")]
     MissingRootFs,
     #[error("container")]
