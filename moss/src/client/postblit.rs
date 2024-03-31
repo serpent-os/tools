@@ -109,14 +109,12 @@ pub(super) fn triggers<'a>(
 
     // Load appropriate triggers from their locations and convert back to a vec of Trigger
     let triggers = match scope {
-        TriggerScope::Transaction(install, client_scope) => {
-            config::Manager::custom(scope.root_dir().join(trigger_root))
-                .load::<TransactionTrigger>()
-                .into_iter()
-                .map(|t| t.0)
-                .collect_vec()
-        }
-        TriggerScope::System(install, client_scope) => config::Manager::custom(scope.root_dir().join(trigger_root))
+        TriggerScope::Transaction(..) => config::Manager::custom(scope.root_dir().join(trigger_root))
+            .load::<TransactionTrigger>()
+            .into_iter()
+            .map(|t| t.0)
+            .collect_vec(),
+        TriggerScope::System(..) => config::Manager::custom(scope.root_dir().join(trigger_root))
             .load::<SystemTrigger>()
             .into_iter()
             .map(|t| t.0)
@@ -137,7 +135,7 @@ pub(super) fn triggers<'a>(
 impl<'a> TriggerRunner<'a> {
     pub fn execute(&self) -> Result<(), Error> {
         match self.scope {
-            TriggerScope::Transaction(install, client_scope) => {
+            TriggerScope::Transaction(install, _) => {
                 // TODO: Add caching support via /var/
                 let isolation = Container::new(install.isolation_dir())
                     .networking(false)
@@ -148,7 +146,7 @@ impl<'a> TriggerRunner<'a> {
 
                 Ok(isolation.run(|| execute_trigger_directly(&self.trigger))?)
             }
-            TriggerScope::System(install, client_scope) => {
+            TriggerScope::System(install, _) => {
                 // OK, if the root == `/` then we can run directly, otherwise we need to containerise with RW.
                 if install.root.to_string_lossy() == "/" {
                     Ok(execute_trigger_directly(&self.trigger)?)
@@ -183,7 +181,7 @@ fn execute_trigger_directly(trigger: &CompiledHandler) -> Result<(), Error> {
                 eprintln!("Failed to execute trigger: {run} {args:?}");
             }
         }
-        Handler::Delete { delete } => todo!(),
+        Handler::Delete { .. } => todo!(),
     }
 
     Ok(())

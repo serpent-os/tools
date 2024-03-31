@@ -105,7 +105,7 @@ impl<'a> PartialOrd for Package<'a> {
 
 impl<'a> Ord for Package<'a> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.name.cmp(&other.name)
+        self.name.cmp(other.name)
     }
 }
 

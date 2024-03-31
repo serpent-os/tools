@@ -3,13 +3,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use dag::Dag;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{package, Provider, Registry};
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Id(u64);
 
 enum ProviderFilter {
     /// Must be installed
@@ -30,9 +26,6 @@ enum Lookup {
 /// A Transaction is used to modify one system state to another
 #[derive(Clone, Debug)]
 pub struct Transaction<'a> {
-    // Unique identifier - baked only for commited transactions
-    id: Option<Id>,
-
     // Bound to a registry
     registry: &'a Registry,
 
@@ -45,7 +38,6 @@ pub struct Transaction<'a> {
 /// set.
 pub(super) fn new(registry: &Registry) -> Result<Transaction<'_>, Error> {
     Ok(Transaction {
-        id: None,
         registry,
         packages: Dag::default(),
     })

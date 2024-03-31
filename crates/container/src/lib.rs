@@ -6,6 +6,7 @@ use std::fs::{self, copy, create_dir_all, remove_dir};
 use std::io;
 use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
+use std::ptr::addr_of_mut;
 use std::sync::atomic::{AtomicI32, Ordering};
 
 use nix::libc::SIGCHLD;
@@ -153,7 +154,7 @@ impl Container {
                         1
                     }
                 }),
-                &mut STACK,
+                &mut *addr_of_mut!(STACK),
                 flags,
                 Some(SIGCHLD),
             )?

@@ -101,8 +101,9 @@ impl Timing {
             let gap = max_prefix_length - (key.to_string().len() + 1);
 
             println!(
-                "│{}{}  {} {}",
-                format!("{}{}", "│".dim(), key.styled()),
+                "│{}{}{}  {} {}",
+                "│".dim(),
+                key.styled(),
                 " ".repeat(gap),
                 fmt_elapsed(*elapsed),
                 fmt_progress(*elapsed, total_elapsed)
