@@ -61,6 +61,7 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
                 .read(true)
                 .write(true)
                 .create(true)
+                .truncate(true)
                 .open(".stoneContent")?;
 
             let progress = ProgressBar::new(content.header.plain_size).with_style(

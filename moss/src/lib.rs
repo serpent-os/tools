@@ -2,9 +2,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-// TODO: Remove once everything is hooked up
-#![allow(unused_variables, dead_code)]
-
 pub use self::client::Client;
 pub use self::dependency::{Dependency, Provider};
 pub use self::installation::Installation;

@@ -26,7 +26,7 @@ pub fn populate(
     // Create the moss client
     let installation = Installation::open(&builder.env.moss_dir)?;
     let mut moss_client =
-        moss::Client::with_explicit_repositories("boulder", installation, repositories)?.ephemeral(&rootfs)?;
+        moss::Client::with_explicit_repositories("boulder", installation, repositories)?.ephemeral(rootfs)?;
 
     if update_repos {
         runtime::block_on(moss_client.refresh_repositories())?;

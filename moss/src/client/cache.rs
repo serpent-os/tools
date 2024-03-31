@@ -197,6 +197,7 @@ impl Download {
             .read(true)
             .write(true)
             .create(true)
+            .truncate(true)
             .open(&content_path)?;
 
         reader.unpack_content(

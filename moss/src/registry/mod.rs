@@ -109,6 +109,7 @@ mod test {
 
     use super::*;
 
+    #[test]
     fn test_ordering() {
         let mut registry = Registry::default();
 
@@ -162,6 +163,7 @@ mod test {
         }
     }
 
+    #[test]
     fn test_flags() {
         let mut registry = Registry::default();
 

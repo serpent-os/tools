@@ -18,14 +18,6 @@ const MIGRATIONS: EmbeddedMigrations = embed_migrations!("src/db/meta/migrations
 
 mod schema;
 
-#[derive(Debug, Clone, Copy)]
-enum Table {
-    Meta,
-    Licenses,
-    Dependencies,
-    Providers,
-}
-
 #[derive(Debug)]
 pub enum Filter {
     Provider(Provider),
