@@ -86,17 +86,17 @@ impl Recipe {
 }
 
 pub fn resolve_path(path: impl AsRef<Path>) -> Result<PathBuf, Error> {
-    // Ensure it's absolute
-    let path = fs::canonicalize(&path).map_err(|_| Error::MissingRecipe(path.as_ref().to_path_buf()))?;
+    let path = path.as_ref();
 
     // Resolve dir to dir + stone.yml
-    let path = if path.is_dir() { path.join("stone.yml") } else { path };
-
-    if path.exists() {
-        Ok(path)
+    let path = if path.is_dir() {
+        path.join("stone.yml")
     } else {
-        Err(Error::MissingRecipe(path))
-    }
+        path.to_path_buf()
+    };
+
+    // Ensure it's absolute & exists
+    fs::canonicalize(&path).map_err(|_| Error::MissingRecipe(path))
 }
 
 #[derive(Debug, Error)]
