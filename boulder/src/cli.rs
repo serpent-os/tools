@@ -9,6 +9,7 @@ use thiserror::Error;
 
 mod build;
 mod chroot;
+mod new;
 mod profile;
 mod recipe;
 
@@ -37,6 +38,7 @@ pub struct Global {
 pub enum Subcommand {
     Build(build::Command),
     Chroot(chroot::Command),
+    New(new::Command),
     Profile(profile::Command),
     Recipe(recipe::Command),
 }
@@ -49,6 +51,7 @@ pub fn process() -> Result<(), Error> {
     match subcommand {
         Subcommand::Build(command) => build::handle(command, env)?,
         Subcommand::Chroot(command) => chroot::handle(command, env)?,
+        Subcommand::New(command) => new::handle(command)?,
         Subcommand::Profile(command) => profile::handle(command, env)?,
         Subcommand::Recipe(command) => recipe::handle(command)?,
     }
@@ -62,6 +65,8 @@ pub enum Error {
     Build(#[from] build::Error),
     #[error("chroot")]
     Chroot(#[from] chroot::Error),
+    #[error("new")]
+    New(#[from] new::Error),
     #[error("profile")]
     Profile(#[from] profile::Error),
     #[error("env")]
