@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: Copyright © 2020-2024 Serpent OS Developers
 //
 // SPDX-License-Identifier: MPL-2.0
-use std::path::Path;
 
 use crate::draft::build::{Error, Phases, State};
+use crate::draft::File;
 
 pub fn phases() -> Phases {
     Phases {
@@ -15,13 +15,13 @@ pub fn phases() -> Phases {
     }
 }
 
-pub fn process(state: &mut State, path: &Path) -> Result<(), Error> {
+pub fn process(state: &mut State, file: &File) -> Result<(), Error> {
     // Depth too great
-    if path.iter().count() > 2 {
+    if file.depth() > 0 {
         return Ok(());
     }
 
-    if path.ends_with("CMakeLists.txt") {
+    if file.path.ends_with("CMakeLists.txt") {
         state.increment_confidence(20);
     }
 

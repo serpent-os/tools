@@ -1,9 +1,8 @@
 // SPDX-FileCopyrightText: Copyright © 2020-2024 Serpent OS Developers
 //
 // SPDX-License-Identifier: MPL-2.0
-use std::path::Path;
-
 use crate::draft::build::{Error, Phases, State};
+use crate::draft::File;
 
 pub fn phases() -> Phases {
     Phases {
@@ -17,8 +16,8 @@ pub fn phases() -> Phases {
     }
 }
 
-pub fn process(state: &mut State, path: &Path) -> Result<(), Error> {
-    if path.ends_with("Cargo.toml") {
+pub fn process(state: &mut State, file: &File) -> Result<(), Error> {
+    if file.path.ends_with("Cargo.toml") {
         state.increment_confidence(100);
     }
 

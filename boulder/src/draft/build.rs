@@ -5,13 +5,15 @@ use std::{
     collections::{HashMap, HashSet},
     fmt,
     num::NonZeroU64,
-    path::{Path, PathBuf},
 };
 
 use moss::Dependency;
 
+use super::File;
+
 mod cargo;
 mod cmake;
+mod meson;
 
 pub type Error = Box<dyn std::error::Error>;
 
@@ -21,22 +23,25 @@ pub type Error = Box<dyn std::error::Error>;
 pub enum System {
     Cargo,
     Cmake,
+    Meson,
 }
 
 impl System {
-    const ALL: &'static [Self] = &[Self::Cargo, Self::Cmake];
+    const ALL: &'static [Self] = &[Self::Cargo, Self::Cmake, Self::Meson];
 
     pub fn phases(&self) -> Phases {
         match self {
             System::Cargo => cargo::phases(),
             System::Cmake => cmake::phases(),
+            System::Meson => meson::phases(),
         }
     }
 
-    fn process(&self, state: &mut State, path: &Path) -> Result<(), Error> {
+    fn process(&self, state: &mut State, file: &File) -> Result<(), Error> {
         match self {
-            System::Cargo => cargo::process(state, path),
-            System::Cmake => cmake::process(state, path),
+            System::Cargo => cargo::process(state, file),
+            System::Cmake => cmake::process(state, file),
+            System::Meson => meson::process(state, file),
         }
     }
 }
@@ -97,7 +102,7 @@ pub struct Analysis {
 
 /// Analyze the provided paths to determine which build [`System`]
 /// the project uses and any dependencies that are identified
-pub fn analyze(paths: &[PathBuf]) -> Result<Analysis, Error> {
+pub fn analyze(files: &[File]) -> Result<Analysis, Error> {
     let mut dependencies = HashSet::new();
     let mut confidences = HashMap::new();
 
@@ -107,7 +112,7 @@ pub fn analyze(paths: &[PathBuf]) -> Result<Analysis, Error> {
             confidence: 0,
         };
 
-        for path in paths {
+        for path in files {
             system.process(&mut state, path)?;
         }
 

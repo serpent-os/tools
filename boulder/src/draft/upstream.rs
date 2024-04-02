@@ -19,9 +19,9 @@ pub struct Upstream {
     pub hash: String,
 }
 
-/// Fetch and extract the provided upstreams under `target_dir`
-pub fn fetch_and_extract(upstreams: &[Url], extract_dir: &Path) -> Result<Vec<Upstream>, Error> {
-    util::recreate_dir(&extract_dir)?;
+/// Fetch and extract the provided upstreams under `extract_root`
+pub fn fetch_and_extract(upstreams: &[Url], extract_root: &Path) -> Result<Vec<Upstream>, Error> {
+    util::recreate_dir(&extract_root)?;
 
     let mpb = MultiProgress::new();
 
@@ -29,7 +29,7 @@ pub fn fetch_and_extract(upstreams: &[Url], extract_dir: &Path) -> Result<Vec<Up
         stream::iter(upstreams)
             .map(|uri| async {
                 let name = util::uri_file_name(uri);
-                let archive_path = extract_dir.join(name);
+                let archive_path = extract_root.join(name);
 
                 let pb = mpb.add(
                     ProgressBar::new_spinner()
@@ -46,7 +46,7 @@ pub fn fetch_and_extract(upstreams: &[Url], extract_dir: &Path) -> Result<Vec<Up
 
                 pb.set_message(format!("{} {}", "Extracting".yellow(), *uri));
 
-                extract(&archive_path, &extract_dir).await?;
+                extract(&archive_path, &extract_root).await?;
 
                 fs::remove_file(archive_path).await?;
 
