@@ -18,7 +18,7 @@ pub fn phases() -> Phases {
 }
 
 pub fn process(state: &mut State, file: &File) -> Result<(), Error> {
-    if file.path.ends_with("Cargo.toml") {
+    if file.file_name() == "Cargo.toml" {
         state.increment_confidence(100);
     }
 

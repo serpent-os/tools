@@ -20,7 +20,7 @@ pub fn process(state: &mut State, file: &File) -> Result<(), Error> {
         return Ok(());
     }
 
-    if file.path.ends_with("CMakeLists.txt") {
+    if file.file_name() == "CMakeLists.txt" {
         state.increment_confidence(20);
     }
 

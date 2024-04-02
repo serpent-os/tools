@@ -15,6 +15,7 @@ mod autotools;
 mod cargo;
 mod cmake;
 mod meson;
+mod python;
 
 pub type Error = Box<dyn std::error::Error>;
 
@@ -26,10 +27,19 @@ pub enum System {
     Cargo,
     Cmake,
     Meson,
+    PythonPep517,
+    PythonSetupTools,
 }
 
 impl System {
-    const ALL: &'static [Self] = &[Self::Autotools, Self::Cargo, Self::Cmake, Self::Meson];
+    const ALL: &'static [Self] = &[
+        Self::Autotools,
+        Self::Cargo,
+        Self::Cmake,
+        Self::Meson,
+        Self::PythonPep517,
+        Self::PythonSetupTools,
+    ];
 
     pub fn environment(&self) -> Option<&'static str> {
         match self {
@@ -37,6 +47,8 @@ impl System {
             System::Cargo => Some(cargo::environment()),
             System::Cmake => None,
             System::Meson => None,
+            System::PythonPep517 => None,
+            System::PythonSetupTools => None,
         }
     }
 
@@ -46,6 +58,8 @@ impl System {
             System::Cargo => cargo::phases(),
             System::Cmake => cmake::phases(),
             System::Meson => meson::phases(),
+            System::PythonPep517 => python::pep517::phases(),
+            System::PythonSetupTools => python::setup_tools::phases(),
         }
     }
 
@@ -55,6 +69,8 @@ impl System {
             System::Cargo => cargo::process(state, file),
             System::Cmake => cmake::process(state, file),
             System::Meson => meson::process(state, file),
+            System::PythonPep517 => python::pep517::process(state, file),
+            System::PythonSetupTools => python::setup_tools::process(state, file),
         }
     }
 }
