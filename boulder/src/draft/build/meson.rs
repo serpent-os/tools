@@ -11,7 +11,6 @@ use crate::draft::File;
 
 pub fn phases() -> Phases {
     Phases {
-        environment: None,
         setup: Some("%meson"),
         build: Some("%meson_build"),
         install: Some("%meson_install"),

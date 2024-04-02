@@ -7,7 +7,6 @@ use crate::draft::File;
 
 pub fn phases() -> Phases {
     Phases {
-        environment: None,
         setup: Some("%cmake"),
         build: Some("%cmake_build"),
         install: Some("%cmake_install"),

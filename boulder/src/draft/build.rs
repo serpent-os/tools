@@ -11,6 +11,7 @@ use moss::Dependency;
 
 use super::File;
 
+mod autotools;
 mod cargo;
 mod cmake;
 mod meson;
@@ -21,16 +22,27 @@ pub type Error = Box<dyn std::error::Error>;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display)]
 #[strum(serialize_all = "lowercase")]
 pub enum System {
+    Autotools,
     Cargo,
     Cmake,
     Meson,
 }
 
 impl System {
-    const ALL: &'static [Self] = &[Self::Cargo, Self::Cmake, Self::Meson];
+    const ALL: &'static [Self] = &[Self::Autotools, Self::Cargo, Self::Cmake, Self::Meson];
+
+    pub fn environment(&self) -> Option<&'static str> {
+        match self {
+            System::Autotools => None,
+            System::Cargo => Some(cargo::environment()),
+            System::Cmake => None,
+            System::Meson => None,
+        }
+    }
 
     pub fn phases(&self) -> Phases {
         match self {
+            System::Autotools => autotools::phases(),
             System::Cargo => cargo::phases(),
             System::Cmake => cmake::phases(),
             System::Meson => meson::phases(),
@@ -39,6 +51,7 @@ impl System {
 
     fn process(&self, state: &mut State, file: &File) -> Result<(), Error> {
         match self {
+            System::Autotools => autotools::process(state, file),
             System::Cargo => cargo::process(state, file),
             System::Cmake => cmake::process(state, file),
             System::Meson => meson::process(state, file),
@@ -48,7 +61,6 @@ impl System {
 
 /// Commands to run for each build phase of the [`System`]
 pub struct Phases {
-    pub environment: Option<&'static str>,
     pub setup: Option<&'static str>,
     pub build: Option<&'static str>,
     pub install: Option<&'static str>,
@@ -64,7 +76,6 @@ impl fmt::Display for Phases {
                 Ok(())
             }
         };
-        fmt("environment", self.environment)?;
         fmt("setup", self.setup)?;
         fmt("build", self.build)?;
         fmt("install", self.install)?;

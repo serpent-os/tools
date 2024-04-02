@@ -4,11 +4,12 @@
 use crate::draft::build::{Error, Phases, State};
 use crate::draft::File;
 
+pub fn environment() -> &'static str {
+    "export HOME=$(pwd)\n    export CARGO_HTTP_CAINFO=/usr/share/defaults/etc/ssl/certs/ca-certificates.crt"
+}
+
 pub fn phases() -> Phases {
     Phases {
-        environment: Some(
-            "export HOME=$(pwd)\n    export CARGO_HTTP_CAINFO=/usr/share/defaults/etc/ssl/certs/ca-certificates.crt",
-        ),
         setup: Some("%cargo_fetch"),
         build: Some("%cargo_build"),
         install: Some("%cargo_install"),

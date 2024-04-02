@@ -58,6 +58,10 @@ impl Drafter {
         };
 
         let builddeps = builddeps(build.dependencies);
+        let environment = build_system
+            .environment()
+            .map(|env| format!("environment : |\n    {env}\n"))
+            .unwrap_or_default();
         let phases = build_system.phases();
 
         #[rustfmt::skip]
@@ -77,7 +81,7 @@ summary     : UPDATE SUMMARY
 description : |
     UPDATE DESCRIPTION
 license     : UPDATE LICENSE
-{builddeps}{phases}
+{builddeps}{environment}{phases}
 ",
             metadata.source.name,
             metadata.source.version,
