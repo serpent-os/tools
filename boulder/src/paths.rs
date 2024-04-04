@@ -24,10 +24,16 @@ pub struct Paths {
     host_root: PathBuf,
     guest_root: PathBuf,
     recipe_dir: PathBuf,
+    output_dir: PathBuf,
 }
 
 impl Paths {
-    pub fn new(recipe: &Recipe, host_root: impl Into<PathBuf>, guest_root: impl Into<PathBuf>) -> io::Result<Self> {
+    pub fn new(
+        recipe: &Recipe,
+        host_root: impl Into<PathBuf>,
+        guest_root: impl Into<PathBuf>,
+        output_dir: impl Into<PathBuf>,
+    ) -> io::Result<Self> {
         let id = Id::new(recipe);
 
         let recipe_dir = recipe.path.parent().unwrap_or(&PathBuf::default()).canonicalize()?;
@@ -37,6 +43,7 @@ impl Paths {
             host_root: host_root.into().canonicalize()?,
             guest_root: guest_root.into(),
             recipe_dir,
+            output_dir: output_dir.into(),
         };
 
         util::ensure_dir_exists(&job.rootfs().host)?;
@@ -108,6 +115,11 @@ impl Paths {
         let relative = mapping.guest.strip_prefix("/").unwrap_or(&mapping.guest);
 
         self.rootfs().host.join(relative)
+    }
+
+    /// Returns the output directory used for artefact syncing
+    pub fn output_dir(&self) -> &PathBuf {
+        &self.output_dir
     }
 }
 

@@ -49,12 +49,18 @@ pub struct Target {
 }
 
 impl Builder {
-    pub fn new(recipe_path: &Path, env: Env, profile: profile::Id, ccache: bool) -> Result<Self, Error> {
+    pub fn new(
+        recipe_path: &Path,
+        env: Env,
+        profile: profile::Id,
+        ccache: bool,
+        output_dir: impl Into<PathBuf>,
+    ) -> Result<Self, Error> {
         let recipe = Recipe::load(recipe_path)?;
 
         let macros = Macros::load(&env)?;
 
-        let paths = Paths::new(&recipe, &env.cache_dir, "/mason")?;
+        let paths = Paths::new(&recipe, &env.cache_dir, "/mason", output_dir)?;
 
         let build_targets = recipe.build_targets();
 

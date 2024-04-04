@@ -46,13 +46,14 @@ pub struct Command {
 }
 
 pub fn handle(command: Command, env: Env) -> Result<(), Error> {
+    let output = command.output.clone();
     let Command {
         profile,
-        output,
         recipe: recipe_path,
         ccache,
         update,
         build_release,
+        ..
     } = command;
 
     let mut timing = Timing::default();
@@ -62,7 +63,7 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
         return Err(Error::MissingOutput(output));
     }
 
-    let builder = Builder::new(&recipe_path, env, profile, ccache)?;
+    let builder = Builder::new(&recipe_path, env, profile, ccache, output)?;
     builder.setup(&mut timing, timer, update)?;
 
     let paths = &builder.paths;

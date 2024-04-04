@@ -212,7 +212,7 @@ pub fn sync_artefacts(paths: &Paths) -> Result<(), io::Error> {
     for path in util::enumerate_files(&paths.artefacts().host, |_| true)? {
         let filename = path.file_name().and_then(|p| p.to_str()).unwrap_or_default();
 
-        let target = paths.recipe().host.join(filename);
+        let target = paths.output_dir().join(filename);
 
         if target.exists() {
             fs::remove_file(&target)?;
