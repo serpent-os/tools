@@ -69,6 +69,12 @@ impl Cobble {
         self.query(flags, |_| true)
     }
 
+    pub fn query_keyword(&self, keyword: &str, flags: package::Flags) -> Vec<Package> {
+        self.query(flags, |meta| {
+            meta.name.contains(keyword) || meta.summary.contains(keyword)
+        })
+    }
+
     pub fn query_provider(&self, provider: &Provider, flags: package::Flags) -> Vec<Package> {
         self.query(flags, |meta| meta.providers.contains(provider))
     }

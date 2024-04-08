@@ -72,6 +72,10 @@ impl Registry {
         self.query(move |plugin| plugin.package(id))
     }
 
+    pub fn by_keyword<'a>(&'a self, keyword: &'a str, flags: package::Flags) -> impl Iterator<Item = Package> + 'a {
+        self.query(move |plugin| plugin.query_keyword(keyword, flags))
+    }
+
     /// Return a sorted stream of [`Package`] matching the given [`Flags`]
     ///
     /// [`Flags`]: package::Flags

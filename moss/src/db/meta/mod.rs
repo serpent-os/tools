@@ -27,10 +27,11 @@ enum Table {
 }
 
 #[derive(Debug)]
-pub enum Filter {
+pub enum Filter<'a> {
     Provider(Provider),
     Dependency(Dependency),
     Name(package::Name),
+    Keyword(&'a str),
 }
 
 #[derive(Debug, Clone)]
@@ -154,6 +155,17 @@ impl Database {
                     .select(model::Meta::as_select())
                     .filter(model::meta::name.eq(name.to_string()))
                     .load_iter::<model::Meta, _>(conn)?,
+                Some(Filter::Keyword(keyword)) => {
+                    let pattern = format!("%{}%", keyword);
+                    model::meta::table
+                        .select(model::Meta::as_select())
+                        .filter(
+                            model::meta::name
+                                .like(pattern.clone())
+                                .or(model::meta::summary.like(pattern.clone())),
+                        )
+                        .load_iter::<model::Meta, _>(conn)?
+                }
                 None => model::meta::table
                     .select(model::Meta::as_select())
                     .load_iter::<model::Meta, _>(conn)?,
@@ -178,6 +190,18 @@ impl Database {
                     .inner_join(model::meta::table)
                     .filter(model::meta::name.eq(name.to_string()))
                     .load_iter::<model::License, _>(conn)?,
+                Some(Filter::Keyword(keyword)) => {
+                    let pattern = format!("%{}%", keyword);
+                    model::meta_licenses::table
+                        .select(model::License::as_select())
+                        .inner_join(model::meta::table)
+                        .filter(
+                            model::meta::name
+                                .like(pattern.clone())
+                                .or(model::meta::summary.like(pattern.clone())),
+                        )
+                        .load_iter::<model::License, _>(conn)?
+                }
                 None => model::meta_licenses::table
                     .select(model::License::as_select())
                     .load_iter::<model::License, _>(conn)?,
@@ -206,6 +230,18 @@ impl Database {
                     .inner_join(model::meta::table)
                     .filter(model::meta::name.eq(name.to_string()))
                     .load_iter::<model::Dependency, _>(conn)?,
+                Some(Filter::Keyword(keyword)) => {
+                    let pattern = format!("%{}%", keyword);
+                    model::meta_dependencies::table
+                        .select(model::Dependency::as_select())
+                        .inner_join(model::meta::table)
+                        .filter(
+                            model::meta::name
+                                .like(pattern.clone())
+                                .or(model::meta::summary.like(pattern.clone())),
+                        )
+                        .load_iter::<model::Dependency, _>(conn)?
+                }
                 None => model::meta_dependencies::table
                     .select(model::Dependency::as_select())
                     .load_iter::<model::Dependency, _>(conn)?,
@@ -234,6 +270,18 @@ impl Database {
                     .inner_join(model::meta::table)
                     .filter(model::meta::name.eq(name.to_string()))
                     .load_iter::<model::Provider, _>(conn)?,
+                Some(Filter::Keyword(keyword)) => {
+                    let pattern = format!("%{}%", keyword);
+                    model::meta_providers::table
+                        .select(model::Provider::as_select())
+                        .inner_join(model::meta::table)
+                        .filter(
+                            model::meta::name
+                                .like(pattern.clone())
+                                .or(model::meta::summary.like(pattern.clone())),
+                        )
+                        .load_iter::<model::Provider, _>(conn)?
+                }
                 None => model::meta_providers::table
                     .select(model::Provider::as_select())
                     .load_iter::<model::Provider, _>(conn)?,
