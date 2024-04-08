@@ -77,6 +77,10 @@ impl Repository {
         self.query(flags, None)
     }
 
+    pub fn query_keyword(&self, keyword: &str, flags: package::Flags) -> Vec<Package> {
+        self.query(flags, Some(db::meta::Filter::Keyword(keyword)))
+    }
+
     /// Query all packages that match the given provider identity
     pub fn query_provider(&self, provider: &Provider, flags: package::Flags) -> Vec<Package> {
         self.query(flags, Some(db::meta::Filter::Provider(provider.clone())))

@@ -18,6 +18,12 @@ pub struct Id(pub(super) String);
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, AsRef, From, Into, Display)]
 pub struct Name(String);
 
+impl Name {
+    pub fn contains(&self, text: &str) -> bool {
+        self.0.contains(text)
+    }
+}
+
 /// The metadata of a [`Package`]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Meta {

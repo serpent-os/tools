@@ -62,6 +62,17 @@ impl Plugin {
         })
     }
 
+    pub fn query_keyword(&self, keyword: &str, flags: package::Flags) -> package::Sorted<Vec<Package>> {
+        package::Sorted::new(match self {
+            Plugin::Active(plugin) => plugin.query_keyword(keyword, flags),
+            Plugin::Cobble(plugin) => plugin.query_keyword(keyword, flags),
+            Plugin::Repository(plugin) => plugin.query_keyword(keyword, flags),
+
+            #[cfg(test)]
+            Plugin::Test(plugin) => plugin.query_keyword(keyword, flags),
+        })
+    }
+
     /// Returns a list of packages with matching `provider` and `flags`
     pub fn query_provider(&self, provider: &Provider, flags: package::Flags) -> package::Sorted<Vec<Package>> {
         package::Sorted::new(match self {
@@ -143,6 +154,14 @@ pub mod test {
             self.packages
                 .iter()
                 .filter(|p| p.flags.contains(flags))
+                .cloned()
+                .collect()
+        }
+
+        pub fn query_keyword(&self, keyword: &str, flags: package::Flags) -> Vec<Package> {
+            self.packages
+                .iter()
+                .filter(|pkg| pkg.meta.name.contains(keyword) || pkg.meta.summary.contains(keyword))
                 .cloned()
                 .collect()
         }
