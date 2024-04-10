@@ -19,7 +19,7 @@ use thiserror::Error;
 
 use tui::dialoguer::theme::ColorfulTheme;
 use tui::dialoguer::Confirm;
-use tui::pretty::print_to_columns;
+use tui::pretty::autoprint_columns;
 
 pub fn command() -> Command {
     Command::new("sync")
@@ -98,13 +98,13 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
     if !synced.is_empty() {
         println!("The following packages will be sync'd: ");
         println!();
-        print_to_columns(synced.as_slice());
+        autoprint_columns(synced.as_slice());
         println!();
     }
     if !removed.is_empty() {
         println!("The following orphaned packages will be removed: ");
         println!();
-        print_to_columns(removed.as_slice());
+        autoprint_columns(removed.as_slice());
         println!();
     }
 

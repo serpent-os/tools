@@ -29,28 +29,33 @@ pub trait ColumnDisplay: Sized {
     fn display_column(&self, writer: &mut impl Write, col: Column, width: usize);
 }
 
-/// Print a vec of items that implement the ColumnDisplay trait.
+pub fn print_columns<T: ColumnDisplay>(items: &[T], colnum: usize) {
+    print(items, Some(colnum))
+}
+
+/// Prints a vec of items that implement the ColumnDisplay trait.
 /// These will be printed in individual columns assuming that the input order is
 /// alphabetically sorted, to give each column an ascending alpha sort.
-pub fn print_to_columns<T: ColumnDisplay>(items: &[T]) {
-    let terminal_width = TermSize::get().width;
+pub fn autoprint_columns<T: ColumnDisplay>(items: &[T]) {
+    print(items, None)
+}
 
-    // Figure render constraints
+fn print<T: ColumnDisplay>(items: &[T], colnum: Option<usize>) {
+    // Figure render constraints.
     let largest_element = items.iter().max_by_key(|p| p.get_display_width() + 3).unwrap();
     let largest_width = largest_element.get_display_width() + 6;
-    let num_columns = max(1, terminal_width / largest_width);
-    let num_rows = ((items.len() as f32) / (num_columns as f32)).ceil() as usize;
+    let colnum = colnum.unwrap_or_else(|| max(1, TermSize::get().width / largest_width));
+    let rownum = ((items.len() as f32) / (colnum as f32)).ceil() as usize;
 
     let mut stdout = stdout().lock();
-
-    for y in 0..num_rows {
-        for x in 0..num_columns {
-            let idx = y + (x * num_rows);
+    for y in 0..rownum {
+        for x in 0..colnum {
+            let idx = y + (x * rownum);
             let state = items.get(idx);
             if let Some(state) = state {
                 let column = if x == 0 {
                     Column::First
-                } else if x == num_columns - 1 {
+                } else if x == colnum - 1 {
                     Column::Last
                 } else {
                     Column::Nth(x)
@@ -58,6 +63,6 @@ pub fn print_to_columns<T: ColumnDisplay>(items: &[T]) {
                 state.display_column(&mut stdout, column, largest_width - state.get_display_width());
             }
         }
-        println!();
+        let _ = writeln!(stdout);
     }
 }

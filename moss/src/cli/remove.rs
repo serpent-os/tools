@@ -17,7 +17,7 @@ use moss::{
 use thiserror::Error;
 use tui::{
     dialoguer::{theme::ColorfulTheme, Confirm},
-    pretty::print_to_columns,
+    pretty::autoprint_columns,
     Styled,
 };
 
@@ -77,7 +77,7 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
 
     println!("The following package(s) will be removed:");
     println!();
-    print_to_columns(&removed);
+    autoprint_columns(&removed);
     println!();
 
     let result = if yes {
