@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 use tui::{
     dialoguer::{theme::ColorfulTheme, Confirm},
-    pretty::print_to_columns,
+    pretty::autoprint_columns,
 };
 
 use crate::{
@@ -60,7 +60,7 @@ pub fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<Timing, 
         if !installed.is_empty() {
             println!("The following package(s) are already installed:");
             println!();
-            print_to_columns(&installed);
+            autoprint_columns(&installed);
         }
 
         return Ok(timing);
@@ -68,7 +68,7 @@ pub fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<Timing, 
 
     println!("The following package(s) will be installed:");
     println!();
-    print_to_columns(&missing);
+    autoprint_columns(&missing);
     println!();
 
     // Must we prompt?

@@ -12,7 +12,7 @@ use itertools::Itertools;
 use thiserror::Error;
 use tui::{
     dialoguer::{theme::ColorfulTheme, Confirm},
-    pretty::print_to_columns,
+    pretty::autoprint_columns,
 };
 
 use crate::{client::cache, db, environment, package, state, Installation, State};
@@ -125,7 +125,7 @@ pub fn prune(
     // Print out the states to be removed to the user
     println!("The following state(s) will be removed:");
     println!();
-    print_to_columns(&removals.iter().map(state::ColumnDisplay).collect::<Vec<_>>());
+    autoprint_columns(&removals.iter().map(state::ColumnDisplay).collect::<Vec<_>>());
     println!();
 
     let result = if yes {
