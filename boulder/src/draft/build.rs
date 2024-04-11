@@ -1,0 +1,160 @@
+// SPDX-FileCopyrightText: Copyright © 2020-2024 Serpent OS Developers
+//
+// SPDX-License-Identifier: MPL-2.0
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+    num::NonZeroU64,
+};
+
+use moss::Dependency;
+
+use super::File;
+
+mod autotools;
+mod cargo;
+mod cmake;
+mod meson;
+mod python;
+
+pub type Error = Box<dyn std::error::Error>;
+
+/// A build system
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display)]
+#[strum(serialize_all = "lowercase")]
+pub enum System {
+    Autotools,
+    Cargo,
+    Cmake,
+    Meson,
+    PythonPep517,
+    PythonSetupTools,
+}
+
+impl System {
+    const ALL: &'static [Self] = &[
+        Self::Autotools,
+        Self::Cargo,
+        Self::Cmake,
+        Self::Meson,
+        Self::PythonPep517,
+        Self::PythonSetupTools,
+    ];
+
+    pub fn environment(&self) -> Option<&'static str> {
+        match self {
+            System::Autotools => None,
+            System::Cargo => Some(cargo::environment()),
+            System::Cmake => None,
+            System::Meson => None,
+            System::PythonPep517 => None,
+            System::PythonSetupTools => None,
+        }
+    }
+
+    pub fn phases(&self) -> Phases {
+        match self {
+            System::Autotools => autotools::phases(),
+            System::Cargo => cargo::phases(),
+            System::Cmake => cmake::phases(),
+            System::Meson => meson::phases(),
+            System::PythonPep517 => python::pep517::phases(),
+            System::PythonSetupTools => python::setup_tools::phases(),
+        }
+    }
+
+    fn process(&self, state: &mut State, file: &File) -> Result<(), Error> {
+        match self {
+            System::Autotools => autotools::process(state, file),
+            System::Cargo => cargo::process(state, file),
+            System::Cmake => cmake::process(state, file),
+            System::Meson => meson::process(state, file),
+            System::PythonPep517 => python::pep517::process(state, file),
+            System::PythonSetupTools => python::setup_tools::process(state, file),
+        }
+    }
+}
+
+/// Commands to run for each build phase of the [`System`]
+pub struct Phases {
+    pub setup: Option<&'static str>,
+    pub build: Option<&'static str>,
+    pub install: Option<&'static str>,
+    pub check: Option<&'static str>,
+}
+
+impl fmt::Display for Phases {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut fmt = |name, value| {
+            if let Some(value) = value {
+                writeln!(f, "{name:<12}: |\n    {value}")
+            } else {
+                Ok(())
+            }
+        };
+        fmt("setup", self.setup)?;
+        fmt("build", self.build)?;
+        fmt("install", self.install)?;
+        fmt("check", self.check)
+    }
+}
+
+/// State passed to each system when processing paths
+struct State<'a> {
+    /// Any dependencies that need to be recorded
+    dependencies: &'a mut HashSet<Dependency>,
+    /// Total confidence level of the current build [`System`]
+    confidence: u64,
+}
+
+impl<'a> State<'a> {
+    /// Increase the confidence that this project uses the current build [`System`]
+    pub fn increment_confidence(&mut self, amount: u64) {
+        self.confidence += amount;
+    }
+
+    /// Add a dependency to output in `builddeps`
+    pub fn add_dependency(&mut self, dependency: Dependency) {
+        self.dependencies.insert(dependency);
+    }
+}
+
+/// Analysis results from [`analyze`]
+pub struct Analysis {
+    /// The detected build [`System`], if any
+    pub detected_system: Option<System>,
+    /// All detected dependencies
+    pub dependencies: HashSet<Dependency>,
+}
+
+/// Analyze the provided paths to determine which build [`System`]
+/// the project uses and any dependencies that are identified
+pub fn analyze(files: &[File]) -> Result<Analysis, Error> {
+    let mut dependencies = HashSet::new();
+    let mut confidences = HashMap::new();
+
+    for system in System::ALL {
+        let mut state = State {
+            dependencies: &mut dependencies,
+            confidence: 0,
+        };
+
+        for path in files {
+            system.process(&mut state, path)?;
+        }
+
+        if let Some(confidence) = NonZeroU64::new(state.confidence) {
+            confidences.insert(*system, confidence);
+        }
+    }
+
+    let detected_system = confidences
+        .into_iter()
+        .max_by_key(|(_, confidence)| *confidence)
+        .map(|(system, _)| system);
+
+    Ok(Analysis {
+        detected_system,
+        dependencies,
+    })
+}

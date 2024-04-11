@@ -7,7 +7,10 @@ use std::{
     path::PathBuf,
 };
 
-use boulder::recipe;
+use boulder::{
+    draft::{self, Drafter},
+    recipe,
+};
 use clap::Parser;
 use futures::StreamExt;
 use moss::{request, runtime};
@@ -17,7 +20,7 @@ use tokio::io::AsyncWriteExt;
 use url::Url;
 
 #[derive(Debug, Parser)]
-#[command(about = "Utilities to manipulate stone recipe files")]
+#[command(about = "Utilities to create and manipulate stone recipe files")]
 pub struct Command {
     #[command(subcommand)]
     subcommand: Subcommand,
@@ -25,6 +28,18 @@ pub struct Command {
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Subcommand {
+    #[command(about = "Create skeletal stone.yaml recipe from source archive URIs")]
+    New {
+        #[arg(
+            short,
+            long,
+            default_value = "./stone.yaml",
+            help = "Location to output generated build recipe"
+        )]
+        output: PathBuf,
+        #[arg(required = true, value_name = "URI", help = "Source archive URIs")]
+        upstreams: Vec<Url>,
+    },
     #[command(about = "Update a recipe file")]
     Update {
         #[arg(short, long, required = true, help = "Update version")]
@@ -65,6 +80,7 @@ fn parse_upstream(s: &str) -> Result<Upstream, String> {
 
 pub fn handle(command: Command) -> Result<(), Error> {
     match command.subcommand {
+        Subcommand::New { output, upstreams } => new(output, upstreams),
         Subcommand::Update {
             recipe,
             overwrite,
@@ -72,6 +88,20 @@ pub fn handle(command: Command) -> Result<(), Error> {
             upstreams,
         } => update(recipe, overwrite, version, upstreams),
     }
+}
+
+fn new(output: PathBuf, upstreams: Vec<Url>) -> Result<(), Error> {
+    // We use async to fetch upstreams
+    let _guard = runtime::init();
+
+    let drafter = Drafter::new(upstreams);
+    let recipe = drafter.run()?;
+
+    fs::write(&output, recipe).map_err(Error::Write)?;
+
+    println!("Saved recipe to {output:?}");
+
+    Ok(())
 }
 
 fn update(recipe: Option<PathBuf>, overwrite: bool, version: String, upstreams: Vec<Upstream>) -> Result<(), Error> {
@@ -221,4 +251,6 @@ pub enum Error {
     FetchIo(#[source] io::Error),
     #[error("invalid utf-8 input")]
     Utf8(#[from] std::string::FromUtf8Error),
+    #[error("draft")]
+    Draft(#[from] draft::Error),
 }

@@ -42,7 +42,8 @@ pub enum Subcommand {
 }
 
 pub fn process() -> Result<(), Error> {
-    let Command { global, subcommand } = Command::parse();
+    let args = replace_aliases(std::env::args());
+    let Command { global, subcommand } = Command::parse_from(args);
 
     let env = Env::new(global.cache_dir, global.config_dir, global.data_dir, global.moss_root)?;
 
@@ -54,6 +55,24 @@ pub fn process() -> Result<(), Error> {
     }
 
     Ok(())
+}
+
+fn replace_aliases(args: std::env::Args) -> Vec<String> {
+    const ALIASES: &[(&str, &[&str])] = &[("new", &["recipe", "new"])];
+
+    let mut args = args.collect::<Vec<_>>();
+
+    for (alias, replacements) in ALIASES {
+        let Some(pos) = args.iter().position(|a| a == *alias) else {
+            continue;
+        };
+
+        args.splice(pos..pos + 1, replacements.iter().map(|arg| arg.to_string()));
+
+        break;
+    }
+
+    args
 }
 
 #[derive(Debug, Error)]
