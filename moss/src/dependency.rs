@@ -10,7 +10,7 @@
 //!
 //! A Dependency, as expected, is a simple tagged string defining what *kind* of thing
 //! a package depends on, and what that thing is. More specifically this could be a shared
-//! library dependency on `libz.so.1`, expressed as a [`Kind::SharedLibary`] dependency
+//! library dependency on `libz.so.1`, expressed as a [`Kind::SharedLibrary`] dependency
 //! with target `libz.so.1(x86_64)`.
 //!
 //! As one might expect, a [`Provider`] is the inverse of a dependency. It is used to record
