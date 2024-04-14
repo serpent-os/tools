@@ -20,6 +20,9 @@ jobs:
     - name: Checkout source
       uses: actions/checkout@v4
 
+    - name: typos-action
+      uses: crate-ci/typos@v1.20.8
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
       with:
