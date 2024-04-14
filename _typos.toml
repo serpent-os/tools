@@ -1,0 +1,12 @@
+[default]
+
+[default.extend-words]
+restat = "restat"
+
+# thanks to base yamls
+idae = "idae"
+
+[files]
+extend-exclude = [
+    "serpent-style/**/*"
+]
