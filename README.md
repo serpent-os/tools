@@ -29,13 +29,6 @@ Progress:
  - [x] GC / cleanups of latent states
  - [ ] Features (previously: Subscriptions)
 
-## Test libstone
-
-```bash
-$ cargo test
-```
-
-
 ## Building moss
 
 ```bash
@@ -67,7 +60,7 @@ eat your operating system.
 Please ensure all tests are running locally without issue:
 
 ```bash
-$ cargo test
+$ cargo test --all
 
 # Prior to commiting a change:
 $ cargo fmt
