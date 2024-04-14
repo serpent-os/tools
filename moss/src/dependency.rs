@@ -2,12 +2,31 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+//! Moss (v1) dependency and provider types
+//!
+//! This module currently defines the dependency and provider kinds and layouts,
+//! but in a future version of moss each version-specific implementation will live
+//! in a nested module, i.e `crate::dependency::v1`
+//!
+//! A Dependency, as expected, is a simple tagged string defining what *kind* of thing
+//! a package depends on, and what that thing is. More specifically this could be a shared
+//! library dependency on `libz.so.1`, expressed as a [`Kind::SharedLibary`] dependency
+//! with target `libz.so.1(x86_64)`.
+//!
+//! As one might expect, a [`Provider`] is the inverse of a dependency. It is used to record
+//! the capabilities of a package such that others may depend on it through resolution.
+//!
+//! We acknowledge the current dependency format, while powerful, does not allow expressing
+//! relationship constraints. This was a deliberate decision due to the rolling nature of
+//! Serpent OS, however more expressive dependency types will be introduced in the next major
+//! stone format.
 use std::str::FromStr;
 
 use derive_more::Display;
 use stone::payload;
 use thiserror::Error;
 
+/// Every dependency
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString)]
 #[strum(serialize_all = "lowercase")]
 pub enum Kind {
@@ -59,6 +78,7 @@ impl From<payload::meta::Dependency> for Kind {
     }
 }
 
+/// Convert our [`Kind`] into a [`payload::meta::Dependency]``
 impl From<Kind> for payload::meta::Dependency {
     fn from(kind: Kind) -> Self {
         match kind {
@@ -80,14 +100,25 @@ impl From<Kind> for payload::meta::Dependency {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Display)]
 #[display(fmt = "{kind}({name})")]
 pub struct Dependency {
-    /// Tag for the table-type of dependency
+    /// Specific type of dependency
     pub kind: Kind,
 
-    /// Bare target
+    /// Bare target (i.e. `libz.so.1(x86_64)`)
     pub name: String,
 }
 
 impl Dependency {
+    /// Construct a dependency from a specially formatted string
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The formatted name, as seen in `stone.yml`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    ///     let dep = Dependency::from_name("pkgconfig(zlib)")?;
+    /// ```
     pub fn from_name(name: &str) -> Result<Self, ParseError> {
         if name.contains('(') {
             Dependency::from_str(name)
@@ -100,18 +131,21 @@ impl Dependency {
     }
 }
 
+/// Partial ordering comparator for dependencies
 impl PartialOrd for Dependency {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
+/// Ordering comparator for dependencies
 impl Ord for Dependency {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.to_string().cmp(&other.to_string())
     }
 }
 
+/// Build a Dependency from a string
 impl FromStr for Dependency {
     type Err = ParseError;
 
@@ -122,6 +156,7 @@ impl FromStr for Dependency {
     }
 }
 
+/// Ditto
 impl TryFrom<String> for Dependency {
     type Error = ParseError;
 
@@ -130,14 +165,21 @@ impl TryFrom<String> for Dependency {
     }
 }
 
+/// A provider is the inverse of a [`Dependency`] - providing the matching requirement
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Display)]
 #[display(fmt = "{kind}({name})")]
 pub struct Provider {
+    /// Specific type of dependency
     pub kind: Kind,
+
+    /// Bare target (i.e. `libz.so.1(x86_64)`)
     pub name: String,
 }
 
 impl Provider {
+    /// Construct a Provider from a specially formatted string
+    ///
+    /// Identical in behaviour to [`Dependency::from_name`]
     pub fn from_name(name: &str) -> Result<Self, ParseError> {
         if name.contains('(') {
             Provider::from_str(name)
@@ -150,18 +192,21 @@ impl Provider {
     }
 }
 
+/// Partial ordering comparator for Provider
 impl PartialOrd for Provider {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
+/// Ordering comparator for Provider
 impl Ord for Provider {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.to_string().cmp(&other.to_string())
     }
 }
 
+/// Build a Provider from a String
 impl FromStr for Provider {
     type Err = ParseError;
 
@@ -172,6 +217,7 @@ impl FromStr for Provider {
     }
 }
 
+/// Ditto
 impl TryFrom<String> for Provider {
     type Error = ParseError;
 
@@ -180,6 +226,7 @@ impl TryFrom<String> for Provider {
     }
 }
 
+/// Parse the [`Kind`] of dependency or provider from the string
 fn parse(s: &str) -> Result<(Kind, String), ParseError> {
     let (kind, rest) = s.split_once('(').ok_or(ParseError(s.to_string()))?;
 
@@ -194,6 +241,7 @@ fn parse(s: &str) -> Result<(Kind, String), ParseError> {
     Ok((kind, name))
 }
 
+/// Parsing error for dependency and provider APIs
 #[derive(Debug, Error)]
 #[error("Invalid dependency type: {0}")]
 pub struct ParseError(String);

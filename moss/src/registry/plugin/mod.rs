@@ -158,7 +158,7 @@ pub mod test {
                 .collect()
         }
 
-        pub fn query_keyword(&self, keyword: &str, flags: package::Flags) -> Vec<Package> {
+        pub fn query_keyword(&self, keyword: &str, _flags: package::Flags) -> Vec<Package> {
             self.packages
                 .iter()
                 .filter(|pkg| pkg.meta.name.contains(keyword) || pkg.meta.summary.contains(keyword))

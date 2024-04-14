@@ -2,6 +2,12 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+//! The pruning system for moss states and assets
+//!
+//! Quite simply this is a strategy based garbage collector for unused/unwanted
+//! system states (i.e. historical snapshots) that cleans up database entries
+//! and assets on disk by way of refcounting.
+
 use std::{
     collections::{HashMap, HashSet},
     fs, io,
@@ -28,6 +34,14 @@ pub enum Strategy {
 
 /// Prune old states using [`Strategy`] and garbage collect
 /// all cached data related to those states being removed
+///
+/// # Arguments
+///
+/// * - `strategy`     - pruning strategy to employ
+/// * - `state_db`     - Installation's state database
+/// * - `install_db`   - Installation's "installed" database
+/// * - `layout_db`    - Installation's layout database
+/// * - `installation` - Client specific target filesystem encapsulation
 pub fn prune(
     strategy: Strategy,
     state_db: &db::state::Database,
@@ -176,6 +190,16 @@ pub fn prune(
 }
 
 /// Removes the provided states & packages from the databases
+/// When any removals cause a filesystem asset to become completely unreffed
+/// it will be permanently deleted from disk.
+///
+/// # Arguments
+///
+/// * `states`     - The states to prune from the DB
+/// * `packages`   - any packages to prune from the DB
+/// * `state_db`   - Client State database
+/// * `install_db` - Client "installed" database
+/// * `layout_db`  - Client layout database
 fn prune_databases(
     states: &[State],
     packages: &[package::Id],

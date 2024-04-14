@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+//! Installation-specific code for several core moss operations
+
 use std::time::{Duration, Instant};
 
 use thiserror::Error;
@@ -19,6 +21,9 @@ use crate::{
     Package, Provider,
 };
 
+/// Install a set of packages
+/// If this call is successful a new State is recorded into the [`super::db::state::Database`].
+/// Upon completion the `/usr` tree is "hot swapped" with the staging tree through `renameat2` call.
 pub fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<Timing, Error> {
     let mut timing = Timing::default();
     let mut instant = Instant::now();
@@ -149,6 +154,7 @@ fn find_packages(id: &str, client: &Client) -> (String, Option<Package>) {
     (id.into(), result)
 }
 
+/// Simple timing information for Install
 #[derive(Default)]
 pub struct Timing {
     pub resolve: Duration,
@@ -156,26 +162,34 @@ pub struct Timing {
     pub blit: Duration,
 }
 
+/// Error's specific to installation operations
 #[derive(Debug, Error)]
 pub enum Error {
+    /// The operation was explicitly cancelled at the user's request
     #[error("cancelled")]
     Cancelled,
 
+    /// An error originated in [`client`] module
     #[error("client")]
     Client(#[from] client::Error),
 
+    /// The given package couldn't be fonud
     #[error("no package found: {0}")]
     NoPackage(String),
 
+    /// A transaction specific error occurred
     #[error("transaction")]
     Transaction(#[from] transaction::Error),
 
+    /// A database specific error occurred
     #[error("db")]
     DB(#[from] crate::db::Error),
 
+    /// Had issues processing user-provided string input
     #[error("string processing")]
     Dialog(#[from] tui::dialoguer::Error),
 
+    /// We forgot how disks work
     #[error("io")]
     Io(#[from] std::io::Error),
 }

@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+//! Encapsulation of a target installation filesystem
+
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -23,19 +25,16 @@ pub enum Mutability {
     ReadWrite,
 }
 
-/// An Installation is a general encapsulation pattern for a root filesystem
-/// as seen from moss.
-/// We're largely active in the mutability, path builders and the potential active
-/// state identifier.
+/// Encapsulate details for a target installation filesystem
 #[derive(Debug, Clone)]
 pub struct Installation {
-    /// Fully qualified rootfs path
+    /// Fully qualified root filesystem path
     pub root: PathBuf,
 
-    /// Do we have R/W access?
+    /// Filesystem mutability: Will it be mutable or just RO for queries?
     pub mutability: Mutability,
 
-    /// Detected currently active state (optional)
+    /// If present, the currently active system state Id
     pub active_state: Option<state::Id>,
 
     /// Custom cache directory location,
@@ -88,6 +87,10 @@ impl Installation {
         })
     }
 
+    /// Construct an Installation with a specific cache directory
+    ///
+    /// This is useful when we wish to have a cache directory separate from the internal
+    /// moss trees, such as when scripting `.iso` tools or for package builds.
     pub fn with_cache_dir(self, dir: impl Into<PathBuf>) -> Result<Self, Error> {
         let dir = dir.into();
 
@@ -222,6 +225,7 @@ fn ensure_cachedir_tag(path: &Path) {
     }
 }
 
+/// Errors specific to a target installation filesystem
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Root is invalid")]

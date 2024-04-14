@@ -2,6 +2,12 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+//! The core client implementation for the moss package manager
+//!
+//! A [`Client`] needs to be constructed to handle the initialisation of various
+//! databases, plugins and data sources to centralise package query and management
+//! operations
+
 use std::{
     fs::{self, create_dir_all},
     io,
@@ -44,24 +50,36 @@ pub struct Client {
     pub name: String,
     /// Root that we operate on
     pub installation: Installation,
+
+    /// Combined set of data sources for current state and potential packages
     pub registry: Registry,
 
+    /// All installed packages across all states
     pub install_db: db::meta::Database,
+
+    /// All States
     pub state_db: db::state::Database,
+
+    /// All layouts for all packages
     pub layout_db: db::layout::Database,
 
+    /// Runtime configuration for the moss package manager
     config: config::Manager,
+
+    /// All of our configured repositories, to seed the [`crate::registry::Registry`]
     repositories: repository::Manager,
+
+    /// Operational scope (real systems, ephemeral, etc)
     scope: Scope,
 }
 
 impl Client {
-    /// Construct a new Client
+    /// Construct a new Client for the given [`Installation`]
     pub fn new(client_name: impl ToString, installation: Installation) -> Result<Client, Error> {
         Self::build(client_name, installation, None)
     }
 
-    /// Construct a new Client with explicit repositories
+    /// Construct a new Client with explicitly configured repositories
     pub fn with_explicit_repositories(
         client_name: impl ToString,
         installation: Installation,
@@ -70,6 +88,7 @@ impl Client {
         Self::build(client_name, installation, Some(repositories))
     }
 
+    /// Build a functioning Client for the given [`Installation`] and repositories
     fn build(
         client_name: impl ToString,
         installation: Installation,
@@ -102,10 +121,12 @@ impl Client {
         })
     }
 
+    /// Returns `true` if this is an ephemeral client
     pub fn is_ephemeral(&self) -> bool {
         matches!(self.scope, Scope::Ephemeral { .. })
     }
 
+    /// Perform an installation via [`install::install`]
     pub fn install(&mut self, packages: &[&str], yes: bool) -> Result<install::Timing, install::Error> {
         install(self, packages, yes)
     }
@@ -156,6 +177,8 @@ impl Client {
     }
 
     /// Prune states with the provided [`prune::Strategy`]
+    /// This allows automatic removal of unused states (and their associated assets)
+    /// from the disk, acting as a garbage collection facility.
     pub fn prune(&self, strategy: prune::Strategy, yes: bool) -> Result<(), Error> {
         if self.scope.is_ephemeral() {
             return Err(Error::EphemeralProhibitedOperation);
@@ -315,7 +338,13 @@ impl Client {
         }
     }
 
-    /// Activate the given state
+    /// "Activate" the staging tree
+    /// In practice, this means we perform an atomic swap of the `/usr` directory on the
+    /// host filesystem with the `/usr` tree within the transaction tree.
+    ///
+    /// This is performed using `renameat2` and results in instantly available, atomically updated
+    /// `/usr`. In combination with the mandated "`/usr`` merge" and statelessness approach of
+    /// Serpent OS, provides a unique atomic upgrade strategy.
     fn promote_staging(&self) -> Result<(), Error> {
         if self.scope.is_ephemeral() {
             return Err(Error::EphemeralProhibitedOperation);
@@ -354,7 +383,7 @@ impl Client {
         Errno::result(result).map(drop)
     }
 
-    /// Archive old states into their respective tree
+    /// Archive old states (currently not "activated") into their respective tree
     fn archive_state(&self, id: state::Id) -> Result<(), Error> {
         if self.scope.is_ephemeral() {
             return Err(Error::EphemeralProhibitedOperation);
@@ -499,7 +528,10 @@ impl Client {
         Ok(())
     }
 
-    /// Build a [`vfs::Tree`] for the provided packages
+    /// Build a [`vfs::Tree`] for the specified package IDs
+    ///
+    /// Returns a newly built vfs Tree to plan the filesystem operations for blitting
+    /// and conflict detection.
     pub fn vfs<'a>(
         &self,
         packages: impl IntoIterator<Item = &'a package::Id>,
@@ -515,6 +547,17 @@ impl Client {
     }
 
     /// Blit the packages to a filesystem root
+    ///
+    /// This fuctionality is core to all moss filesystem transactions, forming the entire
+    /// staging logic. For all the [`crate::package::Id`] present in the staging state,
+    /// query their stored [`stone::payload::Layout`] and cache into a [`vfs::Tree`].
+    ///
+    /// The new `/usr` filesystem is written in optimal order to a staging tree by making
+    /// use of the "at" family of functions (`mkdirat`, `linkat`, etc) with relative directory
+    /// file descriptors, linking files from the assets store to provide deduplication.
+    ///
+    /// This provides a very quick means to generate a hardlinked "snapshot" on-demand,
+    /// which can then be activated via [`Self::promote_staging`]
     fn blit_root<'a>(
         &self,
         packages: impl IntoIterator<Item = &'a package::Id>,
@@ -560,7 +603,9 @@ impl Client {
         Ok(tree)
     }
 
-    /// blit an element to the disk.
+    /// Recursively write a directory, or a single flat inode, to the staging tree.
+    /// Care is taken to retain the directory file descriptor to avoid costly path
+    /// resolution at runtime.
     fn blit_element(
         &self,
         parent: RawFd,
@@ -594,7 +639,14 @@ impl Client {
         }
     }
 
-    /// Process the raw layout entry.
+    /// Write a single inode into the staging tree.
+    ///
+    /// # Arguments
+    ///
+    /// * `parent`  - raw file descriptor for parent directory in which the inode is being record to
+    /// * `cache`   - raw file descriptor for the system asset pool tree
+    /// * `subpath` - the base name of the new inode
+    /// * `item`    - New inode being recorded
     fn blit_element_item(&self, parent: RawFd, cache: RawFd, subpath: &str, item: PendingFile) -> Result<(), Error> {
         match item.layout.entry {
             layout::Entry::Regular(id, _) => {
@@ -713,7 +765,10 @@ impl Scope {
 /// A pending file for blitting
 #[derive(Debug, Clone)]
 pub struct PendingFile {
+    /// The origin package for this file/inode
     pub id: package::Id,
+
+    /// Corresponding layout entry, describing the inode
     pub layout: layout::Layout,
 }
 
@@ -784,6 +839,14 @@ impl ToString for PendingFile {
     }
 }
 
+/// Build a [`crate::registry::Registry`] during client initialisation
+///
+/// # Arguments
+///
+/// * `installation` - Describe our installation target tree
+/// * `repositories` - Configured repositories to laoad [`crate::registry::Plugin::Repository`]
+/// * `installdb`    - Installation database opened in the installation tree
+/// * `statedb`      - State database opened in the installation tree
 fn build_registry(
     installation: &Installation,
     repositories: &repository::Manager,
@@ -807,6 +870,7 @@ fn build_registry(
     Ok(registry)
 }
 
+/// Client-relevant error mapping type
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("root must have an active state")]

@@ -15,6 +15,7 @@ use crate::package;
 pub struct Id(i32);
 
 impl Id {
+    /// Return the next sequential Id
     pub fn next(self) -> Self {
         Self(self.0 + 1)
     }
@@ -53,6 +54,9 @@ pub struct State {
     pub kind: Kind,
 }
 
+/// The Selection records the presence of a package ID in a [`State`]
+/// It also records whether it was selected as a transitive dependency,
+/// along with an optional human-readable reason
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Selection {
     pub package: package::Id,
@@ -63,6 +67,7 @@ pub struct Selection {
 }
 
 impl Selection {
+    /// Construct a new explicit Selection to indicate user intent
     pub fn explicit(package: package::Id) -> Self {
         Self {
             package,
@@ -71,6 +76,7 @@ impl Selection {
         }
     }
 
+    /// Construct a new transitive Selection to mark automatic installation
     pub fn transitive(package: package::Id) -> Self {
         Self {
             package,
@@ -79,6 +85,7 @@ impl Selection {
         }
     }
 
+    /// Record a reason for the Selection entering the state
     pub fn reason(self, reason: impl ToString) -> Self {
         Self {
             reason: Some(reason.to_string()),
@@ -87,6 +94,7 @@ impl Selection {
     }
 }
 
+/// Columnar display encapsulation for a [`State`]
 pub struct ColumnDisplay<'a>(pub &'a State);
 
 impl<'a> pretty::ColumnDisplay for ColumnDisplay<'a> {

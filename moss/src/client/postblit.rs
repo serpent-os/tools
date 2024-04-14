@@ -22,7 +22,7 @@ use triggers::format::{CompiledHandler, Handler, Trigger};
 
 use super::PendingFile;
 
-/// Transaction triggers
+/// Transaction trigger wrapper
 /// These are loaded from `/usr/share/moss/triggers/tx.d/*.yaml`
 #[derive(Deserialize, Debug)]
 struct TransactionTrigger(Trigger);
@@ -33,6 +33,8 @@ impl config::Config for TransactionTrigger {
     }
 }
 
+/// System trigger wrapper
+/// These triggers are loaded from `/usr/share/moss/triggers/sys.d/*.yaml`
 #[derive(Deserialize, Debug)]
 struct SystemTrigger(Trigger);
 
@@ -42,10 +44,13 @@ impl config::Config for SystemTrigger {
     }
 }
 
-/// Defines the scope of triggers
+/// The trigger scope determines the environment that the trigger runs in
 #[derive(Clone, Copy, Debug)]
 pub(super) enum TriggerScope<'a> {
+    /// A transaction trigger, isolated to `/usr`
     Transaction(&'a Installation, &'a super::Scope),
+
+    /// A system trigger with reduced sandboxing, capable of writes outside `/usr`
     System(&'a Installation, &'a super::Scope),
 }
 
@@ -93,14 +98,19 @@ impl<'a> TriggerScope<'a> {
     }
 }
 
+/// Condensed type for loaded triggers with scope and executor
 #[derive(Debug)]
 pub(super) struct TriggerRunner<'a> {
     scope: TriggerScope<'a>,
     trigger: CompiledHandler,
 }
 
-/// Construct an iterator of executable triggers for the given
-/// scope, which can be used with nice progress bars.
+/// Load all triggers matching the given scope and staging filesystem
+///
+/// # Arguments
+///
+/// * `scope`  - Trigger execution scope
+/// * `fstree` - Virtual filesystem tree populated with records of the staging filesystem
 pub(super) fn triggers<'a>(
     scope: TriggerScope<'a>,
     fstree: &vfs::tree::Tree<PendingFile>,
@@ -133,6 +143,13 @@ pub(super) fn triggers<'a>(
 }
 
 impl<'a> TriggerRunner<'a> {
+    /// Execute a trigger, taking care to account for the transaction scope and client scope
+    ///
+    /// All transaction triggers are run via sandboxing ([`container::Container`]) to limit their
+    /// system view, and limit write access.
+    /// System triggers will execute without any sandboxing when moss is used directly against the
+    /// live root filesystem, and will force sandboxing when using a non-`/` root (such as using the
+    /// `-D argument with `moss install`)
     pub fn execute(&self) -> Result<(), Error> {
         match self.scope {
             TriggerScope::Transaction(install, _) => {

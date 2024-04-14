@@ -16,12 +16,14 @@ fn main() {
     }
 }
 
+/// Report an execution error to the user
 fn report_error(error: cli::Error) {
     let sources = sources(&error);
     let error = sources.join(": ");
     eprintln!("{}: {error}", "Error".red());
 }
 
+/// Accumulate sources through error chains
 fn sources(error: &cli::Error) -> Vec<String> {
     let mut sources = vec![error.to_string()];
     let mut source = error.source();

@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+//! Cache management for unpacking remote assets (`.stone`, etc.)
+
 use std::{
     collections::HashSet,
     io,
@@ -35,11 +37,13 @@ impl UnpackingInProgress {
         self.0.lock().expect("mutex lock").insert(path)
     }
 
+    /// No longer unpacking
     pub fn remove(&self, path: &PathBuf) {
         self.0.lock().expect("mutex lock").remove(path);
     }
 }
 
+/// Per-package progress tracking for UI integration
 #[derive(Debug, Clone, Copy)]
 pub struct Progress {
     pub delta: u64,
@@ -48,6 +52,7 @@ pub struct Progress {
 }
 
 impl Progress {
+    /// Return the completion as a percentage
     pub fn pct(&self) -> f32 {
         self.completed as f32 / self.total as f32
     }
@@ -257,6 +262,7 @@ fn check_assets_exist(indicies: &[&payload::Index], installation: &Installation)
     })
 }
 
+/// Returns a fully qualified filesystem path to download the given hash ID into
 pub fn download_path(installation: &Installation, hash: &str) -> Result<PathBuf, Error> {
     if hash.len() < 5 {
         return Err(Error::MalformedHash(hash.to_string()));
@@ -271,6 +277,7 @@ pub fn download_path(installation: &Installation, hash: &str) -> Result<PathBuf,
     Ok(directory.join(hash))
 }
 
+/// Returns a fully qualified filesystem path to promote the final asset into
 pub fn asset_path(installation: &Installation, hash: &str) -> PathBuf {
     let directory = if hash.len() >= 10 {
         installation

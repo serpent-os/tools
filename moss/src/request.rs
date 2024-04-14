@@ -25,7 +25,7 @@ static CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
         .expect("build reqwest client")
 });
 
-/// Fetch a resource at the provided [`Url`] and stream it's response bytes
+/// Fetch a resource at the provided [`Url`] and stream response body as bytes
 pub async fn get(url: Url) -> Result<BoxStream<'static, Result<Bytes, Error>>, Error> {
     match url_file(&url) {
         Some(path) => read(path).await,
@@ -33,6 +33,7 @@ pub async fn get(url: Url) -> Result<BoxStream<'static, Result<Bytes, Error>>, E
     }
 }
 
+/// Internal fetch helper (sanity control) for `get`
 async fn fetch(url: Url) -> Result<impl Stream<Item = Result<Bytes, Error>>, Error> {
     let response = CLIENT.get(url).send().await?;
 
@@ -43,6 +44,7 @@ async fn fetch(url: Url) -> Result<impl Stream<Item = Result<Bytes, Error>>, Err
         .map_err(Error::Fetch)
 }
 
+/// Asynchronously read a filesystem path akin to the fetch API
 async fn read(path: PathBuf) -> Result<BoxStream<'static, Result<Bytes, Error>>, Error> {
     let mut file = File::open(path).await?;
     let size = file.metadata().await?.len() as usize;
@@ -59,6 +61,7 @@ async fn read(path: PathBuf) -> Result<BoxStream<'static, Result<Bytes, Error>>,
     }
 }
 
+/// Specialise handling of `file://` URLs for fetching
 fn url_file(url: &Url) -> Option<PathBuf> {
     if url.scheme() == "file" {
         url.to_file_path().ok()
