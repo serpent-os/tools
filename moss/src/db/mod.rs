@@ -7,7 +7,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, Utc};
 use diesel::SqliteConnection;
 use thiserror::Error;
 
@@ -42,9 +42,7 @@ impl TryFrom<i64> for Timestamp {
 
     fn try_from(value: i64) -> Result<Self, Self::Error> {
         Ok(Self(
-            NaiveDateTime::from_timestamp_opt(value, 0)
-                .ok_or(Error::InvalidTimestamp(value))?
-                .and_utc(),
+            DateTime::<Utc>::from_timestamp(value, 0).ok_or(Error::InvalidTimestamp(value))?,
         ))
     }
 }
