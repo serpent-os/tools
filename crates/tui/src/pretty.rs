@@ -30,17 +30,17 @@ pub trait ColumnDisplay: Sized {
 }
 
 pub fn print_columns<T: ColumnDisplay>(items: &[T], colnum: usize) {
-    print(items, Some(colnum))
+    column_printer(items, Some(colnum))
 }
 
 /// Prints a vec of items that implement the ColumnDisplay trait.
 /// These will be printed in individual columns assuming that the input order is
 /// alphabetically sorted, to give each column an ascending alpha sort.
 pub fn autoprint_columns<T: ColumnDisplay>(items: &[T]) {
-    print(items, None)
+    column_printer(items, None)
 }
 
-fn print<T: ColumnDisplay>(items: &[T], colnum: Option<usize>) {
+fn column_printer<T: ColumnDisplay>(items: &[T], colnum: Option<usize>) {
     // Figure render constraints.
     let largest_element = items.iter().max_by_key(|p| p.get_display_width() + 3).unwrap();
     let largest_width = largest_element.get_display_width() + 6;
