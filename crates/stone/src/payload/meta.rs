@@ -27,7 +27,7 @@ pub enum Dependency {
 
     /// A soname based dependency
     #[strum(serialize = "soname")]
-    SharedLibary,
+    SharedLibrary,
 
     /// A pkgconfig `.pc` based dependency
     PkgConfig,
@@ -138,7 +138,7 @@ pub enum Tag {
 fn decode_dependency(i: u8) -> Result<Dependency, DecodeError> {
     let result = match i {
         0 => Dependency::PackageName,
-        1 => Dependency::SharedLibary,
+        1 => Dependency::SharedLibrary,
         2 => Dependency::PkgConfig,
         3 => Dependency::Interpreter,
         4 => Dependency::CMake,

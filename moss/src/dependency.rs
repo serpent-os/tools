@@ -36,7 +36,7 @@ pub enum Kind {
 
     /// Shared library (soname)
     #[strum(serialize = "soname")]
-    SharedLibary,
+    SharedLibrary,
 
     /// Exported pkg-config provider
     PkgConfig,
@@ -66,7 +66,7 @@ impl From<payload::meta::Dependency> for Kind {
     fn from(dependency: payload::meta::Dependency) -> Self {
         match dependency {
             payload::meta::Dependency::PackageName => Kind::PackageName,
-            payload::meta::Dependency::SharedLibary => Kind::SharedLibary,
+            payload::meta::Dependency::SharedLibrary => Kind::SharedLibrary,
             payload::meta::Dependency::PkgConfig => Kind::PkgConfig,
             payload::meta::Dependency::Interpreter => Kind::Interpreter,
             payload::meta::Dependency::CMake => Kind::CMake,
@@ -83,7 +83,7 @@ impl From<Kind> for payload::meta::Dependency {
     fn from(kind: Kind) -> Self {
         match kind {
             Kind::PackageName => Self::PackageName,
-            Kind::SharedLibary => Self::SharedLibary,
+            Kind::SharedLibrary => Self::SharedLibrary,
             Kind::PkgConfig => Self::PkgConfig,
             Kind::Interpreter => Self::Interpreter,
             Kind::CMake => Self::CMake,

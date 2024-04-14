@@ -116,7 +116,7 @@ fn parse_dynamic_section(
         for offset in needed_offsets {
             if let Ok(name) = strtab.get(offset) {
                 bucket.dependencies.insert(Dependency {
-                    kind: dependency::Kind::SharedLibary,
+                    kind: dependency::Kind::SharedLibrary,
                     name: format!("{name}({machine_isa})"),
                 });
             }
@@ -137,7 +137,7 @@ fn parse_dynamic_section(
             }
 
             bucket.providers.insert(Provider {
-                kind: dependency::Kind::SharedLibary,
+                kind: dependency::Kind::SharedLibrary,
                 name: format!("{soname}({machine_isa})"),
             });
 
@@ -165,7 +165,7 @@ fn parse_dynamic_section(
                         name: path.clone(),
                     });
                     bucket.providers.insert(Provider {
-                        kind: dependency::Kind::SharedLibary,
+                        kind: dependency::Kind::SharedLibrary,
                         name: path,
                     });
                 }
