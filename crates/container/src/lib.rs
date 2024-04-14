@@ -35,7 +35,7 @@ pub struct Container {
 }
 
 impl Container {
-    /// Create a new Contaienr using the default options
+    /// Create a new Container using the default options
     pub fn new(root: impl Into<PathBuf>) -> Self {
         Self {
             root: root.into(),

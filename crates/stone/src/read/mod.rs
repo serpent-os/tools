@@ -190,8 +190,8 @@ impl PayloadKind {
     }
 
     pub fn index(&self) -> Option<&Payload<Vec<Index>>> {
-        if let Self::Index(indicies) = self {
-            Some(indicies)
+        if let Self::Index(indices) = self {
+            Some(indices)
         } else {
             None
         }

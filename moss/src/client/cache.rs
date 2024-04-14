@@ -181,7 +181,7 @@ impl Download {
         let mut reader = stone::read(File::open(&self.path)?)?;
 
         let payloads = reader.payloads()?.collect::<Result<Vec<_>, _>>()?;
-        let indicies = payloads
+        let indices = payloads
             .iter()
             .filter_map(PayloadKind::index)
             .flat_map(|p| &p.body)
@@ -189,7 +189,7 @@ impl Download {
 
         // If we don't have any files to unpack OR download was cached
         // & all assets exist, we can skip unpacking
-        if indicies.is_empty() || (self.was_cached && check_assets_exist(&indicies, &self.installation)) {
+        if indices.is_empty() || (self.was_cached && check_assets_exist(&indices, &self.installation)) {
             return Ok(UnpackedAsset { payloads });
         }
 
@@ -210,7 +210,7 @@ impl Download {
             &mut ProgressWriter::new(&content_file, content.header.plain_size, &on_progress),
         )?;
 
-        indicies
+        indices
             .into_iter()
             .map(|idx| {
                 let path = asset_path(&self.installation, &format!("{:02x}", idx.digest));
@@ -255,8 +255,8 @@ impl Download {
 }
 
 /// Returns true if all assets already exist in the installation
-fn check_assets_exist(indicies: &[&payload::Index], installation: &Installation) -> bool {
-    indicies.iter().all(|index| {
+fn check_assets_exist(indices: &[&payload::Index], installation: &Installation) -> bool {
+    indices.iter().all(|index| {
         let path = asset_path(installation, &format!("{:02x}", index.digest));
         path.exists()
     })

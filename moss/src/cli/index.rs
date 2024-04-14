@@ -207,7 +207,7 @@ pub enum Error {
     MissingMetaField(#[from] MissingMetaFieldError),
 
     #[error(transparent)]
-    StipPrefix(#[from] StripPrefixError),
+    StripPrefix(#[from] StripPrefixError),
 
     #[error("client")]
     Client(#[from] client::Error),

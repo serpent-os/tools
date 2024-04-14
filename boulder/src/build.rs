@@ -135,8 +135,8 @@ impl Builder {
         // this delay allows things to get cleaned up.
         // NOTE: This appears to reliably fix the problem,
         // I ran boulder 100 times w/ and w/out this delay
-        // and the deadlock never occured w/ it, but w/out
-        // it occured within 10 attempts.
+        // and the deadlock never occurred w/ it, but w/out
+        // it occurred within 10 attempts.
         thread::sleep(Duration::from_millis(50));
 
         Ok(())

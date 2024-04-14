@@ -49,7 +49,7 @@ impl Header {
             2 => FileType::Delta,
             3 => FileType::Repository,
             4 => FileType::BuildManifest,
-            f => return Err(DecodeError::UnkownFileType(f)),
+            f => return Err(DecodeError::UnknownFileType(f)),
         };
 
         Ok(Self {
@@ -77,5 +77,5 @@ pub enum DecodeError {
     #[error("Corrupt header, failed integrity check")]
     Corrupt,
     #[error("Unknown file type: {0}")]
-    UnkownFileType(u8),
+    UnknownFileType(u8),
 }

@@ -173,7 +173,7 @@ pub enum Error {
     #[error("client")]
     Client(#[from] client::Error),
 
-    /// The given package couldn't be fonud
+    /// The given package couldn't be found
     #[error("no package found: {0}")]
     NoPackage(String),
 

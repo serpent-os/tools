@@ -67,7 +67,7 @@ where
             return false;
         }
 
-        // don't add edge if it alread exists
+        // don't add edge if it already exists
         if self.0.find_edge(a, b).is_some() {
             return false;
         }

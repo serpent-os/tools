@@ -62,7 +62,7 @@ Please ensure all tests are running locally without issue:
 ```bash
 $ cargo test --all
 
-# Prior to commiting a change:
+# Prior to committing a change:
 $ cargo fmt
 
 # Prior to pushing anything, check:

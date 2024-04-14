@@ -229,12 +229,12 @@ fn prepare_script(upstreams: &[stone_recipe::Upstream]) -> String {
                 if rename.ends_with(".zip") {
                     let _ = writeln!(
                         &mut content,
-                        r#"unzip -d "{unpack_dir}" "%(sourcedir)/{rename}" || (echo "Failed to extract arcive"; exit 1);"#,
+                        r#"unzip -d "{unpack_dir}" "%(sourcedir)/{rename}" || (echo "Failed to extract archive"; exit 1);"#,
                     );
                 } else {
                     let _ = writeln!(
                         &mut content,
-                        r#"tar xf "%(sourcedir)/{rename}" -C "{unpack_dir}" --strip-components={strip_dirs} --no-same-owner || (echo "Failed to extract arcive"; exit 1);"#,
+                        r#"tar xf "%(sourcedir)/{rename}" -C "{unpack_dir}" --strip-components={strip_dirs} --no-same-owner || (echo "Failed to extract archive"; exit 1);"#,
                     );
                 }
             }

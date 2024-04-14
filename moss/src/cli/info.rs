@@ -66,7 +66,7 @@ fn print_titled(title: &'static str) {
     print!("{}{:width$} ", title.bold(), " ", width = display_width);
 }
 
-/// HAX: Printing a paragraph by line breaks.
+/// Ugly hack: Printing a paragraph by line breaks.
 /// TODO: Split into proper paragraphs - limited to num columns in tty
 fn print_paragraph(p: &str) {
     for (index, line) in p.lines().enumerate() {

@@ -81,7 +81,7 @@ impl<'a> StringWalker<'a> {
         self.index += much
     }
 
-    /// Find next occurance of the character, and substring up to it
+    /// Find next occurrence of the character, and substring up to it
     pub fn substring_to(&self, c: char) -> Option<&'a str> {
         // Clone ourselves and search that iterator.
         let walker = self.clone();

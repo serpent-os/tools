@@ -73,7 +73,7 @@ pub struct PathDefinition {
     pub kind: Option<PathKind>,
 }
 
-/// Serialiazation format of triggers
+/// Serialization format of triggers
 #[derive(Debug, Deserialize)]
 pub struct Trigger {
     /// Unique (global scope) identifier

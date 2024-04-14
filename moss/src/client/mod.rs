@@ -548,7 +548,7 @@ impl Client {
 
     /// Blit the packages to a filesystem root
     ///
-    /// This fuctionality is core to all moss filesystem transactions, forming the entire
+    /// This functionality is core to all moss filesystem transactions, forming the entire
     /// staging logic. For all the [`crate::package::Id`] present in the staging state,
     /// query their stored [`stone::payload::Layout`] and cache into a [`vfs::Tree`].
     ///

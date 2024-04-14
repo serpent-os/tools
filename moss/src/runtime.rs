@@ -12,7 +12,7 @@ use tokio::runtime::{self, Handle};
 
 static RUNTIME: OnceLock<RwLock<Option<Runtime>>> = OnceLock::new();
 
-/// One-time initialisiation of the tokio runtime
+/// One-time initialisation of the tokio runtime
 pub fn init() -> Guard {
     let lock = RUNTIME.get_or_init(Default::default);
     *lock.write().unwrap() = Some(Runtime::new().expect("build runtime"));
