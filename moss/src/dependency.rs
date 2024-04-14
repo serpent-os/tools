@@ -117,7 +117,8 @@ impl Dependency {
     /// # Examples
     ///
     /// ```
-    ///     let dep = Dependency::from_name("pkgconfig(zlib)")?;
+    ///     use moss::Dependency;
+    ///     let dep = Dependency::from_name("pkgconfig(zlib)").unwrap();
     /// ```
     pub fn from_name(name: &str) -> Result<Self, ParseError> {
         if name.contains('(') {
