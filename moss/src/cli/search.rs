@@ -54,7 +54,13 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
             summary: pkg.meta.summary,
         })
         .collect();
+
+    if output.is_empty() {
+        return Ok(());
+    }
+
     print_columns(&output, 1);
+
     Ok(())
 }
 
