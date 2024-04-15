@@ -21,7 +21,7 @@ pub struct Upstream {
 
 /// Fetch and extract the provided upstreams under `extract_root`
 pub fn fetch_and_extract(upstreams: &[Url], extract_root: &Path) -> Result<Vec<Upstream>, Error> {
-    util::recreate_dir(&extract_root)?;
+    util::recreate_dir(extract_root)?;
 
     let mpb = MultiProgress::new();
 
@@ -46,7 +46,7 @@ pub fn fetch_and_extract(upstreams: &[Url], extract_root: &Path) -> Result<Vec<U
 
                 pb.set_message(format!("{} {}", "Extracting".yellow(), *uri));
 
-                extract(&archive_path, &extract_root).await?;
+                extract(&archive_path, extract_root).await?;
 
                 fs::remove_file(archive_path).await?;
 
