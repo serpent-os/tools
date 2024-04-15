@@ -15,6 +15,11 @@ pub mod layout;
 pub mod meta;
 pub mod state;
 
+/// Max number of variables (binds) for a prepared statement
+///
+/// https://www.sqlite.org/limits.html#max_variable_number
+const MAX_VARIABLE_NUMBER: usize = 32766;
+
 #[derive(Clone)]
 struct Connection(Arc<Mutex<SqliteConnection>>);
 
