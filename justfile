@@ -1,8 +1,44 @@
+default: moss
+
 root-dir := justfile_directory()
+build-mode := env_var_or_default("MODE", "release")
 
 [private]
 help:
   @just --list -u
+
+[private]
+build package:
+  cargo build --profile {{build-mode}} -p {{package}}
+
+# Compile boulder
+boulder: (build "boulder")
+
+# Compile moss
+moss: (build "moss")
+
+# Fix code issues
+fix:
+  @echo "Applying clippy fixes..."
+  cargo clippy --fix --allow-dirty --allow-staged --workspace -- --no-deps
+  @echo "Applying cargo fmt"
+  cargo fmt --all
+  @echo "Fixing typos"
+  typos -w
+
+# Run lints
+lint:
+  @echo "Running clippy..."
+  cargo clippy --workspace -- --no-deps
+  @echo "Running cargo fmt.."
+  cargo fmt --all -- --check
+  @echo "Checking for typos..."
+  typos
+
+# Run tests
+test: lint
+  @echo "Running tests in all packages"
+  cargo test --all
 
 # Run all DB migrations
 migrate: (diesel "meta" "migration run") (diesel "layout" "migration run") (diesel "state" "migration run")  
