@@ -1,3 +1,4 @@
+# The default task is to build moss
 default: moss
 
 root-dir := justfile_directory()
