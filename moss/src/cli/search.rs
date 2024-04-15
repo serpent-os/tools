@@ -81,14 +81,15 @@ impl ColumnDisplay for Output {
     fn get_display_width(&self) -> usize {
         // TODO: calculate the number of graphemes, not bytes.
         // Now we are assuming name and summary are ASCII.
-        self.name.to_string().len() + self.summary.len() + COLUMN_SPACING
+        self.name.len() + self.summary.len() + COLUMN_SPACING
     }
 
     fn display_column(&self, writer: &mut impl std::io::prelude::Write, _col: tui::pretty::Column, width: usize) {
         let _ = write!(
             writer,
-            "{} {:width$}{} ",
+            "{}{}{:width$}{}",
             self.name.to_string().bold(),
+            " ".repeat(COLUMN_SPACING),
             " ",
             self.summary,
         );
