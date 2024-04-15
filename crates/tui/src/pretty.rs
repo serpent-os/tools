@@ -43,10 +43,10 @@ pub fn autoprint_columns<T: ColumnDisplay>(items: &[T]) {
 fn column_printer<T: ColumnDisplay>(items: &[T], colnum: Option<usize>) {
     let max_width = TermSize::get().width;
 
-    let Some(largest_element) = items.iter().max_by_key(|p| p.get_display_width() + 3) else {
+    let Some(largest_element) = items.iter().max_by_key(|p| p.get_display_width()) else {
         return;
     };
-    let largest_width = min(max_width, largest_element.get_display_width() + 6);
+    let largest_width = min(max_width, largest_element.get_display_width());
 
     let colnum = colnum.unwrap_or_else(|| max(1, max_width / largest_width));
     let rownum = ((items.len() as f32) / (colnum as f32)).ceil() as usize;
