@@ -13,6 +13,7 @@ use crate::package::{self, Meta};
 use crate::{Dependency, Provider};
 
 pub use super::Error;
+use super::MAX_VARIABLE_NUMBER;
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("src/db/meta/migrations");
 
@@ -154,7 +155,7 @@ impl Database {
                         .filter(
                             model::meta::name
                                 .like(pattern.clone())
-                                .or(model::meta::summary.like(pattern.clone())),
+                                .or(model::meta::summary.like(pattern)),
                         )
                         .load_iter::<model::Meta, _>(conn)?
                 }
@@ -165,126 +166,47 @@ impl Database {
             .map(map_row)
             .collect::<Result<_, Error>>()?;
 
-            // Add licenses
-            match &filter {
-                Some(Filter::Provider(provider)) => model::meta_licenses::table
-                    .select(model::License::as_select())
-                    .inner_join(model::meta::table.inner_join(model::meta_providers::table))
-                    .filter(model::meta_providers::provider.eq(provider.to_string()))
-                    .load_iter::<model::License, _>(conn)?,
-                Some(Filter::Dependency(dependency)) => model::meta_licenses::table
-                    .select(model::License::as_select())
-                    .inner_join(model::meta::table.inner_join(model::meta_dependencies::table))
-                    .filter(model::meta_dependencies::dependency.eq(dependency.to_string()))
-                    .load_iter::<model::License, _>(conn)?,
-                Some(Filter::Name(name)) => model::meta_licenses::table
-                    .select(model::License::as_select())
-                    .inner_join(model::meta::table)
-                    .filter(model::meta::name.eq(name.to_string()))
-                    .load_iter::<model::License, _>(conn)?,
-                Some(Filter::Keyword(keyword)) => {
-                    let pattern = format!("%{}%", keyword);
-                    model::meta_licenses::table
-                        .select(model::License::as_select())
-                        .inner_join(model::meta::table)
-                        .filter(
-                            model::meta::name
-                                .like(pattern.clone())
-                                .or(model::meta::summary.like(pattern.clone())),
-                        )
-                        .load_iter::<model::License, _>(conn)?
-                }
-                None => model::meta_licenses::table
-                    .select(model::License::as_select())
-                    .load_iter::<model::License, _>(conn)?,
-            }
-            .try_for_each::<_, Result<_, Error>>(|result| {
-                let row = result?;
-                if let Some(meta) = entries.get_mut(&row.package.into()) {
-                    meta.licenses.push(row.license);
-                }
-                Ok(())
-            })?;
+            let package_ids = entries
+                .keys()
+                .cloned()
+                .map(String::from)
+                .map(|id| model::PackageId { id })
+                .collect::<Vec<_>>();
 
-            // Add dependencies
-            match &filter {
-                Some(Filter::Provider(provider)) => model::meta_dependencies::table
-                    .select(model::Dependency::as_select())
-                    .inner_join(model::meta::table.inner_join(model::meta_providers::table))
-                    .filter(model::meta_providers::provider.eq(provider.to_string()))
-                    .load_iter::<model::Dependency, _>(conn)?,
-                Some(Filter::Dependency(dependency)) => model::meta_dependencies::table
-                    .select(model::Dependency::as_select())
-                    .filter(model::meta_dependencies::dependency.eq(dependency.to_string()))
-                    .load_iter::<model::Dependency, _>(conn)?,
-                Some(Filter::Name(name)) => model::meta_dependencies::table
-                    .select(model::Dependency::as_select())
-                    .inner_join(model::meta::table)
-                    .filter(model::meta::name.eq(name.to_string()))
-                    .load_iter::<model::Dependency, _>(conn)?,
-                Some(Filter::Keyword(keyword)) => {
-                    let pattern = format!("%{}%", keyword);
-                    model::meta_dependencies::table
-                        .select(model::Dependency::as_select())
-                        .inner_join(model::meta::table)
-                        .filter(
-                            model::meta::name
-                                .like(pattern.clone())
-                                .or(model::meta::summary.like(pattern.clone())),
-                        )
-                        .load_iter::<model::Dependency, _>(conn)?
-                }
-                None => model::meta_dependencies::table
-                    .select(model::Dependency::as_select())
-                    .load_iter::<model::Dependency, _>(conn)?,
-            }
-            .try_for_each::<_, Result<_, Error>>(|result| {
-                let row = result?;
-                if let Some(meta) = entries.get_mut(&row.package.into()) {
-                    meta.dependencies.insert(row.dependency);
-                }
-                Ok(())
-            })?;
+            for chunk in package_ids.chunks(MAX_VARIABLE_NUMBER) {
+                // Add licenses
+                model::License::belonging_to(chunk)
+                    .load_iter::<model::License, _>(conn)?
+                    .try_for_each::<_, Result<_, Error>>(|result| {
+                        let row = result?;
+                        if let Some(meta) = entries.get_mut(&row.package.into()) {
+                            meta.licenses.push(row.license);
+                        }
+                        Ok(())
+                    })?;
 
-            // Add providers
-            match &filter {
-                Some(Filter::Provider(provider)) => model::meta_providers::table
-                    .select(model::Provider::as_select())
-                    .filter(model::meta_providers::provider.eq(provider.to_string()))
-                    .load_iter::<model::Provider, _>(conn)?,
-                Some(Filter::Dependency(dependency)) => model::meta_providers::table
-                    .select(model::Provider::as_select())
-                    .inner_join(model::meta::table.inner_join(model::meta_dependencies::table))
-                    .filter(model::meta_dependencies::dependency.eq(dependency.to_string()))
-                    .load_iter::<model::Provider, _>(conn)?,
-                Some(Filter::Name(name)) => model::meta_providers::table
-                    .select(model::Provider::as_select())
-                    .inner_join(model::meta::table)
-                    .filter(model::meta::name.eq(name.to_string()))
-                    .load_iter::<model::Provider, _>(conn)?,
-                Some(Filter::Keyword(keyword)) => {
-                    let pattern = format!("%{}%", keyword);
-                    model::meta_providers::table
-                        .select(model::Provider::as_select())
-                        .inner_join(model::meta::table)
-                        .filter(
-                            model::meta::name
-                                .like(pattern.clone())
-                                .or(model::meta::summary.like(pattern.clone())),
-                        )
-                        .load_iter::<model::Provider, _>(conn)?
-                }
-                None => model::meta_providers::table
-                    .select(model::Provider::as_select())
-                    .load_iter::<model::Provider, _>(conn)?,
+                // Add dependencies
+                model::Dependency::belonging_to(chunk)
+                    .load_iter::<model::Dependency, _>(conn)?
+                    .try_for_each::<_, Result<_, Error>>(|result| {
+                        let row = result?;
+                        if let Some(meta) = entries.get_mut(&row.package.into()) {
+                            meta.dependencies.insert(row.dependency);
+                        }
+                        Ok(())
+                    })?;
+
+                // Add providers
+                model::Provider::belonging_to(chunk)
+                    .load_iter::<model::Provider, _>(conn)?
+                    .try_for_each::<_, Result<_, Error>>(|result| {
+                        let row = result?;
+                        if let Some(meta) = entries.get_mut(&row.package.into()) {
+                            meta.providers.insert(row.provider);
+                        }
+                        Ok(())
+                    })?;
             }
-            .try_for_each::<_, Result<_, Error>>(|result| {
-                let row = result?;
-                if let Some(meta) = entries.get_mut(&row.package.into()) {
-                    meta.providers.insert(row.provider);
-                }
-                Ok(())
-            })?;
 
             Ok(entries.into_iter().collect())
         })
@@ -430,10 +352,19 @@ mod model {
         pub download_size: Option<i64>,
     }
 
+    #[derive(Queryable, Selectable, Identifiable)]
+    #[diesel(table_name = meta)]
+    #[diesel(primary_key(package))]
+    pub struct PackageId {
+        #[diesel(column_name = "package")]
+        pub id: String,
+    }
+
     #[derive(Queryable, Selectable, Identifiable, Associations)]
     #[diesel(table_name = meta_licenses)]
     #[diesel(primary_key(package, license))]
     #[diesel(belongs_to(Meta, foreign_key = package))]
+    #[diesel(belongs_to(PackageId, foreign_key = package))]
     pub struct License {
         pub package: String,
         pub license: String,
@@ -443,6 +374,7 @@ mod model {
     #[diesel(table_name = meta_dependencies)]
     #[diesel(primary_key(package, dependency))]
     #[diesel(belongs_to(Meta, foreign_key = package))]
+    #[diesel(belongs_to(PackageId, foreign_key = package))]
     pub struct Dependency {
         pub package: String,
         #[diesel(deserialize_as = String)]
@@ -453,6 +385,7 @@ mod model {
     #[diesel(table_name = meta_providers)]
     #[diesel(primary_key(package, provider))]
     #[diesel(belongs_to(Meta, foreign_key = package))]
+    #[diesel(belongs_to(PackageId, foreign_key = package))]
     pub struct Provider {
         pub package: String,
         #[diesel(deserialize_as = String)]

@@ -27,7 +27,7 @@ impl Metadata {
         let mut source = Source::default();
 
         // Try to identify source metadata from the first upstream
-        if let Some(upstream) = upstreams.get(0) {
+        if let Some(upstream) = upstreams.first() {
             for matcher in Matcher::ALL {
                 if let Some(matched) = match matcher {
                     Matcher::Basic => basic::source(&upstream.uri),

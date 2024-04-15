@@ -18,7 +18,7 @@ pub fn source(upstream: &Url) -> Option<Source> {
     let name = captures.get(1)?.as_str().to_string();
     let version = captures.get(2)?.as_str().to_string();
 
-    let (homepage, _) = upstream.as_str().rsplit_once("/")?;
+    let (homepage, _) = upstream.as_str().rsplit_once('/')?;
 
     Some(Source {
         name,
