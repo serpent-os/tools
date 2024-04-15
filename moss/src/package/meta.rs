@@ -22,10 +22,6 @@ impl Name {
     pub fn contains(&self, text: &str) -> bool {
         self.0.contains(text)
     }
-
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
 }
 
 /// The metadata of a [`super::Package`]
