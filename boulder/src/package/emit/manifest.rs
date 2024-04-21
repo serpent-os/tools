@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{collections::BTreeSet, io, path::PathBuf};
+use std::{collections::BTreeSet, io, num::NonZeroU64, path::PathBuf};
 
 use thiserror::Error;
 
@@ -16,6 +16,7 @@ mod json;
 #[derive(Debug)]
 pub struct Manifest<'a> {
     recipe: &'a Recipe,
+    build_release: NonZeroU64,
     arch: Architecture,
     output_dir: PathBuf,
     build_deps: BTreeSet<String>,
@@ -23,7 +24,7 @@ pub struct Manifest<'a> {
 }
 
 impl<'a> Manifest<'a> {
-    pub fn new(paths: &Paths, recipe: &'a Recipe, arch: Architecture) -> Self {
+    pub fn new(paths: &Paths, recipe: &'a Recipe, build_release: NonZeroU64, arch: Architecture) -> Self {
         let output_dir = paths.artefacts().guest;
 
         let build_deps = recipe
@@ -37,8 +38,9 @@ impl<'a> Manifest<'a> {
 
         Self {
             recipe,
-            output_dir,
+            build_release,
             arch,
+            output_dir,
             build_deps,
             packages: BTreeSet::new(),
         }
@@ -60,6 +62,7 @@ impl<'a> Manifest<'a> {
         json::write(
             &self.output_dir.join(format!("manifest.{}.jsonc", self.arch)),
             self.recipe,
+            self.build_release,
             &self.packages,
             &self.build_deps,
         )

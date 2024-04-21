@@ -6,6 +6,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs::File,
     io::Write,
+    num::NonZeroU64,
     path::Path,
 };
 
@@ -18,6 +19,7 @@ use crate::{package::emit, Recipe};
 pub fn write(
     path: &Path,
     recipe: &Recipe,
+    build_release: NonZeroU64,
     packages: &BTreeSet<&emit::Package>,
     build_deps: &BTreeSet<String>,
 ) -> Result<(), Error> {
@@ -64,6 +66,7 @@ pub fn write(
         source_name: recipe.parsed.source.name.clone(),
         source_release: recipe.parsed.source.release.to_string(),
         source_version: recipe.parsed.source.version.clone(),
+        build_release,
     };
 
     let mut file = File::create(path)?;
@@ -88,8 +91,9 @@ struct Content {
     manifest_version: String,
     packages: BTreeMap<String, Package>,
     source_name: String,
-    source_release: String,
+    source_release: String, // FIXME: Refactor to NonZeroU64 on account of that's how we use it in practice?
     source_version: String,
+    build_release: NonZeroU64,
 }
 
 #[derive(Serialize)]
