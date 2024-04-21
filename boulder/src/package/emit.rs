@@ -109,8 +109,8 @@ impl<'a> Ord for Package<'a> {
     }
 }
 
-pub fn emit(paths: &Paths, recipe: &Recipe, packages: &[Package]) -> Result<(), Error> {
-    let mut manifest = Manifest::new(paths, recipe, architecture::host());
+pub fn emit(paths: &Paths, recipe: &Recipe, build_release: NonZeroU64, packages: &[Package]) -> Result<(), Error> {
+    let mut manifest = Manifest::new(paths, recipe, build_release, architecture::host());
 
     println!("Packaging");
 
