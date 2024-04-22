@@ -103,7 +103,7 @@ impl<'a> Packager<'a> {
             .collect::<Vec<_>>();
 
         // Emit package stones and manifest files to artefact directory
-        emit(self.paths, self.recipe, self.build_release, &packages).map_err(Error::Emit)?;
+        emit(self.paths, self.recipe, &packages).map_err(Error::Emit)?;
 
         timing.finish(timer);
 
