@@ -39,7 +39,7 @@ impl<'a> Packager<'a> {
     ) -> Result<Self, Error> {
         let mut collector = Collector::new(paths.install().guest);
 
-        // Arch names used to parse [`Marcos`] for package templates
+        // Arch names used to parse [`Macros`] for package templates
         //
         // We always use "base" plus whatever build targets we've built
         let arches = Some("base".to_string())
