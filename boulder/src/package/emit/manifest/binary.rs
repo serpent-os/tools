@@ -20,7 +20,10 @@ pub fn write(path: &Path, packages: &BTreeSet<&Package>, build_deps: &BTreeSet<S
 
     // Add each package
     for package in packages {
-        let mut payload = package.meta().to_stone_payload();
+        let mut meta = package.meta();
+        // deliberately override .stone package metadata and set build_release to zero for binary manifests
+        meta.build_release = 0;
+        let mut payload = meta.to_stone_payload();
 
         // Add build deps
         for name in build_deps {
