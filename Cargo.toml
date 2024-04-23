@@ -14,12 +14,12 @@ edition = "2021"
 
 [workspace.dependencies]
 bytes = "1.5.0"
-chrono = "0.4.34"
+chrono = "0.4.38"
 clap = { version = "4.5.1", features = ["derive", "string"] }
 crossterm = "0.27.0"
 derive_more = "0.99"
 dialoguer = "0.11.0"
-diesel = { version = "2.1.4", features = ["sqlite","returning_clauses_for_sqlite_3_35"] }
+diesel = { version = "2.1.6", features = ["sqlite","returning_clauses_for_sqlite_3_35"] }
 diesel_migrations = "2.1.0"
 dirs = "5.0"
 elf = "0.7.4"
