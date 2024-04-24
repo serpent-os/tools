@@ -176,6 +176,21 @@ impl Client {
         Ok(())
     }
 
+    /// Adds the provided binary stone paths into a cobble plugin to
+    /// query / install local stones
+    pub fn cobble(&mut self, stones: &[&Path]) -> Result<Vec<package::Id>, Error> {
+        let mut cobble = plugin::Cobble::default();
+
+        let packages = stones
+            .iter()
+            .map(|path| cobble.add_package(path))
+            .collect::<Result<_, _>>()?;
+
+        self.registry.add_plugin(Plugin::Cobble(cobble));
+
+        Ok(packages)
+    }
+
     /// Prune states with the provided [`prune::Strategy`]
     /// This allows automatic removal of unused states (and their associated assets)
     /// from the disk, acting as a garbage collection facility.
@@ -860,7 +875,6 @@ fn build_registry(
 
     let mut registry = Registry::default();
 
-    registry.add_plugin(Plugin::Cobble(plugin::Cobble::default()));
     registry.add_plugin(Plugin::Active(plugin::Active::new(state, installdb.clone())));
 
     for repo in repositories.active() {
@@ -903,4 +917,6 @@ pub enum Error {
     Blit(#[from] Errno),
     #[error("postblit")]
     PostBlit(#[from] postblit::Error),
+    #[error("loading local stone to cobble plugin")]
+    Cobble(#[from] plugin::cobble::Error),
 }

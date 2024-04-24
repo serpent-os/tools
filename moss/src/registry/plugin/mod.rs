@@ -20,7 +20,7 @@ pub use self::repository::Repository;
 pub use self::test::Test;
 
 mod active;
-mod cobble;
+pub mod cobble;
 mod repository;
 
 /// A [`Registry`] plugin that enables querying [`Package`] information.
