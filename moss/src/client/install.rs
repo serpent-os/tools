@@ -45,7 +45,7 @@ pub fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<Timing, 
 
     // Add local stones to cobble plugin
     if !local_stones.is_empty() {
-        input.extend(client.cobble(&local_stones)?);
+        input.extend(client.cobble(&local_stones)?.into_iter().map(|pkg| pkg.id));
     }
 
     // Add all inputs

@@ -178,7 +178,7 @@ impl Client {
 
     /// Adds the provided binary stone paths into a cobble plugin to
     /// query / install local stones
-    pub fn cobble(&mut self, stones: &[&Path]) -> Result<Vec<package::Id>, Error> {
+    pub fn cobble<T: AsRef<Path>>(&mut self, stones: &[T]) -> Result<Vec<Package>, Error> {
         let mut cobble = plugin::Cobble::default();
 
         let packages = stones

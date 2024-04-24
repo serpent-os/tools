@@ -21,10 +21,10 @@ pub struct Cobble {
 
 impl Cobble {
     /// Add a package to the cobble set
-    pub fn add_package(&mut self, path: impl Into<PathBuf>) -> Result<package::Id, Error> {
-        let path = path.into();
+    pub fn add_package(&mut self, path: impl AsRef<Path>) -> Result<Package, Error> {
+        let path = path.as_ref();
 
-        let mut file = File::open(&path)?;
+        let mut file = File::open(path)?;
 
         // Hash file to SHA256 and get size
         let (file_size, file_hash) = stat_file(&file)?;
@@ -54,12 +54,18 @@ impl Cobble {
         meta.download_size = Some(file_size);
 
         // Create a package ID from the hashed path
-        let id = path_hash(&path);
+        let id = path_hash(path);
+
+        let state = State {
+            path: path.to_path_buf(),
+            meta,
+        };
+        let package = state.package(id.clone());
 
         // Whack it into the cobbler
-        self.packages.insert(id.clone(), State { path, meta });
+        self.packages.insert(id, state);
 
-        Ok(id)
+        Ok(package)
     }
 
     pub fn package(&self, id: &package::Id) -> Option<Package> {
@@ -67,7 +73,7 @@ impl Cobble {
     }
 
     fn query(&self, flags: package::Flags, filter: impl Fn(&Meta) -> bool) -> Vec<Package> {
-        if flags.available {
+        if flags.available || flags == package::Flags::default() {
             self.packages
                 .iter()
                 .filter(|(_, state)| filter(&state.meta))
