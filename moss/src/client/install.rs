@@ -4,8 +4,12 @@
 
 //! Installation-specific code for several core moss operations
 
-use std::time::{Duration, Instant};
+use std::{
+    path::Path,
+    time::{Duration, Instant},
+};
 
+use itertools::{Either, Itertools};
 use thiserror::Error;
 use tui::{
     dialoguer::{theme::ColorfulTheme, Confirm},
@@ -28,8 +32,21 @@ pub fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<Timing, 
     let mut timing = Timing::default();
     let mut instant = Instant::now();
 
+    let (pkg_names, local_stones): (Vec<&str>, Vec<&Path>) = pkgs.iter().partition_map(|name| {
+        if name.ends_with(".stone") {
+            Either::Right(Path::new(*name))
+        } else {
+            Either::Left(*name)
+        }
+    });
+
     // Resolve input packages
-    let input = resolve_input(pkgs, client)?;
+    let mut input = resolve_input(&pkg_names, client)?;
+
+    // Add local stones to cobble plugin
+    if !local_stones.is_empty() {
+        input.extend(client.cobble(&local_stones)?);
+    }
 
     // Add all inputs
     let mut tx = client.registry.transaction()?;
