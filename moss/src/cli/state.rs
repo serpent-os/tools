@@ -45,6 +45,7 @@ pub fn command() -> Command {
                     .value_parser(clap::value_parser!(u64)),
             ),
         )
+        .subcommand(Command::new("verify").about("Verify TODO"))
 }
 
 pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
@@ -54,6 +55,7 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
         Some(("activate", args)) => activate(args, installation),
         Some(("prune", args)) => prune(args, installation),
         Some(("remove", args)) => remove(args, installation),
+        Some(("verify", args)) => verify(args, installation),
         _ => unreachable!(),
     }
 }
@@ -119,6 +121,13 @@ pub fn remove(args: &ArgMatches, installation: Installation) -> Result<(), Error
 
     let client = Client::new(environment::NAME, installation)?;
     client.prune(prune::Strategy::Remove(id.into()), yes)?;
+
+    Ok(())
+}
+
+pub fn verify(_args: &ArgMatches, installation: Installation) -> Result<(), Error> {
+    let client = Client::new(environment::NAME, installation)?;
+    client.verify()?;
 
     Ok(())
 }

@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel::{Connection as _, SqliteConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use itertools::Itertools;
 
 use super::{Connection, Error};
 use crate::state::{self, Id, Selection};
@@ -41,6 +42,45 @@ impl Database {
                     Ok((row.id.into(), row.created.0))
                 })
                 .collect()
+        })
+    }
+
+    pub fn all(&self) -> Result<Vec<State>, Error> {
+        self.conn.exec(|conn| {
+            let states = model::state::table
+                .select(model::State::as_select())
+                .load::<model::State>(conn)?;
+            let mut selections = model::state_selections::table
+                .select(model::Selection::as_select())
+                .load::<model::Selection>(conn)?
+                .into_iter()
+                .map(|row| {
+                    (
+                        state::Id::from(row.state_id),
+                        state::Selection {
+                            package: row.package_id,
+                            explicit: row.explicit,
+                            reason: row.reason,
+                        },
+                    )
+                })
+                .into_group_map();
+
+            Ok(states
+                .into_iter()
+                .map(|state| {
+                    let id = state.id.into();
+                    let selections = selections.remove(&id).unwrap_or_default();
+                    State {
+                        id,
+                        summary: state.summary,
+                        description: state.description,
+                        selections,
+                        created: state.created.0,
+                        kind: state.kind,
+                    }
+                })
+                .collect())
         })
     }
 
