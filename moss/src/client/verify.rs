@@ -175,6 +175,8 @@ pub fn verify(client: &Client) -> Result<(), client::Error> {
         if is_active {
             // Override install root with the newly blitted active state
             client.apply_stateful_blit(fstree, state, None)?;
+            // Remove corrupt (swapped) state from staging directory
+            fs::remove_dir_all(client.installation.staging_dir())?;
         } else {
             // Use the staged blit as an ephereral target for the non-active state
             // then archive it to it's archive directory
