@@ -11,7 +11,7 @@ use tui::{pretty, Styled};
 use crate::package;
 
 /// Unique identifier for [`State`]
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, From, Into, Display)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, From, Into, Display)]
 pub struct Id(i32);
 
 impl Id {

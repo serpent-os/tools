@@ -9,6 +9,7 @@
 //! operations
 
 use std::{
+    borrow::Borrow,
     fmt,
     fs::{self, create_dir_all},
     io,
@@ -33,6 +34,7 @@ use vfs::tree::{builder::TreeBuilder, BlitFile, Element};
 
 use self::install::install;
 use self::prune::prune;
+use self::verify::verify;
 use crate::{
     db, environment, installation, package,
     registry::plugin::{self, Plugin},
@@ -45,6 +47,7 @@ pub mod cache;
 pub mod install;
 mod postblit;
 pub mod prune;
+mod verify;
 
 /// A Client is a connection to the underlying package management systems
 pub struct Client {
@@ -177,7 +180,15 @@ impl Client {
         Ok(())
     }
 
+    pub fn verify(&self) -> Result<(), Error> {
+        if self.scope.is_ephemeral() {
+            return Err(Error::EphemeralProhibitedOperation);
+        }
+        verify(self)?;
+        Ok(())
+    }
     /// Prune states with the provided [`prune::Strategy`]
+
     /// This allows automatic removal of unused states (and their associated assets)
     /// from the disk, acting as a garbage collection facility.
     pub fn prune(&self, strategy: prune::Strategy, yes: bool) -> Result<(), Error> {
@@ -274,69 +285,80 @@ impl Client {
                 // Add to db
                 let state = self.state_db.add(selections, Some(&summary.to_string()), None)?;
 
-                // Write state id
-                {
-                    let usr = self.installation.staging_path("usr");
-                    fs::create_dir_all(&usr)?;
-                    let state_path = usr.join(".stateID");
-                    fs::write(state_path, state.id.to_string())?;
-                }
-
-                record_os_release(&self.installation.staging_dir(), Some(state.id))?;
-
-                // Run all of the transaction triggers
-                let triggers = postblit::triggers(
-                    postblit::TriggerScope::Transaction(&self.installation, &self.scope),
-                    &fstree,
-                )?;
-                create_root_links(&self.installation.isolation_dir())?;
-                for trigger in triggers {
-                    trigger.execute()?;
-                }
-                // Staging is only used with [`Scope::Stateful`]
-                self.promote_staging()?;
-
-                // Now we got it staged, we need working rootfs
-                create_root_links(&self.installation.root)?;
-
-                if let Some(id) = old_state {
-                    self.archive_state(id)?;
-                }
-
-                // At this point we're allowed to run system triggers
-                let sys_triggers =
-                    postblit::triggers(postblit::TriggerScope::System(&self.installation, &self.scope), &fstree)?;
-                for trigger in sys_triggers {
-                    trigger.execute()?;
-                }
+                self.apply_stateful_blit(fstree, &state, old_state)?;
 
                 Ok(Some(state))
             }
             Scope::Ephemeral { blit_root } => {
-                record_os_release(blit_root, None)?;
-                create_root_links(blit_root)?;
-                create_root_links(&self.installation.isolation_dir())?;
+                self.apply_ephemeral_blit(fstree, blit_root)?;
 
-                let etc = blit_root.join("etc");
-                create_dir_all(etc)?;
-
-                // ephemeral tx triggers
-                let triggers = postblit::triggers(
-                    postblit::TriggerScope::Transaction(&self.installation, &self.scope),
-                    &fstree,
-                )?;
-                for trigger in triggers {
-                    trigger.execute()?;
-                }
-                // ephemeral system triggers
-                let sys_triggers =
-                    postblit::triggers(postblit::TriggerScope::System(&self.installation, &self.scope), &fstree)?;
-                for trigger in sys_triggers {
-                    trigger.execute()?;
-                }
                 Ok(None)
             }
         }
+    }
+
+    pub fn apply_stateful_blit(
+        &self,
+        fstree: vfs::Tree<PendingFile>,
+        state: &State,
+        old_state: Option<state::Id>,
+    ) -> Result<(), Error> {
+        record_state_id(&self.installation.staging_dir(), state.id)?;
+        record_os_release(&self.installation.staging_dir(), Some(state.id))?;
+
+        // Run all of the transaction triggers
+        let triggers = postblit::triggers(
+            postblit::TriggerScope::Transaction(&self.installation, &self.scope),
+            &fstree,
+        )?;
+        create_root_links(&self.installation.isolation_dir())?;
+        for trigger in triggers {
+            trigger.execute()?;
+        }
+        // Staging is only used with [`Scope::Stateful`]
+        self.promote_staging()?;
+
+        // Now we got it staged, we need working rootfs
+        create_root_links(&self.installation.root)?;
+
+        if let Some(id) = old_state {
+            self.archive_state(id)?;
+        }
+
+        // At this point we're allowed to run system triggers
+        let sys_triggers =
+            postblit::triggers(postblit::TriggerScope::System(&self.installation, &self.scope), &fstree)?;
+        for trigger in sys_triggers {
+            trigger.execute()?;
+        }
+
+        Ok(())
+    }
+
+    pub fn apply_ephemeral_blit(&self, fstree: vfs::Tree<PendingFile>, blit_root: &Path) -> Result<(), Error> {
+        record_os_release(blit_root, None)?;
+        create_root_links(blit_root)?;
+        create_root_links(&self.installation.isolation_dir())?;
+
+        let etc = blit_root.join("etc");
+        create_dir_all(etc)?;
+
+        // ephemeral tx triggers
+        let triggers = postblit::triggers(
+            postblit::TriggerScope::Transaction(&self.installation, &self.scope),
+            &fstree,
+        )?;
+        for trigger in triggers {
+            trigger.execute()?;
+        }
+        // ephemeral system triggers
+        let sys_triggers =
+            postblit::triggers(postblit::TriggerScope::System(&self.installation, &self.scope), &fstree)?;
+        for trigger in sys_triggers {
+            trigger.execute()?;
+        }
+
+        Ok(())
     }
 
     /// "Activate" the staging tree
@@ -404,7 +426,10 @@ impl Client {
     }
 
     /// Download & unpack the provided packages. Packages already cached will be validated & skipped.
-    pub async fn cache_packages(&self, packages: &[&Package]) -> Result<(), Error> {
+    pub async fn cache_packages<T>(&self, packages: &[T]) -> Result<(), Error>
+    where
+        T: Borrow<Package>,
+    {
         // Setup progress bar
         let multi_progress = MultiProgress::new();
 
@@ -422,6 +447,8 @@ impl Client {
 
         // Download and unpack each package
         stream::iter(packages.iter().map(|package| async {
+            let package: &Package = package.borrow();
+
             // Setup the progress bar and set as downloading
             let progress_bar = multi_progress.insert_before(
                 &total_progress,
@@ -719,6 +746,14 @@ fn create_root_links(root: &Path) -> Result<(), io::Error> {
         fs::rename(staging_target, final_target)?;
     }
 
+    Ok(())
+}
+
+fn record_state_id(root: &Path, state: state::Id) -> Result<(), Error> {
+    let usr = root.join("usr");
+    fs::create_dir_all(&usr)?;
+    let state_path = usr.join(".stateID");
+    fs::write(state_path, state.to_string())?;
     Ok(())
 }
 
