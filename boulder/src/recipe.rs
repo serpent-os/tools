@@ -34,20 +34,17 @@ impl Recipe {
         let host_string = host.to_string();
 
         if self.parsed.architectures.is_empty() {
-            let mut targets = vec![BuildTarget::Native(host)];
+            let mut targets = vec![];
 
             if self.parsed.emul32 {
                 targets.push(BuildTarget::Emul32(host));
             }
 
+            targets.push(BuildTarget::Native(host));
+
             targets
         } else {
             let mut targets = vec![];
-
-            if self.parsed.architectures.contains(&host_string) || self.parsed.architectures.contains(&"native".into())
-            {
-                targets.push(BuildTarget::Native(host));
-            }
 
             let emul32 = BuildTarget::Emul32(host);
             let emul32_string = emul32.to_string();
@@ -56,6 +53,11 @@ impl Recipe {
                 || self.parsed.architectures.contains(&"emul32".into())
             {
                 targets.push(emul32);
+            }
+
+            if self.parsed.architectures.contains(&host_string) || self.parsed.architectures.contains(&"native".into())
+            {
+                targets.push(BuildTarget::Native(host));
             }
 
             targets
