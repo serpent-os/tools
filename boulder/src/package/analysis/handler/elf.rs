@@ -142,7 +142,7 @@ fn parse_dynamic_section(
             });
 
             // Do we possibly have an Interpreter? This is a .dynamic library ..
-            if soname.starts_with("ld-") && info.target_path.starts_with("/usr/bin") {
+            if soname.starts_with("ld-") && info.target_path.to_str().unwrap_or_default().starts_with("/usr/lib") {
                 let interp_paths = if matches!(bit_size, Class::ELF64) {
                     [
                         format!("/usr/lib64/{soname}({machine_isa})"),
