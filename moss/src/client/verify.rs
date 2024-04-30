@@ -4,12 +4,13 @@
 
 use std::{
     collections::{BTreeSet, HashSet},
-    fs, io,
+    fmt, fs, io,
     path::PathBuf,
 };
 
 use itertools::Itertools;
 use stone::{payload::layout, write::digest};
+use tui::{ProgressBar, ProgressStyle, Styled};
 use vfs::tree::BlitFile;
 
 use crate::{
@@ -17,7 +18,9 @@ use crate::{
     package, runtime, state, Client,
 };
 
-pub fn verify(client: &Client) -> Result<(), client::Error> {
+pub fn verify(client: &Client, verbose: bool) -> Result<(), client::Error> {
+    println!("Verifying assets");
+
     // Get all installed layouts, this is our source of truth
     let layouts = client.layout_db.all()?;
 
@@ -36,18 +39,36 @@ pub fn verify(client: &Client) -> Result<(), client::Error> {
     let mut issues = vec![];
     let mut hasher = digest::Hasher::new();
 
+    let pb = ProgressBar::new(unique_assets.len() as u64)
+        .with_message("Verifying")
+        .with_style(
+            ProgressStyle::with_template("\n|{bar:20.red/blue}| {pos}/{len} {wide_msg}")
+                .unwrap()
+                .progress_chars("■≡=- "),
+        );
+    pb.tick();
+
     // For each asset, ensure it exists in the content store and isn't corrupt (hash is correct)
-    for (hash, meta) in unique_assets.into_iter().sorted_by_key(|(key, _)| key.clone()) {
+    for (hash, meta) in unique_assets
+        .into_iter()
+        .sorted_by_key(|(key, _)| format!("{key:0>32}"))
+    {
+        let display_hash = format!("{hash:0>32}");
+
         let path = cache::asset_path(&client.installation, &hash);
 
-        let files = meta.iter().map(|(_, file)| file).collect::<BTreeSet<_>>();
+        let files = meta.iter().map(|(_, file)| file).cloned().collect::<BTreeSet<_>>();
 
-        println!("Checking {hash} - {files:?}");
+        pb.set_message(format!("Verifying {display_hash}"));
 
         if !path.exists() {
-            eprintln!("{path:?} doesn't exist");
+            pb.inc(1);
+            if verbose {
+                pb.println(format!(" {} {display_hash} - {files:?}", "×".yellow()));
+            }
             issues.push(Issue::MissingAsset {
-                hash,
+                hash: display_hash,
+                files,
                 packages: meta.into_iter().map(|(package, _)| package).collect(),
             });
             continue;
@@ -65,20 +86,37 @@ pub fn verify(client: &Client) -> Result<(), client::Error> {
         let verified_hash = format!("{:02x}", hasher.digest128());
 
         if verified_hash != hash {
-            eprintln!("{path:?} hash mismatch, expected {hash} got {verified_hash}");
+            pb.inc(1);
+            if verbose {
+                pb.println(format!(" {} {display_hash} - {files:?}", "×".yellow()));
+            }
             issues.push(Issue::CorruptAsset {
-                layout_hash: hash,
-                corrupt_hash: verified_hash,
+                hash: display_hash,
+                files,
                 packages: meta.into_iter().map(|(package, _)| package).collect(),
             });
+            continue;
+        }
+
+        pb.inc(1);
+        if verbose {
+            pb.println(format!(" {} {display_hash} - {files:?}", "»".green()));
         }
     }
 
     // Get all states
     let states = client.state_db.all()?;
 
+    pb.set_length(states.len() as u64);
+    pb.set_position(0);
+    pb.suspend(|| {
+        println!("Verifying states");
+    });
+
     // Check the VFS of each state exists properly on the FS
     for state in &states {
+        pb.set_message(format!("Verifying state #{}", state.id));
+
         let is_active = client.installation.active_state == Some(state.id);
 
         let vfs = client.vfs(state.selections.iter().map(|s| &s.package))?;
@@ -89,10 +127,12 @@ pub fn verify(client: &Client) -> Result<(), client::Error> {
             client.installation.root_path(state.id.to_string()).join("usr")
         };
 
-        for file in vfs.iter() {
-            let path = base.join(file.path().strip_prefix("/usr/").unwrap_or_default());
+        let files = vfs.iter().collect::<Vec<_>>();
 
-            println!("Checking {path:?}");
+        let mut num_issues = 0;
+
+        for file in files {
+            let path = base.join(file.path().strip_prefix("/usr/").unwrap_or_default());
 
             // All symlinks for non-active states are broken
             // since they resolve to the active state path
@@ -103,12 +143,20 @@ pub fn verify(client: &Client) -> Result<(), client::Error> {
                 Ok(true) => {}
                 Ok(false) if path.is_symlink() => {}
                 _ => {
-                    eprintln!("{path:?} from state {} does not exist", state.id);
-                    issues.push(Issue::MissingVFSPath { path, state: state.id })
+                    num_issues += 1;
+                    issues.push(Issue::MissingVFSPath { path, state: state.id });
                 }
             }
         }
+
+        pb.inc(1);
+        if verbose {
+            let mark = if num_issues > 0 { "×".yellow() } else { "»".green() };
+            pb.println(format!(" {mark} state #{}", state.id));
+        }
     }
+
+    pb.finish_and_clear();
 
     if issues.is_empty() {
         println!("No issues found");
@@ -116,10 +164,14 @@ pub fn verify(client: &Client) -> Result<(), client::Error> {
     }
 
     println!(
-        "Found {} issue{}, fixing...",
+        "Found {} issue{}",
         issues.len(),
         if issues.len() == 1 { "" } else { "s" }
     );
+
+    for issue in &issues {
+        println!(" {} {issue}", "×".yellow());
+    }
 
     // Calculate and resolve the unique set of packages with asset issues
     let issue_packages = client.resolve_packages(
@@ -138,7 +190,7 @@ pub fn verify(client: &Client) -> Result<(), client::Error> {
             fs::remove_file(&path)?;
         }
 
-        println!("\nReinstalling packages");
+        println!("Reinstalling packages");
 
         // And re-cache all packages that comprise the corrupt / missing asset
         runtime::block_on(client.cache_packages(&issue_packages))?;
@@ -158,7 +210,7 @@ pub fn verify(client: &Client) -> Result<(), client::Error> {
         .chain(issues.iter().filter_map(Issue::state))
         .collect::<BTreeSet<_>>();
 
-    println!("\nReblitting affected states");
+    println!("Reblitting affected states");
 
     // Reblit each state
     for id in issue_states {
@@ -188,7 +240,7 @@ pub fn verify(client: &Client) -> Result<(), client::Error> {
             client.archive_state(state.id)?;
         }
 
-        println!("State {} fixed", state.id);
+        println!(" {} state #{}", "»".green(), state.id);
     }
 
     println!("All issues resolved");
@@ -196,16 +248,16 @@ pub fn verify(client: &Client) -> Result<(), client::Error> {
     Ok(())
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 enum Issue {
     CorruptAsset {
-        layout_hash: String,
-        corrupt_hash: String,
+        hash: String,
+        files: BTreeSet<String>,
         packages: HashSet<package::Id>,
     },
     MissingAsset {
         hash: String,
+        files: BTreeSet<String>,
         packages: HashSet<package::Id>,
     },
     MissingVFSPath {
@@ -217,7 +269,7 @@ enum Issue {
 impl Issue {
     fn corrupt_hash(&self) -> Option<&str> {
         match self {
-            Issue::CorruptAsset { layout_hash: hash, .. } => Some(hash),
+            Issue::CorruptAsset { hash, .. } => Some(hash),
             Issue::MissingAsset { .. } => None,
             Issue::MissingVFSPath { .. } => None,
         }
@@ -234,6 +286,16 @@ impl Issue {
         match self {
             Issue::CorruptAsset { .. } | Issue::MissingAsset { .. } => None,
             Issue::MissingVFSPath { state, .. } => Some(state),
+        }
+    }
+}
+
+impl fmt::Display for Issue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Issue::CorruptAsset { hash, files, .. } => write!(f, "Corrupt asset {hash} - {files:?}"),
+            Issue::MissingAsset { hash, files, .. } => write!(f, "Missing asset {hash} - {files:?}"),
+            Issue::MissingVFSPath { path, state } => write!(f, "Missing path {} in state #{state}", path.display()),
         }
     }
 }

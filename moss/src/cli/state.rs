@@ -45,7 +45,11 @@ pub fn command() -> Command {
                     .value_parser(clap::value_parser!(u64)),
             ),
         )
-        .subcommand(Command::new("verify").about("Verify TODO"))
+        .subcommand(
+            Command::new("verify")
+                .about("Verify TODO")
+                .arg(arg!(--verbose "Vebose output").action(ArgAction::SetTrue)),
+        )
 }
 
 pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
@@ -125,9 +129,10 @@ pub fn remove(args: &ArgMatches, installation: Installation) -> Result<(), Error
     Ok(())
 }
 
-pub fn verify(_args: &ArgMatches, installation: Installation) -> Result<(), Error> {
+pub fn verify(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
+    let verbose = args.get_flag("verbose");
     let client = Client::new(environment::NAME, installation)?;
-    client.verify()?;
+    client.verify(verbose)?;
 
     Ok(())
 }

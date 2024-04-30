@@ -180,11 +180,11 @@ impl Client {
         Ok(())
     }
 
-    pub fn verify(&self) -> Result<(), Error> {
+    pub fn verify(&self, verbose: bool) -> Result<(), Error> {
         if self.scope.is_ephemeral() {
             return Err(Error::EphemeralProhibitedOperation);
         }
-        verify(self)?;
+        verify(self, verbose)?;
         Ok(())
     }
     /// Prune states with the provided [`prune::Strategy`]
