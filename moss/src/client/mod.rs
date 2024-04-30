@@ -180,11 +180,11 @@ impl Client {
         Ok(())
     }
 
-    pub fn verify(&self, verbose: bool) -> Result<(), Error> {
+    pub fn verify(&self, yes: bool, verbose: bool) -> Result<(), Error> {
         if self.scope.is_ephemeral() {
             return Err(Error::EphemeralProhibitedOperation);
         }
-        verify(self, verbose)?;
+        verify(self, yes, verbose)?;
         Ok(())
     }
     /// Prune states with the provided [`prune::Strategy`]
@@ -939,4 +939,10 @@ pub enum Error {
     Blit(#[from] Errno),
     #[error("postblit")]
     PostBlit(#[from] postblit::Error),
+    /// Had issues processing user-provided string input
+    #[error("string processing")]
+    Dialog(#[from] tui::dialoguer::Error),
+    /// The operation was explicitly cancelled at the user's request
+    #[error("cancelled")]
+    Cancelled,
 }
