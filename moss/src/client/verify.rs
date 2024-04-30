@@ -10,7 +10,10 @@ use std::{
 
 use itertools::Itertools;
 use stone::{payload::layout, write::digest};
-use tui::{ProgressBar, ProgressStyle, Styled};
+use tui::{
+    dialoguer::{theme::ColorfulTheme, Confirm},
+    ProgressBar, ProgressStyle, Styled,
+};
 use vfs::tree::BlitFile;
 
 use crate::{
@@ -18,7 +21,7 @@ use crate::{
     package, runtime, state, Client,
 };
 
-pub fn verify(client: &Client, verbose: bool) -> Result<(), client::Error> {
+pub fn verify(client: &Client, yes: bool, verbose: bool) -> Result<(), client::Error> {
     println!("Verifying assets");
 
     // Get all installed layouts, this is our source of truth
@@ -171,6 +174,18 @@ pub fn verify(client: &Client, verbose: bool) -> Result<(), client::Error> {
 
     for issue in &issues {
         println!(" {} {issue}", "×".yellow());
+    }
+
+    let result = if yes {
+        true
+    } else {
+        Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(" Fixing issues, this will change your system state. Do you wish to continue? ")
+            .default(false)
+            .interact()?
+    };
+    if !result {
+        return Err(client::Error::Cancelled);
     }
 
     // Calculate and resolve the unique set of packages with asset issues

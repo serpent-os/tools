@@ -131,8 +131,10 @@ pub fn remove(args: &ArgMatches, installation: Installation) -> Result<(), Error
 
 pub fn verify(args: &ArgMatches, installation: Installation) -> Result<(), Error> {
     let verbose = args.get_flag("verbose");
+    let yes = args.get_flag("yes");
+
     let client = Client::new(environment::NAME, installation)?;
-    client.verify(verbose)?;
+    client.verify(yes, verbose)?;
 
     Ok(())
 }
