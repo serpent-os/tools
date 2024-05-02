@@ -45,7 +45,7 @@ impl<R: Read + Seek> Reader<R> {
             .flat_map(|_| PayloadKind::decode(&mut self.reader, &mut self.hasher).transpose()))
     }
 
-    pub fn unpack_content<W: Write>(&mut self, content: &Payload<Content>, writer: &mut W) -> Result<(), Error>
+    pub fn unpack_content<W>(&mut self, content: &Payload<Content>, writer: &mut W) -> Result<(), Error>
     where
         W: Write,
     {
