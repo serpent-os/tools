@@ -188,7 +188,7 @@ fn resolve_with_sync(
             Resolution::Explicit => p.flags.explicit,
             Resolution::All => true,
         })
-        .map(|p| {
+        .filter_map(|p| {
             // Get first available = use highest priority
             if let Some(lookup) = client
                 .registry
@@ -202,19 +202,18 @@ fn resolve_with_sync(
                 };
 
                 if !all_ids.contains(&lookup.id) && upgrade_check {
-                    Ok(Cow::Owned(lookup))
+                    Some(Cow::Owned(lookup))
                 } else {
-                    Ok(Cow::Borrowed(p))
+                    Some(Cow::Borrowed(p))
                 }
             } else {
-                Err(Error::NameNotFound(p.meta.name.clone()))
+                None
             }
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+        });
 
     // Build a new tx from this sync'd package set
     let mut tx = client.registry.transaction()?;
-    tx.add(with_sync.iter().map(|p| p.id.clone()).collect())?;
+    tx.add(with_sync.map(|p| p.id.clone()).collect())?;
 
     // Resolve the tx
     Ok(client.resolve_packages(tx.finalize())?)
@@ -224,9 +223,6 @@ fn resolve_with_sync(
 pub enum Error {
     #[error("cancelled")]
     Cancelled,
-
-    #[error("unknown package name")]
-    NameNotFound(package::Name),
 
     #[error("no installation")]
     NoInstall,

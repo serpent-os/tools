@@ -2,8 +2,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::path::PathBuf;
+
 use clap::{arg, ArgMatches, Command};
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use moss::{
     client::{self, Client},
     environment,
@@ -35,26 +37,48 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
         .collect::<Vec<_>>();
     let show_files = args.get_flag("files");
 
-    let client = Client::new(environment::NAME, installation)?;
+    let mut client = Client::new(environment::NAME, installation)?;
 
-    for pkg in pkgs {
-        let lookup = Provider::from_name(&pkg).unwrap();
+    // Partition between names and stone paths
+    let (pkg_names, local_stones): (Vec<String>, Vec<PathBuf>) = pkgs.into_iter().partition_map(|name| {
+        if name.ends_with(".stone") {
+            Either::Right(name.into())
+        } else {
+            Either::Left(name)
+        }
+    });
+
+    let mut candidates = vec![];
+
+    // Cobble local stones and add their packages
+    if !local_stones.is_empty() {
+        candidates.extend(client.cobble(&local_stones)?);
+    }
+
+    // Resolve & add all package names
+    for pkg in pkg_names {
+        let lookup = Provider::from_name(&pkg).map_err(|_| Error::ParseProvider(pkg.to_string()))?;
         let resolved = client
             .registry
             .by_provider(&lookup, Flags::default())
             .collect::<Vec<_>>();
+
         if resolved.is_empty() {
             return Err(Error::NotFound(pkg));
         }
-        for candidate in resolved {
-            print_package(&candidate);
 
-            if candidate.flags.installed && show_files {
-                let vfs = client.vfs([&candidate.id])?;
-                print_files(vfs);
-            }
-            println!();
+        candidates.extend(resolved);
+    }
+
+    // Print each candidate
+    for candidate in candidates {
+        print_package(&candidate);
+
+        if candidate.flags.installed && show_files {
+            let vfs = client.vfs([&candidate.id])?;
+            print_files(vfs);
         }
+        println!();
     }
 
     Ok(())
@@ -133,6 +157,8 @@ fn print_files(vfs: vfs::Tree<client::PendingFile>) {
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("Not a valid provider name: {0}")]
+    ParseProvider(String),
     #[error("No such package {0}")]
     NotFound(String),
     #[error("client")]
