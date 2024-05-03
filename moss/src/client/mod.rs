@@ -9,6 +9,7 @@
 //! operations
 
 use std::{
+    fmt,
     fs::{self, create_dir_all},
     io,
     os::{fd::RawFd, unix::fs::symlink},
@@ -833,9 +834,9 @@ impl From<String> for PendingFile {
     }
 }
 
-impl ToString for PendingFile {
-    fn to_string(&self) -> String {
-        self.path()
+impl fmt::Display for PendingFile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.path().fmt(f)
     }
 }
 

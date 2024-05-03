@@ -104,7 +104,7 @@ impl<T: BlitFile> TreeBuilder<T> {
                         target
                     }
                 };
-                if all_dirs.get(&target).is_some() {
+                if all_dirs.contains_key(&target) {
                     redirects.insert(path, target);
                 }
             }
