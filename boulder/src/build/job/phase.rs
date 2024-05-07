@@ -2,20 +2,20 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::collections::HashSet;
-
 use itertools::Itertools;
+use std::collections::BTreeSet;
+
 use stone_recipe::{
     script,
     tuning::{self, Toolchain},
     Script,
 };
-
 use tui::Styled;
 
-use super::{work_dir, Error};
 use crate::build::pgo;
 use crate::{architecture::BuildTarget, util, Macros, Paths, Recipe};
+
+use super::{work_dir, Error};
 
 pub fn list(pgo_stage: Option<pgo::Stage>) -> Vec<Phase> {
     if matches!(pgo_stage, Some(pgo::Stage::One | pgo::Stage::Two)) {
@@ -25,7 +25,7 @@ pub fn list(pgo_stage: Option<pgo::Stage>) -> Vec<Phase> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, strum::Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, strum::Display)]
 pub enum Phase {
     Prepare,
     Setup,
@@ -316,7 +316,7 @@ fn add_tuning(
         flags
             .map(|s| s.trim())
             .filter(|s| s.len() > 1)
-            .collect::<HashSet<_>>()
+            .collect::<BTreeSet<_>>()
             .into_iter()
             .join(" ")
     }

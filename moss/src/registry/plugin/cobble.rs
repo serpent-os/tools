@@ -2,20 +2,23 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
-use std::{collections::HashMap, path::PathBuf};
+use std::path::PathBuf;
+
+use thiserror::Error;
+
+use stone::read::PayloadKind;
 
 use crate::package::{self, meta, Meta, MissingMetaFieldError, Package};
 use crate::Provider;
-use stone::read::PayloadKind;
-use thiserror::Error;
 
 // TODO:
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct Cobble {
     // Storage of local packages
-    packages: HashMap<meta::Id, State>,
+    packages: BTreeMap<meta::Id, State>,
 }
 
 impl Cobble {

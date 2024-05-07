@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 //! Build a vfs tree incrementally
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use crate::path;
 use crate::tree::{Kind, Tree};
@@ -86,7 +86,7 @@ impl<T: BlitFile> TreeBuilder<T> {
             .collect::<BTreeMap<_, _>>();
 
         // build a set of redirects
-        let mut redirects = HashMap::new();
+        let mut redirects = BTreeMap::new();
 
         // Resolve symlinks-to-dirs
         for link in self.explicit.iter() {
@@ -140,8 +140,9 @@ impl<T: BlitFile> TreeBuilder<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::{BlitFile, TreeBuilder};
     use crate::tree::Kind;
+
+    use super::{BlitFile, TreeBuilder};
 
     #[derive(Clone, Default, Debug, PartialEq, Eq, PartialOrd, Ord)]
     struct CustomFile {

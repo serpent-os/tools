@@ -2,19 +2,19 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::collections::HashMap;
+use derive_more::Display;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use thiserror::Error;
 
 use config::Config;
-use derive_more::Display;
 use moss::repository;
 pub use moss::{repository::Priority, Repository};
-use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
 use crate::Env;
 
 /// A unique [`Profile`] identifier
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Display)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Ord, PartialOrd, Display)]
 #[serde(from = "String")]
 pub struct Id(String);
 
@@ -43,7 +43,7 @@ pub struct Profile {
 
 /// A map of profiles
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct Map(HashMap<Id, Profile>);
+pub struct Map(BTreeMap<Id, Profile>);
 
 impl Map {
     pub fn is_empty(&self) -> bool {
@@ -73,7 +73,7 @@ impl Map {
 
 impl IntoIterator for Map {
     type Item = (Id, Profile);
-    type IntoIter = std::collections::hash_map::IntoIter<Id, Profile>;
+    type IntoIter = std::collections::btree_map::IntoIter<Id, Profile>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()

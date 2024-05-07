@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{collections::HashMap, path::Path};
+use std::collections::BTreeMap;
+use std::path::Path;
 
-use config::Config;
 use derive_more::{Display, From, Into};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -15,6 +15,8 @@ use tokio::{
 };
 use url::Url;
 
+use config::Config;
+
 use crate::{db::meta, request};
 
 pub use self::manager::Manager;
@@ -22,7 +24,7 @@ pub use self::manager::Manager;
 pub mod manager;
 
 /// A unique [`Repository`] identifier
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, From, Display)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Ord, PartialOrd, From, Display)]
 #[serde(from = "String")]
 pub struct Id(String);
 
@@ -78,7 +80,7 @@ impl Ord for Priority {
 
 /// A map of repositories
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct Map(HashMap<Id, Repository>);
+pub struct Map(BTreeMap<Id, Repository>);
 
 impl Map {
     pub fn with(items: impl IntoIterator<Item = (Id, Repository)>) -> Self {
@@ -104,7 +106,7 @@ impl Map {
 
 impl IntoIterator for Map {
     type Item = (Id, Repository);
-    type IntoIter = std::collections::hash_map::IntoIter<Id, Repository>;
+    type IntoIter = std::collections::btree_map::IntoIter<Id, Repository>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()

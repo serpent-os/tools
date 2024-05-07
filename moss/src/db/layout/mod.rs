@@ -2,16 +2,16 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::collections::HashSet;
-
 use diesel::prelude::*;
 use diesel::{Connection as _, SqliteConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use std::collections::BTreeSet;
+
 use stone::payload;
 
-use super::Connection;
 use crate::package;
 
+use super::Connection;
 pub use super::Error;
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("src/db/layout/migrations");
@@ -61,7 +61,7 @@ impl Database {
         })
     }
 
-    pub fn file_hashes(&self) -> Result<HashSet<String>, Error> {
+    pub fn file_hashes(&self) -> Result<BTreeSet<String>, Error> {
         self.conn.exec(|conn| {
             let hashes = model::layout::table
                 .select(model::layout::entry_value1.assume_not_null())

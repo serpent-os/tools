@@ -2,13 +2,13 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{collections::HashMap, hash::Hash, path::PathBuf};
+use std::collections::BTreeMap;
+use std::{hash::Hash, path::PathBuf};
 
 use serde::Deserialize;
+pub use serde_yaml::Error;
 use thiserror::Error;
 use url::Url;
-
-pub use serde_yaml::Error;
 
 pub use self::macros::Macros;
 pub use self::script::Script;
@@ -158,7 +158,7 @@ impl<'de> Deserialize<'de> for Upstream {
             Inner(Inner),
         }
 
-        #[derive(Debug, Deserialize, PartialEq, Eq, Hash)]
+        #[derive(Debug, Deserialize, PartialEq, Eq, Ord, PartialOrd, Hash)]
         #[serde(try_from = "&str")]
         enum Uri {
             Plain(Url),
@@ -180,7 +180,7 @@ impl<'de> Deserialize<'de> for Upstream {
         #[error("invalid uri: {0}")]
         struct UriParseError(#[from] url::ParseError);
 
-        let raw_map = HashMap::<Uri, Outer>::deserialize(deserializer)?;
+        let raw_map = BTreeMap::<Uri, Outer>::deserialize(deserializer)?;
 
         match raw_map.into_iter().next() {
             Some((Uri::Plain(uri), Outer::String(hash))) => Ok(Upstream::Plain {
@@ -254,7 +254,7 @@ impl<'de> Deserialize<'de> for Path {
         #[serde(untagged)]
         enum Inner {
             String(String),
-            KeyValue(HashMap<String, PathKind>),
+            KeyValue(BTreeMap<String, PathKind>),
         }
 
         match Inner::deserialize(deserializer)? {
@@ -313,7 +313,7 @@ where
     T: serde::Deserialize<'de>,
     D: serde::de::Deserializer<'de>,
 {
-    let sequence = Vec::<HashMap<String, T>>::deserialize(deserializer)?;
+    let sequence = Vec::<BTreeMap<String, T>>::deserialize(deserializer)?;
 
     Ok(sequence.into_iter().fold(vec![], |acc, next| {
         acc.into_iter()

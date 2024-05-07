@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{collections::HashMap, fs, io, path::Path};
+use std::collections::BTreeMap;
+use std::{fs, io, path::Path};
 
 use thiserror::Error;
 
@@ -10,7 +11,7 @@ use crate::{util, Env};
 
 #[derive(Debug)]
 pub struct Macros {
-    pub arch: HashMap<String, stone_recipe::Macros>,
+    pub arch: BTreeMap<String, stone_recipe::Macros>,
     pub actions: Vec<stone_recipe::Macros>,
 }
 
@@ -25,7 +26,7 @@ impl Macros {
         let arch_files = util::enumerate_files(&arch_dir, matcher).map_err(Error::ArchFiles)?;
         let action_files = util::enumerate_files(&actions_dir, matcher).map_err(Error::ActionFiles)?;
 
-        let mut arch = HashMap::new();
+        let mut arch = BTreeMap::new();
         let mut actions = vec![];
 
         for file in arch_files {

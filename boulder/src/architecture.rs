@@ -37,7 +37,7 @@ impl Architecture {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Display)]
 pub enum BuildTarget {
     #[display(fmt = "{_0}")]
     Native(Architecture),

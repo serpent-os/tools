@@ -2,9 +2,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::collections::{HashMap, HashSet};
-
 use serde::Deserialize;
+use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
 
 use crate::{sequence_of_key_value, single_as_sequence, KeyValue, Macros};
@@ -32,7 +31,7 @@ impl<'de> Deserialize<'de> for KeyValue<Tuning> {
         #[serde(untagged)]
         enum Outer {
             Key(String),
-            KeyValue(HashMap<String, Inner>),
+            KeyValue(BTreeMap<String, Inner>),
         }
 
         match Outer::deserialize(deserializer)? {
@@ -134,11 +133,11 @@ pub struct TuningGroup {
 
 #[derive(Debug, Default)]
 pub struct Builder {
-    flags: HashMap<String, TuningFlag>,
-    groups: HashMap<String, TuningGroup>,
-    enabled: HashSet<String>,
-    disabled: HashSet<String>,
-    option_sets: HashMap<String, String>,
+    flags: BTreeMap<String, TuningFlag>,
+    groups: BTreeMap<String, TuningGroup>,
+    enabled: BTreeSet<String>,
+    disabled: BTreeSet<String>,
+    option_sets: BTreeMap<String, String>,
 }
 
 impl Builder {
@@ -200,8 +199,8 @@ impl Builder {
     }
 
     pub fn build(&self) -> Result<Vec<TuningFlag>, Error> {
-        let mut enabled_flags = HashSet::new();
-        let mut disabled_flags = HashSet::new();
+        let mut enabled_flags = BTreeSet::new();
+        let mut disabled_flags = BTreeSet::new();
 
         for enabled in &self.enabled {
             let Some(group) = self.groups.get(enabled) else {
@@ -235,7 +234,7 @@ impl Builder {
         Ok(enabled_flags
             .iter()
             .chain(&disabled_flags)
-            .collect::<HashSet<_>>()
+            .collect::<BTreeSet<_>>()
             .into_iter()
             .filter_map(|flag| self.flags.get(flag).cloned())
             .collect())

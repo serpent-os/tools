@@ -3,8 +3,6 @@
 // SPDX-License-Identifier: MPL-2.0
 #![allow(clippy::map_collect_result_unit)]
 
-use std::collections::{HashMap, HashSet};
-
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -13,14 +11,15 @@ use nom::{
     multi::{many1, many_till},
     sequence::{delimited, preceded, terminated},
 };
+use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
 
 use crate::{macros::Action, Macros};
 
 #[derive(Default)]
 pub struct Parser {
-    actions: HashMap<String, Action>,
-    definitions: HashMap<String, String>,
+    actions: BTreeMap<String, Action>,
+    definitions: BTreeMap<String, String>,
     env: Option<String>,
 }
 
@@ -56,7 +55,7 @@ impl Parser {
     }
 
     pub fn parse(&self, input: &str) -> Result<Script, Error> {
-        let mut dependencies = HashSet::new();
+        let mut dependencies = BTreeSet::new();
 
         let Parsed { commands, env } = parse(
             input,
@@ -70,8 +69,9 @@ impl Parser {
             .actions
             .iter()
             .filter_map(|(identifier, action)| {
-                let result = parse_content_only(&action.command, &self.actions, &self.definitions, &mut HashSet::new())
-                    .transpose()?;
+                let result =
+                    parse_content_only(&action.command, &self.actions, &self.definitions, &mut BTreeSet::new())
+                        .transpose()?;
 
                 Some(result.map(|resolved| (identifier.clone(), resolved)))
             })
@@ -80,7 +80,7 @@ impl Parser {
             .definitions
             .iter()
             .filter_map(|(identifier, definition)| {
-                let result = parse_content_only(definition, &self.actions, &self.definitions, &mut HashSet::new())
+                let result = parse_content_only(definition, &self.actions, &self.definitions, &mut BTreeSet::new())
                     .transpose()?;
 
                 Some(result.map(|resolved| (identifier.clone(), resolved)))
@@ -122,9 +122,9 @@ pub struct Script {
     pub dependencies: Vec<String>,
     pub env: Option<String>,
     /// Fully resolved actions
-    pub resolved_actions: HashMap<String, String>,
+    pub resolved_actions: BTreeMap<String, String>,
     /// Fully resolved definitions
-    pub resolved_definitions: HashMap<String, String>,
+    pub resolved_definitions: BTreeMap<String, String>,
 }
 
 struct Parsed {
@@ -135,9 +135,9 @@ struct Parsed {
 fn parse(
     input: &str,
     env: Option<&str>,
-    actions: &HashMap<String, Action>,
-    definitions: &HashMap<String, String>,
-    dependencies: &mut HashSet<String>,
+    actions: &BTreeMap<String, Action>,
+    definitions: &BTreeMap<String, String>,
+    dependencies: &mut BTreeSet<String>,
 ) -> Result<Parsed, Error> {
     let mut line_num = 0;
     let mut content = String::new();
@@ -207,9 +207,9 @@ fn parse(
 /// Extract the `parse` call as content only, used for parsing nested macros
 fn parse_content_only(
     input: &str,
-    actions: &HashMap<String, Action>,
-    definitions: &HashMap<String, String>,
-    dependencies: &mut HashSet<String>,
+    actions: &BTreeMap<String, Action>,
+    definitions: &BTreeMap<String, String>,
+    dependencies: &mut BTreeSet<String>,
 ) -> Result<Option<String>, Error> {
     Ok(parse(input, None, actions, definitions, dependencies)?
         .commands
@@ -287,8 +287,9 @@ pub enum Error {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use crate::macros::Action;
+
+    use super::*;
 
     #[test]
     fn parse_script() {
@@ -321,15 +322,15 @@ mod test {
                 Command::Content("patch -v --args=a,b,c %escaped %{".to_string()),
                 Command::Break(Breakpoint {
                     exit: false,
-                    line_num: 2
+                    line_num: 2,
                 }),
                 Command::Break(Breakpoint {
                     exit: true,
-                    line_num: 3
+                    line_num: 3,
                 }),
                 Command::Content(
                     "/mason/pkg/0001-deps-analysis-elves-In-absence-of-soname.-make-one-u.patch".to_string()
-                )
+                ),
             ]
         );
         assert_eq!(script.dependencies, vec!["patch".to_string()])
@@ -345,7 +346,7 @@ mod test {
             breakpoint,
             Command::Break(Breakpoint {
                 line_num: 1,
-                exit: false
+                exit: false,
             })
         );
 
@@ -365,7 +366,7 @@ mod test {
             breakpoint,
             Command::Break(Breakpoint {
                 line_num: 2,
-                exit: false
+                exit: false,
             })
         );
     }

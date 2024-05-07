@@ -2,14 +2,15 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{collections::HashMap, io};
+use std::{collections::BTreeMap, io};
 
-use boulder::{profile, Env, Profile};
 use clap::Parser;
 use itertools::Itertools;
-use moss::{repository, runtime, Installation, Repository};
 use thiserror::Error;
 use url::Url;
+
+use boulder::{profile, Env, Profile};
+use moss::{repository, runtime, Installation, Repository};
 
 #[derive(Debug, Parser)]
 #[command(about = "Manage boulder profiles")]
@@ -27,13 +28,13 @@ pub enum Subcommand {
         #[arg(help = "profile name")]
         name: String,
         #[arg(
-            short = 'r',
-            long = "repo",
-            required = true,
-            help = "profile repositories",
-            value_parser = parse_repository,
-            help = "repository to add to profile, can be passed multiple times",
-            long_help = "repository to add to profile\n\nExample: --repo name=volatile,uri=https://dev.serpentos.com/volatile/x86_64/stone.index,priority=100"
+        short = 'r',
+        long = "repo",
+        required = true,
+        help = "profile repositories",
+        value_parser = parse_repository,
+        help = "repository to add to profile, can be passed multiple times",
+        long_help = "repository to add to profile\n\nExample: --repo name=volatile,uri=https://dev.serpentos.com/volatile/x86_64/stone.index,priority=100"
         )]
         repos: Vec<(repository::Id, Repository)>,
     },
@@ -49,7 +50,7 @@ fn parse_repository(s: &str) -> Result<(repository::Id, Repository), String> {
     let key_values = s
         .split(',')
         .filter_map(|kv| kv.split_once('='))
-        .collect::<HashMap<_, _>>();
+        .collect::<BTreeMap<_, _>>();
 
     let id = repository::Id::new(key_values.get("name").ok_or("missing name")?.to_string());
     let uri = key_values
@@ -140,6 +141,7 @@ pub fn update<'a>(env: &'a Env, manager: profile::Manager<'a>, profile: &profile
 
     Ok(())
 }
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("config")]
