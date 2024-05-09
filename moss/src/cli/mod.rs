@@ -8,6 +8,7 @@ use clap::{Arg, ArgAction, Command};
 use moss::{installation, runtime, Installation};
 use thiserror::Error;
 
+mod completions;
 mod extract;
 mod index;
 mod info;
@@ -58,6 +59,7 @@ fn command() -> Command {
                 .action(ArgAction::SetTrue),
         )
         .arg_required_else_help(true)
+        .subcommand(completions::command())
         .subcommand(extract::command())
         .subcommand(index::command())
         .subcommand(info::command())
@@ -94,6 +96,10 @@ pub fn process() -> Result<(), Error> {
     }
 
     match matches.subcommand() {
+        Some(("completions", args)) => {
+            completions::handle(args, command());
+            Ok(())
+        }
         Some(("extract", args)) => extract::handle(args).map_err(Error::Extract),
         Some(("index", args)) => index::handle(args).map_err(Error::Index),
         Some(("info", args)) => info::handle(args, installation).map_err(Error::Info),
