@@ -124,3 +124,6 @@ install-moss:
 
   # Cleanup
   rm -rfv $tmpdir
+
+create-release-tar:
+  scripts/create-release-tar.sh
