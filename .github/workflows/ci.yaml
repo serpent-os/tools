@@ -23,6 +23,14 @@ jobs:
     - name: typos-action
       uses: crate-ci/typos@v1.20.8
 
+    - name: Install LLVM and Clang
+      run: |
+        wget https://apt.llvm.org/llvm.sh
+        chmod +x llvm.sh
+        sudo ./llvm.sh 18
+        echo "/usr/lib/llvm-18/bin" >> $GITHUB_PATH
+        echo "CC=/usr/lib/llvm-18/bin/clang" >> $GITHUB_ENV
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
       with:
