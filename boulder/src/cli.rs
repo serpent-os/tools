@@ -51,14 +51,14 @@ pub fn process() -> Result<(), Error> {
         Subcommand::Build(command) => build::handle(command, env)?,
         Subcommand::Chroot(command) => chroot::handle(command, env)?,
         Subcommand::Profile(command) => profile::handle(command, env)?,
-        Subcommand::Recipe(command) => recipe::handle(command)?,
+        Subcommand::Recipe(command) => recipe::handle(command, env)?,
     }
 
     Ok(())
 }
 
 fn replace_aliases(args: std::env::Args) -> Vec<String> {
-    const ALIASES: &[(&str, &[&str])] = &[("new", &["recipe", "new"])];
+    const ALIASES: &[(&str, &[&str])] = &[("new", &["recipe", "new"]), ("macros", &["recipe", "macros"])];
 
     let mut args = args.collect::<Vec<_>>();
 
@@ -66,6 +66,12 @@ fn replace_aliases(args: std::env::Args) -> Vec<String> {
         let Some(pos) = args.iter().position(|a| a == *alias) else {
             continue;
         };
+
+        // Escape hatch for alias w/ same name as
+        // inner subcommand
+        if args.get(pos - 1).map(String::as_str) == replacements.first().copied() {
+            continue;
+        }
 
         args.splice(pos..pos + 1, replacements.iter().map(|arg| arg.to_string()));
 

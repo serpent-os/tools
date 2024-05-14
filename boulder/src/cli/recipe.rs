@@ -8,15 +8,21 @@ use std::{
 };
 
 use boulder::{
+    architecture,
     draft::{self, Drafter},
-    recipe,
+    macros, recipe, Env, Macros,
 };
 use clap::Parser;
 use futures::StreamExt;
+use itertools::Itertools;
 use moss::{request, runtime};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
+use tui::{
+    pretty::{self, ColumnDisplay},
+    Styled,
+};
 use url::Url;
 
 #[derive(Debug, Parser)]
@@ -63,6 +69,11 @@ pub enum Subcommand {
         )]
         overwrite: bool,
     },
+    #[command(about = "Print macro definitions")]
+    Macros {
+        #[arg(name = "macro", help = "Print definition and example for the provided macro")]
+        _macro: Option<String>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -78,7 +89,7 @@ fn parse_upstream(s: &str) -> Result<Upstream, String> {
     }
 }
 
-pub fn handle(command: Command) -> Result<(), Error> {
+pub fn handle(command: Command, env: Env) -> Result<(), Error> {
     match command.subcommand {
         Subcommand::New { output, upstreams } => new(output, upstreams),
         Subcommand::Update {
@@ -87,6 +98,7 @@ pub fn handle(command: Command) -> Result<(), Error> {
             version,
             upstreams,
         } => update(recipe, overwrite, version, upstreams),
+        Subcommand::Macros { _macro } => macros(_macro, env),
     }
 }
 
@@ -231,12 +243,97 @@ async fn fetch_hash(uri: Url) -> Result<String, Error> {
     Ok(hash)
 }
 
+fn macros(_macro: Option<String>, env: Env) -> Result<(), Error> {
+    let macros = Macros::load(&env)?;
+
+    let mut items = macros
+        .actions
+        .iter()
+        .flat_map(|m| {
+            m.actions.iter().map(|action| PrintMacro {
+                name: format!("%{}", action.key),
+                // Multi-line strings need to be in `example`
+                description: action.value.description.lines().next().unwrap_or_default(),
+                example: action.value.example.as_deref(),
+            })
+        })
+        .sorted()
+        .collect::<Vec<_>>();
+
+    let mut definitions = vec![];
+    for arch in ["base", &architecture::host().to_string()] {
+        if let Some(macros) = macros.arch.get(arch) {
+            definitions.extend(macros.definitions.iter().map(|def| PrintMacro {
+                name: format!("%({})", def.key),
+                description: &def.value,
+                example: None,
+            }));
+        }
+    }
+    definitions.sort();
+    definitions.dedup();
+
+    items.extend(definitions);
+
+    match _macro {
+        Some(name) => {
+            if let Some(action) = items
+                .into_iter()
+                .find(|a| a.name == format!("%{name}") || a.name == format!("%({name})"))
+            {
+                println!("{} - {}", action.name.bold(), action.description);
+
+                if let Some(example) = action.example {
+                    println!("\n{}", "Example:".bold());
+                    for line in example.lines() {
+                        println!("  {line}");
+                    }
+                }
+            } else {
+                return Err(Error::MacroNotFound(name));
+            }
+        }
+        None => {
+            pretty::print_columns(&items, 1);
+        }
+    }
+
+    Ok(())
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+struct PrintMacro<'a> {
+    name: String,
+    description: &'a str,
+    example: Option<&'a str>,
+}
+
+impl<'a> ColumnDisplay for PrintMacro<'a> {
+    fn get_display_width(&self) -> usize {
+        self.name.len()
+    }
+
+    fn display_column(&self, writer: &mut impl io::prelude::Write, _col: pretty::Column, width: usize) {
+        let _ = write!(
+            writer,
+            "{}{:width$}  {}",
+            self.name.clone().bold(),
+            " ",
+            self.description,
+        );
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Recipe file must be provided to use -w/--overwrite")]
     OverwriteRecipeRequired,
     #[error("Mismatch for upstream[{0}], expected {1} got {2}")]
     UpstreamMismatch(usize, &'static str, &'static str),
+    #[error("load macros")]
+    LoadMacros(#[from] macros::Error),
+    #[error("Macro doesn't exist: {0}")]
+    MacroNotFound(String),
     #[error("resolve recipe path")]
     ResolvePath(#[source] recipe::Error),
     #[error("reading recipe")]
