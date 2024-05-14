@@ -1,22 +1,22 @@
 actions:
 
-    # Perform python setup and build with the default options
     - python_setup:
+        description: Perform python setup and build with the default options
         command: |
             test -e ./setup.py || ( echo "%%python: The ./setup.py script could not be found" ; exit 1 )
             python3 setup.py build
         dependencies:
             - python
 
-    # Install python package to the destination directory
     - python_install:
+        description: Install python package to the destination directory
         command: |
             python3 setup.py install --root="%(installroot)"
         dependencies:
             - python
 
-    # Build a wheel for python PEP517 projects
     - pyproject_build:
+        description: Build a wheel for python PEP517 projects
         command: |
             python3 -m build --wheel --no-isolation
         dependencies:
@@ -24,19 +24,19 @@ actions:
             - python-build
             - python-wheel
 
-    # Install wheel to destination directory
     - pyproject_install:
+        description: Install wheel to destination directory
         command: |
             python3 -m installer --destdir="%(installroot)" dist/*.whl
         dependencies:
             - python
             - python-installer
 
-    # Compile .pyc bytecode files from any miscellaneous .py files in the install directory.
     # TODO: Investigate whether providing additional -opt1.pyc and -opt2.pyc from increasing
     #       the optimization level is worth it. Python itself has to be invoked with -O/-OO
     #       in order to use opt1/opt2 .pyc files.
     - python_compile:
+        description: Compile .pyc bytecode files from any miscellaneous .py files in the install directory.
         command: |
             function python_compile() {
                 if [ -z "$1" ]; then

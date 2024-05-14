@@ -1,19 +1,19 @@
 actions:
     # Actions required for PGO builds
 
-    # Merge LLVM profile data, copies to combined.profdata in case there's no stage2
     - llvm_merge_s1:
+        description: Merge LLVM profile data, copies to combined.profdata in case there's no stage2
         command: |
             llvm-profdata merge --failure-mode=all -output=%(pgo_dir)/ir.profdata %(pgo_dir)/IR/default*.profraw
             cp %(pgo_dir)/ir.profdata %(pgo_dir)/combined.profdata
-    # Merge LLVM profile data after stage2 PGO workload
     - llvm_merge_s2:
+        description: Merge LLVM profile data after stage2 PGO workload
         command: |
             rm %(pgo_dir)/combined.profdata
             llvm-profdata merge --failure-mode=all -output=%(pgo_dir)/combined.profdata %(pgo_dir)/ir.profdata %(pgo_dir)/CS/default*.profraw
 
-    # Instrument file with llvm-bolt
     - bolt_instr:
+        description: Instrument file with llvm-bolt
         command: |
             binstr(){
                 mv ${1} ${1}.orig
@@ -22,16 +22,16 @@ actions:
             }
             binstr
 
-    # Instrument file with llvm-bolt
     - bolt_merge:
+        description: Instrument file with llvm-bolt
         command: |
             bmerge(){
                 merge-fdata %(pgo_dir)/BOLT/$(basename ${1}).*.fdata > %(pgo_dir)/$(basename ${1}).fdata
             }
             bmerge
 
-    # Apply bolt profile
     - bolt_opt:
+        description: Apply bolt profile
         command: |
             boptim(){
                 llvm-bolt ${1}.orig -o ${1}.bolt -data=%(pgo_dir)/$(basename ${1}).fdata -reorder-blocks=cache+ -reorder-functions=hfsort+ -split-functions=3 -split-all-cold -split-eh -dyno-stats -icf=1 -use-gnu-stack ${2} ${3} ${4}
@@ -41,8 +41,8 @@ actions:
         dependencies:
             - llvm-bolt
 
-    # Collect perf data suitable for the bolt macros
     - bolt_perf:
+        description: Collect perf data suitable for the bolt macros
         command: |
             bperf(){
                 mkdir -p %(pgo_dir)/BOLT
@@ -52,8 +52,8 @@ actions:
         dependencies:
             - perf
 
-    # Convert perf data into bolt equivalent
     - bolt_perf2bolt:
+        description: Convert perf data into bolt equivalent
         command: |
             bperf2bolt(){
                 cp ${1} ${1}.orig

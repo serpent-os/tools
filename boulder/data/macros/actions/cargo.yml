@@ -1,13 +1,13 @@
 actions:
-    # Fetch dependencies
     - cargo_fetch:
+        description: Fetch dependencies
         command: |
             cargo fetch -v --locked
         dependencies:
             - rust
 
-    # Build the rust project
     - cargo_build:
+        description: Build the rust project
         command: |
             cargo build -v -j "%(jobs)" --frozen --release --target %(target_triple) \
               --config profile.release.debug=\"full\" \
@@ -16,8 +16,8 @@ actions:
         dependencies:
             - rust
 
-    # Install the built binary
     - cargo_install:
+        description: Install the built binary
         command: |
             cargo_install(){
                 if [ $# -eq 1 ]; then
@@ -30,8 +30,8 @@ actions:
         dependencies:
             - rust
 
-    # Run tests
     - cargo_test:
+        description: Run tests
         command: |
             cargo test -v -j "%(jobs)" --frozen --release --target %(target_triple) --workspace
         dependencies:
