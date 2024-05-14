@@ -3,8 +3,8 @@ actions:
     # NOTE: If required we can add support for the deprecated Module::Build buildsystem in the future.
     #       However, let's just support ExtUtils::MakeMaker for now to vastly simply these macros.
 
-    # Setup perl with ExtUtils::MakeMaker from stdlib
     - perl_setup:
+        description: Setup perl with ExtUtils::MakeMaker from stdlib
         command: |
             perl Makefile.PL PREFIX="%(prefix)" NO_PACKLIST=1 NO_PERLLOCAL=1 INSTALLDIRS=vendor DESTDIR="%(installroot)"
         dependencies:

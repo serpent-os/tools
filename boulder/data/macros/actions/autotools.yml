@@ -1,7 +1,7 @@
 actions:
 
-    # Perform ./configure with the default options
     - configure:
+        description: Perform ./configure with the default options
         command: |
             test -x ./configure || ( echo "%%configure: The ./configure script could not be found" ; exit 1 )
             ./configure %(options_configure)
@@ -9,23 +9,23 @@ actions:
             - autoconf
             - automake
 
-    # Perform a make
     # TIP: Add V=1 VERBOSE=1 after '%make' in the recipe if you need a more verbose build
     - make:
+        description: Perform a make
         command: |
             make -j "%(jobs)"
         dependencies:
             - make
 
-    # Install results of build to the destination directory
     - make_install:
+        description: Install results of build to the destination directory
         command: |
             %make install DESTDIR="%(installroot)"
         dependencies:
             - make
 
-    # Re autotools-configure a project without an autogen.sh script
     - reconfigure:
+        description: Re autotools-configure a project without an autogen.sh script
         command: |
             autoreconf -vfi || ( echo "%%reconfigure: Failed to run autoreconf"; exit 1 )
             %configure
@@ -33,8 +33,8 @@ actions:
             - autoconf
             - automake
 
-    # Run autogen.sh script, attempting to only configure once
     - autogen:
+        description: Run autogen.sh script, attempting to only configure once
         command: |
             NOCONFIGURE="noconfigure"; export NOCONFIGURE
             sh ./autogen.sh %(options_configure)

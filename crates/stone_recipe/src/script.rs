@@ -299,6 +299,8 @@ mod test {
         parser.add_action(
             "patch",
             Action {
+                description: "test".into(),
+                example: None,
                 command: "patch -v %(nested_flag)".into(),
                 dependencies: vec!["patch".into()],
             },
@@ -355,6 +357,8 @@ mod test {
         parser.add_action(
             "meson",
             Action {
+                description: "test".into(),
+                example: None,
                 command: "meson -j 1".into(),
                 dependencies: vec![],
             },

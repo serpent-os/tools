@@ -51,8 +51,8 @@ definitions:
 
 actions              :
 
-    # scriptBase is merged to the top of all newly generated build scripts.
     - scriptBase     :
+        description: scriptBase is merged to the top of all newly generated build scripts.
         command: |
             #!/bin/sh
             set -e

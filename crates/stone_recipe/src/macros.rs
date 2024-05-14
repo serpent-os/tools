@@ -33,6 +33,8 @@ pub struct Macros {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Action {
+    pub description: String,
+    pub example: Option<String>,
     pub command: String,
     #[serde(default)]
     pub dependencies: Vec<String>,
