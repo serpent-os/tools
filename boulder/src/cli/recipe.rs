@@ -316,9 +316,9 @@ impl<'a> ColumnDisplay for PrintMacro<'a> {
     fn display_column(&self, writer: &mut impl io::prelude::Write, _col: pretty::Column, width: usize) {
         let _ = write!(
             writer,
-            "{}{:width$}  {}",
+            "{}{}  {}",
             self.name.clone().bold(),
-            " ",
+            " ".repeat(width),
             self.description,
         );
     }
