@@ -2,7 +2,7 @@
 default: moss
 
 root-dir := justfile_directory()
-build-mode := env_var_or_default("MODE", "packaging")
+build-mode := env_var_or_default("MODE", "onboarding")
 
 [private]
 help:

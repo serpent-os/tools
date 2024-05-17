@@ -71,6 +71,9 @@ pub fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<Timing, 
         return Ok(timing);
     }
 
+    // Testing panic for hyperfine benchmarking purposes (build flag tuning)
+    // panic!();
+
     println!("The following package(s) will be installed:");
     println!();
     autoprint_columns(&missing);

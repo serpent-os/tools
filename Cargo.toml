@@ -51,7 +51,7 @@ xxhash-rust = { version = "0.8.10", features = ["xxh3"] }
 zstd = { version = "0.12.4", features = [ "zstdmt" ] }
 
 [profile.release]
-lto = 'thin'
+lto = "thin"
 
 [profile.packaging]
 inherits = "release"
@@ -61,3 +61,14 @@ opt-level = 3
 # allow packaging system to do it
 strip = "none"
 debug = true
+
+# We want people who use the onboarding steps to get a nice compromise
+# between fast compilation and fast runtime, but with checks in place
+# and full backtraces. Hyperfine tests shows opt-level = 1 to be a good
+# compromise between compile speed and runtime speed.
+[profile.onboarding]
+inherits = "dev"
+opt-level = 1
+lto = "thin"
+debug = true
+strip = "none"
