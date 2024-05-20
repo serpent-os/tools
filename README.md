@@ -28,7 +28,7 @@ Current Milestone target: [oxide-prealpha1](https://github.com/serpent-os/moss/m
 ## Onboarding
 
 ```bash
-# This will build boulder and moss and install them to /usr/local by default
+# This will build boulder and moss and install them to ${HOME}/.local/ by default
 just get-started
 
 # If you want to override the install prefix, do the following:
