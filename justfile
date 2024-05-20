@@ -3,7 +3,9 @@ default: moss
 
 root-dir := justfile_directory()
 build-mode := env_var_or_default("MODE", "onboarding")
-prefix := env_var_or_default("PREFIX", "/usr/local")
+# Keep it simple for now and make installs user-local
+xdg-data-home := "$HOME/.local/share"
+xdg-bin-home := "$HOME/.local/bin"
 
 [private]
 help:
@@ -22,15 +24,15 @@ moss: (build "moss")
 # Onboarding replacement
 get-started: (build "boulder") (build "moss")
   @echo ""
-  @echo "Installing boulder and moss to {{prefix}}/ ..."
-  sudo mkdir -pv {{prefix}}/bin/
-  sudo cp {{root-dir}}/target/{{build-mode}}/{boulder,moss} {{prefix}}/bin/
-  sudo rm -rf {{prefix}}/share/boulder
-  sudo mkdir -pv {{prefix}}/share/boulder/
-  sudo cp -R {{root-dir}}/boulder/data/* {{prefix}}/share/boulder/
+  @echo "Installing boulder and moss to {{xdg-bin-home}}/ ..."
+  mkdir -pv "{{xdg-bin-home}}/"
+  cp "{{root-dir}}/target/{{build-mode}}"/{boulder,moss} "{{xdg-bin-home}}/"
+  rm -rf "{{xdg-data-home}}/boulder"
+  mkdir -pv "{{xdg-data-home}}/boulder/"
+  cp -R "{{root-dir}}/boulder/data"/* "{{xdg-data-home}}/boulder/"
   @echo ""
   @echo "Listing installed files..."
-  ls -hlF {{prefix}}/{bin/{boulder,moss},share/boulder}
+  ls -hlF "{{xdg-bin-home}}"/{boulder,moss} "{{xdg-data-home}}/boulder"
   @echo ""
   @echo "Checking the system path to boulder and moss executables:"
   command -v boulder
