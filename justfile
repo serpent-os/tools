@@ -3,6 +3,7 @@ default: moss
 
 root-dir := justfile_directory()
 build-mode := env_var_or_default("MODE", "onboarding")
+prefix := env_var_or_default("PREFIX", "/usr/local")
 
 [private]
 help:
@@ -17,6 +18,26 @@ boulder: (build "boulder")
 
 # Compile moss
 moss: (build "moss")
+
+# Onboarding replacement
+get-started: (build "boulder") (build "moss")
+  @echo ""
+  @echo "Installing boulder and moss to {{prefix}}/ ..."
+  sudo mkdir -pv {{prefix}}/bin/
+  sudo cp {{root-dir}}/target/{{build-mode}}/{boulder,moss} {{prefix}}/bin/
+  sudo rm -rf {{prefix}}/share/boulder
+  sudo mkdir -pv {{prefix}}/share/boulder/
+  sudo cp -R {{root-dir}}/boulder/data/* {{prefix}}/share/boulder/
+  @echo ""
+  @echo "Listing installed files..."
+  ls -hlF {{prefix}}/{bin/{boulder,moss},share/boulder}
+  @echo ""
+  @echo "Checking the system path to boulder and moss executables:"
+  command -v boulder
+  command -v moss
+  @echo ""
+  @echo "Done."
+  @echo ""
 
 # Fix code issues
 fix:

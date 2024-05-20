@@ -1,21 +1,15 @@
-# moss-rs
+# `moss` and `boulder`
 
 A rewrite of the [Serpent OS](https://serpentos.com) tooling in Rust, enabling a robust implementation befitting Serpent and [Solus](https://getsol.us)
 
-We will initially focus on `moss` and `stone` (library), restoring parity while focusing on some key areas 
-
- - Version agnostic read APIs
- - Decoupled repository indices with support for format upgrades
- - Asynchronous I/O (specifically fetches)
- - Memory consumption + safety
- - Upgrade of installations
-
-When the tooling is at a point exceeding the functionality of our first version, focus will shift to the build infrastructure as well
-as the Rust version of `boulder` (`.stone` build tooling).
+The Rust re-implementations of `moss` and `boulder` have now exceeded the capabilities of the original PoC code bases.
 
 It is recommended to use an up to date version of Rust via `rustup`.
 
-Progress:
+
+## Status
+
+Current Milestone target: [oxide-prealpha1](https://github.com/serpent-os/moss/milestone/1)
 
  - [x] Read support for `.stone`
  - [x] Repository manipulation
@@ -27,49 +21,62 @@ Progress:
  - [x] `sync` support (See: https://github.com/serpent-os/moss-rs/pull/73#issuecomment-1802672634)
  - [x] Triggers
  - [x] GC / cleanups of latent states
+ - [x] boulder ported
  - [ ] Features (previously: Subscriptions)
 
-## Building moss
+
+## Onboarding
 
 ```bash
-$ cargo build -p moss
-$ cargo run -p moss -- $args
+# This will build boulder and moss and install them to /usr/local by default
+just get-started
+
+# If you want to override the install prefix, do the following:
+PREFIX=/usr just get-started
 ```
+
 
 ## Experiment
 
-Remember to use the `-D sosroot` argument to specify a root directory, otherwise moss will happily
-eat your operating system.
+**NB:** Remember to use the `-D sosroot/` argument to specify a root directory, otherwise moss will happily
+eat your current operating system.
 
-    cargo build --release
 
-    # create the sosroot/ directory
-    mkdir -pv sosroot/
+```bash
+just get-started
 
-    # Add the volatile repo
-    ./target/release/moss -D sosroot/ repo add volatile https://dev.serpentos.com/volatile/x86_64/stone.index
+# create the sosroot/ directory
+mkdir -pv sosroot/
 
-    # List packages
-    ./target/release/moss -D sosroot/ list available
+# Add the volatile repo
+moss -D sosroot/ repo add volatile https://dev.serpentos.com/volatile/x86_64/stone.index
 
-    # Install something
-    ./target/release/moss -D sosroot/ install systemd bash libx11-32bit
+# List packages
+moss -D sosroot/ list available
+
+# Install something
+moss -D sosroot/ install systemd bash libx11-32bit
+```
+
+If you want to create systemd-nspawn roots or bootable VMs, please check out the [img-tests](https://github.com/serpent-os/img-tests) repository.
+
 
 ## Contributing changes
 
 Please ensure all tests are running locally without issue:
 
 ```bash
-$ cargo test --all
+$ just test
 
 # Prior to committing a change:
-$ cargo fmt
+$ just test # includes the just lint target
 
-# Prior to pushing anything, check:
-$ cargo clippy
+# Prior to pushing anything, apply clippy fixes:
+$ just fix
 ```
+
+Then create a Pull Request with your changes.
 
 ## License
 
 `moss-rs` is available under the terms of the [MPL-2.0](https://spdx.org/licenses/MPL-2.0.html)
-
