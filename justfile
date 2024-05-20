@@ -38,6 +38,8 @@ get-started: (build "boulder") (build "moss")
   @echo ""
   @echo "Done."
   @echo ""
+  @echo "The Serpent OS documentation lives at https://docs.serpentos.com"
+  @echo ""
 
 # Fix code issues
 fix:
