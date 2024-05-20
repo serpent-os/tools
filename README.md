@@ -36,6 +36,11 @@ PREFIX=/usr just get-started
 ```
 
 
+## Documentation
+
+See [docs.serpentos.com](https://docs.serpentos.com/).
+
+
 ## Experiment
 
 **NB:** Remember to use the `-D sosroot/` argument to specify a root directory, otherwise moss will happily
