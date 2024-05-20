@@ -30,6 +30,13 @@ Current Milestone target: [oxide-prealpha1](https://github.com/serpent-os/moss/m
 ```bash
 # This will build boulder and moss and install them to ${HOME}/.local/ by default
 just get-started
+
+# boulder and moss rely on so-called subuid and subgid support.
+# IFF you do not already have this set up for your ${USER} in /etc/subuid and /etc/subuid
+# you might want to do something similar to this:
+sudo touch /etc/sub{uid,gid}
+sudo usermod --add-subuids 1000000-1065535 --add-subgids 1000000-1065535 root
+sudo usermod --add-subuids 1065536-1131071 --add-subgids 1065536-1131071 ${USER}
 ```
 
 
