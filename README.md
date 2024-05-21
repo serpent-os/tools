@@ -39,6 +39,13 @@ sudo usermod --add-subuids 1000000-1065535 --add-subgids 1000000-1065535 root
 sudo usermod --add-subuids 1065536-1131071 --add-subgids 1065536-1131071 ${USER}
 ```
 
+**NB:** If you want to build .stones with boulder on your _non-serpent_ host system, you will need to specify the
+location of the boulder data files (which live in ${HOME}/.local/share/boulder if you used `just get-started`:
+
+```bash
+alias boulder="${HOME}/.local/bin/boulder --data-dir ${HOME}/.local/share/boulder"
+```
+
 
 ## Documentation
 
