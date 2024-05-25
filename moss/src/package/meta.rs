@@ -51,6 +51,8 @@ pub struct Meta {
     pub dependencies: BTreeSet<Dependency>,
     /// All providers, including name()
     pub providers: BTreeSet<Provider>,
+    /// All providers that conflict with this package
+    pub conflicts: BTreeSet<Provider>,
     /// If relevant: uri to fetch from
     pub uri: Option<String>,
     /// If relevant: hash for the download
@@ -88,6 +90,15 @@ impl Meta {
                 name: name.clone(),
             }))
             .collect();
+        let conflicts = payload
+            .iter()
+            .filter_map(meta_conflict)
+            // Add package name as provider
+            .chain(Some(Provider {
+                kind: dependency::Kind::PackageName,
+                name: name.clone(),
+            }))
+            .collect();
 
         Ok(Meta {
             name: Name::from(name),
@@ -102,6 +113,7 @@ impl Meta {
             licenses,
             dependencies,
             providers,
+            conflicts,
             uri,
             hash,
             download_size,
@@ -205,13 +217,22 @@ fn meta_dependency(meta: &payload::Meta) -> Option<Dependency> {
 }
 
 fn meta_provider(meta: &payload::Meta) -> Option<Provider> {
-    if let payload::meta::Kind::Provider(kind, name) = meta.kind.clone() {
-        Some(Provider {
+    match (meta.tag, meta.kind.clone()) {
+        (payload::meta::Tag::Provides, payload::meta::Kind::Provider(kind, name)) => Some(Provider {
             kind: dependency::Kind::from(kind),
-            name,
-        })
-    } else {
-        None
+            name: name.clone(),
+        }),
+        _ => None,
+    }
+}
+
+fn meta_conflict(meta: &payload::Meta) -> Option<Provider> {
+    match (meta.tag, meta.kind.clone()) {
+        (payload::meta::Tag::Conflicts, payload::meta::Kind::Provider(kind, name)) => Some(Provider {
+            kind: dependency::Kind::from(kind),
+            name: name.clone(),
+        }),
+        _ => None,
     }
 }
 

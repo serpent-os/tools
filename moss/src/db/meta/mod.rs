@@ -70,6 +70,11 @@ impl Database {
                 .load_iter(conn)?
                 .map(|p| Ok(p?.provider))
                 .collect::<Result<_, Error>>()?;
+            let conflicts = model::Conflict::belonging_to(&meta)
+                .select(model::Conflict::as_select())
+                .load_iter(conn)?
+                .map(|p| Ok(p?.conflict))
+                .collect::<Result<_, Error>>()?;
 
             Ok(Meta {
                 name: meta.name,
@@ -84,6 +89,7 @@ impl Database {
                 licenses,
                 dependencies,
                 providers,
+                conflicts,
                 uri: meta.uri,
                 hash: meta.hash,
                 download_size: meta.download_size.map(|size| size as u64),
@@ -126,6 +132,7 @@ impl Database {
                         licenses: Default::default(),
                         dependencies: Default::default(),
                         providers: Default::default(),
+                        conflicts: Default::default(),
                         uri: meta.uri,
                         hash: meta.hash,
                         download_size: meta.download_size.map(|size| size as u64),
@@ -203,6 +210,17 @@ impl Database {
                         let row = result?;
                         if let Some(meta) = entries.get_mut(&row.package.into()) {
                             meta.providers.insert(row.provider);
+                        }
+                        Ok(())
+                    })?;
+
+                // Add conflicts
+                model::Conflict::belonging_to(chunk)
+                    .load_iter::<model::Conflict, _>(conn)?
+                    .try_for_each::<_, Result<_, Error>>(|result| {
+                        let row = result?;
+                        if let Some(meta) = entries.get_mut(&row.package.into()) {
+                            meta.conflicts.insert(row.conflict);
                         }
                         Ok(())
                     })?;
@@ -329,7 +347,7 @@ mod model {
         Selectable,
     };
 
-    pub use crate::db::meta::schema::{meta, meta_dependencies, meta_licenses, meta_providers};
+    pub use crate::db::meta::schema::{meta, meta_conflicts, meta_dependencies, meta_licenses, meta_providers};
     use crate::package;
 
     #[derive(Queryable, Selectable, Identifiable)]
@@ -390,6 +408,17 @@ mod model {
         pub package: String,
         #[diesel(deserialize_as = String)]
         pub provider: crate::Provider,
+    }
+
+    #[derive(Queryable, Selectable, Identifiable, Associations)]
+    #[diesel(table_name = meta_conflicts)]
+    #[diesel(primary_key(package, conflict))]
+    #[diesel(belongs_to(Meta, foreign_key = package))]
+    #[diesel(belongs_to(PackageId, foreign_key = package))]
+    pub struct Conflict {
+        pub package: String,
+        #[diesel(deserialize_as = String)]
+        pub conflict: crate::Provider,
     }
 
     #[derive(Insertable)]

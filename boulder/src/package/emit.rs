@@ -82,6 +82,8 @@ impl<'a> Package<'a> {
                 )
                 .collect(),
             providers: self.analysis.providers().cloned().collect(),
+            // TODO(GZGavinZhao): implement this once conflicts for moss is tested.
+            conflicts: Default::default(),
             uri: None,
             hash: None,
             download_size: None,
