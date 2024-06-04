@@ -44,7 +44,7 @@ serde_yaml = "0.9"
 sha2 = "0.10.8"
 strum = { version = "0.26", features = ["derive"] }
 thiserror = "1"
-tokio = { version = "1.37", features = ["full"] }
+tokio = { version = "1.38", features = ["full"] }
 tokio-stream = { version = "0.1.15", features = ["time"] }
 tokio-util = { version = "0.7.11", features = ["io"] }
 url = { version = "2.5.0", features = ["serde"] }
