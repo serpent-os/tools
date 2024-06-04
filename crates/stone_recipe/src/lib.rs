@@ -103,6 +103,8 @@ pub struct Package {
     pub run_deps: Vec<String>,
     #[serde(default)]
     pub paths: Vec<Path>,
+    #[serde(default)]
+    pub conflicts: Vec<String>,
 }
 
 #[derive(Debug, Clone)]

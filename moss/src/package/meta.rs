@@ -155,6 +155,12 @@ impl Meta {
                 .filter(|provider| provider.kind != dependency::Kind::PackageName)
                 .map(|provider| (Tag::Provides, Kind::Provider(provider.kind.into(), provider.name))),
         )
+        .chain(
+            self.conflicts
+                .into_iter()
+                // We re-add this on ingestion / it's implied
+                .map(|conflict| (Tag::Conflicts, Kind::Provider(conflict.kind.into(), conflict.name))),
+        )
         .map(|(tag, kind)| payload::Meta { tag, kind })
         .collect()
     }
