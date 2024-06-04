@@ -299,6 +299,17 @@ impl Database {
                     })
                 })
                 .collect::<Vec<_>>();
+            let conflicts = packages
+                .iter()
+                .flat_map(|(package, meta)| {
+                    meta.conflicts.iter().map(|conflict| {
+                        (
+                            model::meta_conflicts::package.eq(<package::Id as AsRef<str>>::as_ref(package)),
+                            model::meta_conflicts::conflict.eq(conflict.to_string()),
+                        )
+                    })
+                })
+                .collect::<Vec<_>>();
 
             conn.transaction(|conn| {
                 batch_remove_impl(&ids, conn)?;
@@ -312,6 +323,9 @@ impl Database {
                     .execute(conn)?;
                 diesel::insert_into(model::meta_providers::table)
                     .values(providers)
+                    .execute(conn)?;
+                diesel::insert_into(model::meta_conflicts::table)
+                    .values(conflicts)
                     .execute(conn)?;
                 Ok(())
             })
@@ -485,5 +499,47 @@ mod test {
         db.wipe().unwrap();
         let result = db.get(&id);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_conflict_is_recognized() {
+        let db = Database::new(":memory:").unwrap();
+
+        // See `test/conflicts/italian-pizza.yml` for the recipe file that produced this stone.
+        // It should be obvious that this package conflicts with `name(pineapple)`.
+        let italian_pizza = include_bytes!("../../../../test/conflicts/italian-pizza-1-1-1-x86_64.stone");
+        let pineapple_provider = Provider {
+            kind: Kind::PackageName,
+            name: "pineapple".to_string(),
+        };
+
+        let mut stone = stone::read_bytes(italian_pizza).unwrap();
+
+        let payloads = stone.payloads().unwrap().collect::<Result<Vec<_>, _>>().unwrap();
+        let meta_payload = payloads.iter().find_map(PayloadKind::meta).unwrap();
+        let meta = Meta::from_stone_payload(&meta_payload.body).unwrap();
+        db.add(package::Id::from(meta.id()), meta.clone()).unwrap();
+
+        // Ensure we're parsing the correct package!
+        assert_eq!(&meta.name, &"italian-pizza".to_string().into());
+        // Ensure that the conflict info already exists in the binary package.
+        assert_eq!(
+            meta.conflicts.iter().collect::<Vec<&Provider>>(),
+            vec![&pineapple_provider]
+        );
+
+        // Now retrieve by provider.
+        let lookup = Filter::Provider(Provider {
+            kind: Kind::PackageName,
+            name: "italian-pizza".to_string(),
+        });
+        let fetched = db.query(Some(lookup)).unwrap();
+        assert_eq!(fetched.len(), 1);
+
+        let (_, retrieved_pkg) = fetched.first().unwrap();
+        let retrieved_conflicts: Vec<&Provider> = retrieved_pkg.conflicts.iter().collect();
+        // Ensure that the conflicts field is inserted into and can be queried from our database
+        // correctly.
+        assert_eq!(retrieved_conflicts, vec![&pineapple_provider]);
     }
 }

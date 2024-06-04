@@ -90,15 +90,7 @@ impl Meta {
                 name: name.clone(),
             }))
             .collect();
-        let conflicts = payload
-            .iter()
-            .filter_map(meta_conflict)
-            // Add package name as provider
-            .chain(Some(Provider {
-                kind: dependency::Kind::PackageName,
-                name: name.clone(),
-            }))
-            .collect();
+        let conflicts = payload.iter().filter_map(meta_conflict).collect();
 
         Ok(Meta {
             name: Name::from(name),
