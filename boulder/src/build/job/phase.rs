@@ -344,11 +344,17 @@ fn add_tuning(
             .iter()
             .filter_map(|flag| flag.get(tuning::CompilerFlag::D, toolchain)),
     );
+    let rustflags = fmt_flags(
+        flags
+            .iter()
+            .filter_map(|flag| flag.get(tuning::CompilerFlag::Rust, toolchain)),
+    );
 
     parser.add_definition("cflags", cflags);
     parser.add_definition("cxxflags", cxxflags);
     parser.add_definition("ldflags", ldflags);
     parser.add_definition("dflags", dflags);
+    parser.add_definition("rustflags", rustflags);
 
     Ok(())
 }
