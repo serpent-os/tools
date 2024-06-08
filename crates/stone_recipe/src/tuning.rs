@@ -85,6 +85,7 @@ pub enum CompilerFlag {
     C,
     Cxx,
     D,
+    Rust,
     Ld,
 }
 
@@ -93,6 +94,7 @@ pub struct CompilerFlags {
     c: Option<String>,
     cxx: Option<String>,
     d: Option<String>,
+    rust: Option<String>,
     ld: Option<String>,
 }
 
@@ -102,6 +104,7 @@ impl CompilerFlags {
             CompilerFlag::C => self.c.as_deref(),
             CompilerFlag::Cxx => self.cxx.as_deref(),
             CompilerFlag::D => self.d.as_deref(),
+            CompilerFlag::Rust => self.rust.as_deref(),
             CompilerFlag::Ld => self.ld.as_deref(),
         }
     }

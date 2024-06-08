@@ -66,6 +66,7 @@ actions              :
             LDFLAGS="%(ldflags)"; export LDFLAGS
             CGO_LDFLAGS="%(ldflags) -Wl,--no-gc-sections"; export CGO_LDFLAGS
             DFLAGS="%(dflags)"; export DFLAGS
+            RUSTFLAGS="%(rustflags)"; export RUSTFLAGS
             CC="%(cc)"; export CC
             CXX="%(cxx)"; export CXX
             OBJC="%(objc)"; export OBJC
@@ -289,16 +290,19 @@ flags               :
         cxx       : "-pipe -Wformat -Wformat-security -Wno-error -fPIC"
         ld        : "-Wl,-O2,--gc-sections"
         d         : "-release -Hkeep-all-bodies -relocation-model=pic -wi"
+        rust      : ""
 
     - omit-frame-pointer:
         c         : "-fomit-frame-pointer -momit-leaf-frame-pointer"
         cxx       : "-fomit-frame-pointer -momit-leaf-frame-pointer"
         d         : "-frame-pointer=none"
+        rust      : ""
 
     - no-omit-frame-pointer:
         c         : "-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
         cxx       : "-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
         d         : "-frame-pointer=all"
+        rust      : "-Cforce-frame-pointers"
 
     # Toggle bindnow (ON)
     - bindnow:
