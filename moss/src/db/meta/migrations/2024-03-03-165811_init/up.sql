@@ -35,3 +35,10 @@ CREATE TABLE IF NOT EXISTS meta_providers (
     PRIMARY KEY (package, provider),
     FOREIGN KEY (package) REFERENCES meta(package) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS meta_conflicts (
+    package TEXT NOT NULL,
+    conflict TEXT NOT NULL,
+    PRIMARY KEY (package, conflict),
+    FOREIGN KEY (package) REFERENCES meta(package) ON DELETE CASCADE
+);

@@ -19,6 +19,13 @@ diesel::table! {
 }
 
 diesel::table! {
+    meta_conflicts (package, conflict) {
+        package -> Text,
+        conflict -> Text,
+    }
+}
+
+diesel::table! {
     meta_dependencies (package, dependency) {
         package -> Text,
         dependency -> Text,
@@ -39,8 +46,9 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(meta_conflicts -> meta (package));
 diesel::joinable!(meta_dependencies -> meta (package));
 diesel::joinable!(meta_licenses -> meta (package));
 diesel::joinable!(meta_providers -> meta (package));
 
-diesel::allow_tables_to_appear_in_same_query!(meta, meta_dependencies, meta_licenses, meta_providers,);
+diesel::allow_tables_to_appear_in_same_query!(meta, meta_conflicts, meta_dependencies, meta_licenses, meta_providers,);

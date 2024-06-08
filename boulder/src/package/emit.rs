@@ -9,7 +9,7 @@ use std::{
 };
 
 use itertools::Itertools;
-use moss::{package::Meta, Dependency};
+use moss::{package::Meta, Dependency, Provider};
 use thiserror::Error;
 use tui::{ProgressBar, ProgressStyle, Styled};
 
@@ -82,6 +82,12 @@ impl<'a> Package<'a> {
                 )
                 .collect(),
             providers: self.analysis.providers().cloned().collect(),
+            conflicts: self
+                .definition
+                .conflicts
+                .iter()
+                .filter_map(|name| Provider::from_name(name).ok())
+                .collect(),
             uri: None,
             hash: None,
             download_size: None,
