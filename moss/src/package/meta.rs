@@ -11,7 +11,7 @@ use thiserror::Error;
 use crate::{dependency, Dependency, Provider};
 
 /// A package identifier constructed from metadata fields
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Display)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Display)]
 pub struct Id(pub(super) String);
 
 /// The name of a [`super::Package`]

@@ -1,16 +1,14 @@
 // SPDX-FileCopyrightText: Copyright © 2020-2024 Serpent OS Developers
 //
 // SPDX-License-Identifier: MPL-2.0
-use std::{
-    collections::{hash_map, HashMap},
-    fs, io,
-    num::NonZeroU64,
-};
+use std::collections::{btree_map, BTreeMap};
+use std::{fs, io, num::NonZeroU64};
 
 use itertools::Itertools;
+use thiserror::Error;
+
 use stone::write::digest;
 use stone_recipe::{script, Package};
-use thiserror::Error;
 
 use crate::{build, container, timing, util, Macros, Paths, Recipe, Timing};
 
@@ -24,7 +22,7 @@ mod emit;
 pub struct Packager<'a> {
     paths: &'a Paths,
     recipe: &'a Recipe,
-    packages: HashMap<String, Package>,
+    packages: BTreeMap<String, Package>,
     collector: Collector,
     build_release: NonZeroU64,
 }
@@ -119,13 +117,13 @@ fn resolve_packages(
     macros: &Macros,
     recipe: &Recipe,
     collector: &mut Collector,
-) -> Result<HashMap<String, Package>, Error> {
+) -> Result<BTreeMap<String, Package>, Error> {
     let mut parser = script::Parser::new();
     parser.add_definition("name", &recipe.parsed.source.name);
     parser.add_definition("version", &recipe.parsed.source.version);
     parser.add_definition("release", recipe.parsed.source.release);
 
-    let mut packages = HashMap::new();
+    let mut packages = BTreeMap::new();
 
     // Add a package, ensuring it's fully expanded
     //
@@ -165,10 +163,10 @@ fn resolve_packages(
         }
 
         match packages.entry(name.clone()) {
-            hash_map::Entry::Vacant(entry) => {
+            btree_map::Entry::Vacant(entry) => {
                 entry.insert(package);
             }
-            hash_map::Entry::Occupied(entry) => {
+            btree_map::Entry::Occupied(entry) => {
                 let prev = entry.remove();
 
                 package.run_deps = package.run_deps.into_iter().chain(prev.run_deps).sorted().collect();

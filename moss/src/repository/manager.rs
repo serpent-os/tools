@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
@@ -11,14 +11,14 @@ use std::time::Duration;
 use futures::{stream, StreamExt, TryStreamExt};
 use itertools::Itertools;
 use thiserror::Error;
-use tui::{MultiProgress, ProgressBar, ProgressStyle, Styled};
 use xxhash_rust::xxh3::xxh3_64;
 
+use tui::{MultiProgress, ProgressBar, ProgressStyle, Styled};
+
 use crate::db::meta;
+use crate::repository::{self, Repository};
 use crate::{environment, runtime};
 use crate::{package, Installation};
-
-use crate::repository::{self, Repository};
 
 enum Source {
     System(config::Manager),
@@ -38,7 +38,7 @@ impl Source {
 pub struct Manager {
     source: Source,
     installation: Installation,
-    repositories: HashMap<repository::Id, repository::Active>,
+    repositories: BTreeMap<repository::Id, repository::Active>,
 }
 
 impl Manager {

@@ -4,15 +4,14 @@
 
 //! Cache management for unpacking remote assets (`.stone`, etc.)
 
+use std::collections::BTreeSet;
 use std::{
-    collections::HashSet,
     io,
     path::PathBuf,
     sync::{Arc, Mutex},
 };
 
 use futures::StreamExt;
-use stone::{payload, read::PayloadKind};
 use thiserror::Error;
 use tokio::{
     fs::{self, File},
@@ -20,13 +19,15 @@ use tokio::{
 };
 use url::Url;
 
+use stone::{payload, read::PayloadKind};
+
 use crate::{package, request, Installation};
 
 /// Synchronized set of assets that are currently being
 /// unpacked. Used to prevent unpacking the same asset
 /// from different packages at the same time.
 #[derive(Debug, Clone, Default)]
-pub struct UnpackingInProgress(Arc<Mutex<HashSet<PathBuf>>>);
+pub struct UnpackingInProgress(Arc<Mutex<BTreeSet<PathBuf>>>);
 
 impl UnpackingInProgress {
     /// Marks the provided path as "in-progress".

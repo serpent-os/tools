@@ -14,15 +14,13 @@
 //!     let result = pattern.match_path("/usr/lib/modules/6.2.3/kernel").expect("no kernel match");
 //! ```
 
-use std::{
-    collections::{HashMap, HashSet},
-    convert::Infallible,
-    str::FromStr,
-};
+use std::collections::{BTreeMap, BTreeSet};
+use std::{convert::Infallible, str::FromStr};
 
 use regex::Regex;
 use serde::{de, Deserialize};
 use thiserror::Error;
+
 #[derive(Debug)]
 enum Fragment {
     /// `?`
@@ -116,7 +114,7 @@ pub struct Match {
     pub path: String,
 
     /// Captured variables, as defined by the [`Pattern::groups()`]
-    pub variables: HashMap<String, String>,
+    pub variables: BTreeMap<String, String>,
 }
 
 impl Pattern {
@@ -243,7 +241,7 @@ impl FromStr for Pattern {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let fragments = fragments_from_string(s)?;
-        let mut groups = HashSet::new();
+        let mut groups = BTreeSet::new();
 
         let compiled = fragments
             .iter()

@@ -2,13 +2,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{
-    collections::{BTreeSet, HashSet},
-    fmt, fs, io,
-    path::PathBuf,
-};
+use std::{collections::BTreeSet, fmt, fs, io, path::PathBuf};
 
 use itertools::Itertools;
+
 use stone::{payload::layout, write::digest};
 use tui::{
     dialoguer::{theme::ColorfulTheme, Confirm},
@@ -194,7 +191,7 @@ pub fn verify(client: &Client, yes: bool, verbose: bool) -> Result<(), client::E
             .iter()
             .filter_map(Issue::packages)
             .flatten()
-            .collect::<HashSet<_>>(),
+            .collect::<BTreeSet<_>>(),
     )?;
 
     // We had some corrupt or missing assets, let's resolve that!
@@ -268,12 +265,12 @@ enum Issue {
     CorruptAsset {
         hash: String,
         files: BTreeSet<String>,
-        packages: HashSet<package::Id>,
+        packages: BTreeSet<package::Id>,
     },
     MissingAsset {
         hash: String,
         files: BTreeSet<String>,
-        packages: HashSet<package::Id>,
+        packages: BTreeSet<package::Id>,
     },
     MissingVFSPath {
         path: PathBuf,
@@ -290,7 +287,7 @@ impl Issue {
         }
     }
 
-    fn packages(&self) -> Option<&HashSet<package::Id>> {
+    fn packages(&self) -> Option<&BTreeSet<package::Id>> {
         match self {
             Issue::CorruptAsset { packages, .. } | Issue::MissingAsset { packages, .. } => Some(packages),
             Issue::MissingVFSPath { .. } => None,

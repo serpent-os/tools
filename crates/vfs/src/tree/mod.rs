@@ -5,7 +5,8 @@
 //! Virtual filesystem tree (optimise layout inserts)
 
 use core::fmt::Debug;
-use std::{collections::HashMap, vec};
+use std::collections::BTreeMap;
+use std::vec;
 
 use indextree::{Arena, Descendants, NodeId};
 use thiserror::Error;
@@ -42,7 +43,7 @@ pub trait BlitFile: Clone + Sized + Debug + From<String> {
 #[derive(Debug)]
 pub struct Tree<T: BlitFile> {
     arena: Arena<T>,
-    map: HashMap<String, NodeId>,
+    map: BTreeMap<String, NodeId>,
     length: u64,
 }
 
@@ -51,7 +52,7 @@ impl<T: BlitFile> Tree<T> {
     fn new() -> Self {
         Tree {
             arena: Arena::new(),
-            map: HashMap::new(),
+            map: BTreeMap::new(),
             length: 0_u64,
         }
     }
@@ -106,7 +107,7 @@ impl<T: BlitFile> Tree<T> {
                 // Report duplicate and skip for now
                 eprintln!(
                     "error: {}",
-                    Error::Duplicate(node.get().path(), node.get().id(), others.first().unwrap().id(),)
+                    Error::Duplicate(node.get().path(), node.get().id(), others.first().unwrap().id())
                 );
 
                 Ok(())

@@ -2,12 +2,13 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::{fs, io};
+
+use thiserror::Error;
 
 use moss::{repository, runtime, Installation};
 use stone_recipe::{tuning::Toolchain, Upstream};
-use thiserror::Error;
 
 use crate::build::Builder;
 use crate::{container, timing, util, Timing};
@@ -149,7 +150,7 @@ fn packages(builder: &Builder) -> Vec<&str> {
         .into_iter()
         .chain(extra_deps)
         // Remove dupes
-        .collect::<HashSet<_>>()
+        .collect::<BTreeSet<_>>()
         .into_iter()
         .collect()
 }

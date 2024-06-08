@@ -1,11 +1,8 @@
 // SPDX-FileCopyrightText: Copyright © 2020-2024 Serpent OS Developers
 //
 // SPDX-License-Identifier: MPL-2.0
-use std::{
-    collections::{HashMap, HashSet},
-    fmt,
-    num::NonZeroU64,
-};
+use std::collections::{BTreeMap, BTreeSet};
+use std::{fmt, num::NonZeroU64};
 
 use moss::Dependency;
 
@@ -20,7 +17,7 @@ mod python;
 pub type Error = Box<dyn std::error::Error>;
 
 /// A build system
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, strum::Display)]
 #[strum(serialize_all = "lowercase")]
 pub enum System {
     Autotools,
@@ -102,7 +99,7 @@ impl fmt::Display for Phases {
 /// State passed to each system when processing paths
 struct State<'a> {
     /// Any dependencies that need to be recorded
-    dependencies: &'a mut HashSet<Dependency>,
+    dependencies: &'a mut BTreeSet<Dependency>,
     /// Total confidence level of the current build [`System`]
     confidence: u64,
 }
@@ -124,14 +121,14 @@ pub struct Analysis {
     /// The detected build [`System`], if any
     pub detected_system: Option<System>,
     /// All detected dependencies
-    pub dependencies: HashSet<Dependency>,
+    pub dependencies: BTreeSet<Dependency>,
 }
 
 /// Analyze the provided paths to determine which build [`System`]
 /// the project uses and any dependencies that are identified
 pub fn analyze(files: &[File]) -> Result<Analysis, Error> {
-    let mut dependencies = HashSet::new();
-    let mut confidences = HashMap::new();
+    let mut dependencies = BTreeSet::new();
+    let mut confidences = BTreeMap::new();
 
     for system in System::ALL {
         let mut state = State {

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use diesel::prelude::*;
 use diesel::{Connection as _, SqliteConnection};
@@ -133,7 +133,7 @@ impl Database {
                 ))
             };
 
-            let mut entries: HashMap<package::Id, Meta> = match &filter {
+            let mut entries: BTreeMap<package::Id, Meta> = match &filter {
                 Some(Filter::Provider(provider)) => model::meta::table
                     .select(model::Meta::as_select())
                     .inner_join(model::meta_providers::table)
@@ -212,7 +212,7 @@ impl Database {
         })
     }
 
-    pub fn file_hashes(&self) -> Result<HashSet<String>, Error> {
+    pub fn file_hashes(&self) -> Result<BTreeSet<String>, Error> {
         self.conn.exec(|conn| {
             Ok(model::meta::table
                 .select(model::meta::hash.assume_not_null())

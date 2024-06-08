@@ -23,7 +23,7 @@ pub fn stages(recipe: &Recipe, target: BuildTarget) -> Option<Vec<Stage>> {
     })
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, strum::Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, strum::Display)]
 pub enum Stage {
     #[strum(serialize = "stage1")]
     One,

@@ -109,7 +109,7 @@ impl Registry {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashSet;
+    use std::collections::BTreeSet;
 
     use super::*;
 
@@ -213,8 +213,8 @@ mod test {
             let actual = actual
                 .into_iter()
                 .map(|p| String::from(p.meta.name))
-                .collect::<HashSet<_>>();
-            let expected = expected.iter().map(|s| s.to_string()).collect::<HashSet<_>>();
+                .collect::<BTreeSet<_>>();
+            let expected = expected.iter().map(|s| s.to_string()).collect::<BTreeSet<_>>();
 
             actual == expected
         }

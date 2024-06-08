@@ -2,8 +2,9 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use std::collections::BTreeMap;
 use std::{
-    collections::{BTreeSet, HashMap, VecDeque},
+    collections::{BTreeSet, VecDeque},
     path::PathBuf,
 };
 
@@ -11,8 +12,9 @@ use moss::{Dependency, Provider};
 use stone::write::digest;
 use tui::{ProgressBar, ProgressStyle, Styled};
 
-use super::collect::{Collector, PathInfo};
 use crate::{Paths, Recipe};
+
+use super::collect::{Collector, PathInfo};
 
 mod handler;
 
@@ -24,7 +26,7 @@ pub struct Chain<'a> {
     paths: &'a Paths,
     collector: &'a Collector,
     hasher: &'a mut digest::Hasher,
-    pub buckets: HashMap<String, Bucket>,
+    pub buckets: BTreeMap<String, Bucket>,
 }
 
 impl<'a> Chain<'a> {

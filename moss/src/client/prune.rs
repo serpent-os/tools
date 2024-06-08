@@ -8,14 +8,15 @@
 //! system states (i.e. historical snapshots) that cleans up database entries
 //! and assets on disk by way of refcounting.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::{
-    collections::{HashMap, HashSet},
     fs, io,
     path::{Path, PathBuf},
 };
 
 use itertools::Itertools;
 use thiserror::Error;
+
 use tui::{
     dialoguer::{theme::ColorfulTheme, Confirm},
     pretty::autoprint_columns,
@@ -101,7 +102,7 @@ pub fn prune(
     }
 
     // Keep track of how many active states are using a package
-    let mut packages_counts = HashMap::<package::Id, usize>::new();
+    let mut packages_counts = BTreeMap::<package::Id, usize>::new();
     let mut removals = vec![];
 
     // Get net refcount of each package in all states
@@ -226,7 +227,7 @@ fn prune_databases(
 /// Removes all files under `root` that no longer exist in the provided `final_hashes` set
 fn remove_orphaned_files(
     root: PathBuf,
-    final_hashes: HashSet<String>,
+    final_hashes: BTreeSet<String>,
     compute_path: impl Fn(String) -> Option<PathBuf>,
 ) -> Result<(), Error> {
     // Compute hashes to remove by (installed - final)
@@ -258,7 +259,7 @@ fn remove_orphaned_files(
 }
 
 /// Returns all nested files under `root` and parses the file name as a hash
-fn enumerate_file_hashes(root: impl AsRef<Path>) -> Result<HashSet<String>, io::Error> {
+fn enumerate_file_hashes(root: impl AsRef<Path>) -> Result<BTreeSet<String>, io::Error> {
     let files = enumerate_files(root)?;
 
     let path_to_hash = |path: PathBuf| {

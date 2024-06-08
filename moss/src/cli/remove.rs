@@ -2,10 +2,11 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::collections::HashSet;
-
 use clap::{arg, ArgMatches, Command};
 use itertools::{Either, Itertools};
+use std::collections::BTreeSet;
+use thiserror::Error;
+
 use moss::{
     client::{self, Client},
     environment,
@@ -14,7 +15,6 @@ use moss::{
     state::Selection,
     Installation, Provider,
 };
-use thiserror::Error;
 use tui::{
     dialoguer::{theme::ColorfulTheme, Confirm},
     pretty::autoprint_columns,
@@ -43,7 +43,7 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
     let client = Client::new(environment::NAME, installation)?;
 
     let installed = client.registry.list_installed(Flags::default()).collect::<Vec<_>>();
-    let installed_ids = installed.iter().map(|p| p.id.clone()).collect::<HashSet<_>>();
+    let installed_ids = installed.iter().map(|p| p.id.clone()).collect::<BTreeSet<_>>();
 
     // Separate packages between installed / not installed (or invalid)
     let (for_removal, not_installed): (Vec<_>, Vec<_>) = pkgs.iter().partition_map(|provider| {
@@ -70,7 +70,7 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
     transaction.remove(for_removal);
 
     // Finalized tx has all reverse deps removed
-    let finalized = transaction.finalize().cloned().collect::<HashSet<_>>();
+    let finalized = transaction.finalize().cloned().collect::<BTreeSet<_>>();
 
     // Resolve all removed packages, where removed is (installed - finalized)
     let removed = client.resolve_packages(installed_ids.difference(&finalized))?;
