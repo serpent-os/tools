@@ -2,14 +2,13 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{io, path::PathBuf};
+use std::{io, path::PathBuf, sync::OnceLock};
 
 use bytes::Bytes;
 use futures::{
     stream::{self, BoxStream},
     Stream, StreamExt,
 };
-use once_cell::sync::Lazy;
 use thiserror::Error;
 use tokio::{fs::File, io::AsyncReadExt};
 use tokio_util::io::ReaderStream;
@@ -18,12 +17,16 @@ use url::Url;
 use crate::environment;
 
 /// Shared client for tcp socket reuse and connection limit
-static CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
-    reqwest::ClientBuilder::new()
-        .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .expect("build reqwest client")
-});
+static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+
+fn get_client() -> &'static reqwest::Client {
+    CLIENT.get_or_init(|| {
+        reqwest::ClientBuilder::new()
+            .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
+            .build()
+            .expect("build reqwest client")
+    })
+}
 
 /// Fetch a resource at the provided [`Url`] and stream response body as bytes
 pub async fn get(url: Url) -> Result<BoxStream<'static, Result<Bytes, Error>>, Error> {
@@ -35,7 +38,7 @@ pub async fn get(url: Url) -> Result<BoxStream<'static, Result<Bytes, Error>>, E
 
 /// Internal fetch helper (sanity control) for `get`
 async fn fetch(url: Url) -> Result<impl Stream<Item = Result<Bytes, Error>>, Error> {
-    let response = CLIENT.get(url).send().await?;
+    let response = self::get_client().get(url).send().await?;
 
     response
         .error_for_status()

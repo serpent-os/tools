@@ -22,7 +22,6 @@ hex.workspace = true
 libsqlite3-sys.workspace = true
 log.workspace = true
 nix.workspace = true
-once_cell.workspace = true
 rayon.workspace = true
 reqwest.workspace = true
 serde.workspace = true

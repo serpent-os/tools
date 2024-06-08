@@ -1263,7 +1263,6 @@ dependencies = [
  "libsqlite3-sys",
  "log",
  "nix",
- "once_cell",
  "rayon",
  "reqwest",
  "serde",
