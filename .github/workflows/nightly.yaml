@@ -47,7 +47,12 @@ jobs:
 
     - name: Build project
       run: |
-        RUSTFLAGS="$RUSTFLAGS -Clink-arg=-fuse-ld=ld.lld" cargo +nightly -Z build-std=std build --target=x86_64-unknown-linux-musl --profile packaging
+        # Might be nice to get a sense for where these things come from in $PATH
+        command -v cc
+        command -v ld
+        command -v ld.lld
+        # temporarily switch to the dev target from the packaging target while we debug the build failure
+        RUSTFLAGS="$RUSTFLAGS -Clink-arg=-fuse-ld=lld" cargo +nightly -Z build-std=std build --target=x86_64-unknown-linux-musl --profile dev
         strip target/x86_64-unknown-linux-musl/packaging/moss
         mkdir release && cd release
         tar czvf moss.tar.gz -C ../target/x86_64-unknown-linux-musl/packaging moss
