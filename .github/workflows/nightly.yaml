@@ -52,10 +52,12 @@ jobs:
         cc --version
         command -v ld
         ld --version
-        command -v ld.lld
-        ld.lld --version
+        command -v clang
+        clang --version
+        command -v lld
+        lld --version
         # temporarily switch to the dev target from the packaging target while we debug the build failure
-        cargo +nightly -Z build-std=std build --target=x86_64-unknown-linux-musl --profile dev
+        CC=/usr/lib/llvm-18/bin/clang RUSTFLAGS="$RUSTFLAGS -Clink-arg=-fuse-ld=lld" cargo +nightly -Z build-std=std build --target=x86_64-unknown-linux-musl --profile dev
         strip target/x86_64-unknown-linux-musl/packaging/moss
         mkdir release && cd release
         tar czvf moss.tar.gz -C ../target/x86_64-unknown-linux-musl/packaging moss
