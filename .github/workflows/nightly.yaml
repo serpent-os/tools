@@ -29,8 +29,6 @@ jobs:
         sudo ./llvm.sh 18
         echo "/usr/lib/llvm-18/bin" >> $GITHUB_PATH
         echo "CC=/usr/lib/llvm-18/bin/clang" >> $GITHUB_ENV
-        # avoid trying to link things with (system) GNU ld
-        echo "RUSTFLAGS+=' -Clink-arg=-fuse-ld=ld.lld'" >> $GITHUB_ENV
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@nightly
@@ -49,7 +47,7 @@ jobs:
 
     - name: Build project
       run: |
-        cargo +nightly -Z build-std=std build --target=x86_64-unknown-linux-musl --profile packaging
+        RUSTFLAGS="$RUSTFLAGS -Clink-arg=-fuse-ld=ld.lld" cargo +nightly -Z build-std=std build --target=x86_64-unknown-linux-musl --profile packaging
         strip target/x86_64-unknown-linux-musl/packaging/moss
         mkdir release && cd release
         tar czvf moss.tar.gz -C ../target/x86_64-unknown-linux-musl/packaging moss
