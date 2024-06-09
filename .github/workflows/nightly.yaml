@@ -49,10 +49,13 @@ jobs:
       run: |
         # Might be nice to get a sense for where these things come from in $PATH
         command -v cc
+        cc --version
         command -v ld
+        ld --version
         command -v ld.lld
+        ld.lld --version
         # temporarily switch to the dev target from the packaging target while we debug the build failure
-        RUSTFLAGS="$RUSTFLAGS -Clink-arg=-fuse-ld=lld" cargo +nightly -Z build-std=std build --target=x86_64-unknown-linux-musl --profile dev
+        cargo +nightly -Z build-std=std build --target=x86_64-unknown-linux-musl --profile dev
         strip target/x86_64-unknown-linux-musl/packaging/moss
         mkdir release && cd release
         tar czvf moss.tar.gz -C ../target/x86_64-unknown-linux-musl/packaging moss
