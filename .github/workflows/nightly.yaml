@@ -47,7 +47,7 @@ jobs:
 
     - name: Build project
       run: |
-        cargo +nightly -Z build-std=std build --target=x86_64-unknown-linux-musl --profile packaging
+        CC=/usr/lib/llvm-18/bin/clang cargo +nightly -Z build-std=std build --target=x86_64-unknown-linux-musl --profile packaging
         strip target/x86_64-unknown-linux-musl/packaging/moss
         mkdir release && cd release
         tar czvf moss.tar.gz -C ../target/x86_64-unknown-linux-musl/packaging moss
