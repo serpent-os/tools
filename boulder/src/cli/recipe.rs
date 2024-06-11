@@ -34,6 +34,23 @@ pub struct Command {
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Subcommand {
+    #[command(about = "Bump a recipe's release")]
+    Bump {
+        #[arg(
+            short,
+            long,
+            default_value = "./stone.yaml",
+            help = "Location of the recipe file to update"
+        )]
+        recipe: PathBuf,
+        #[arg(
+            short = 'n',
+            long,
+            required = false,
+            help = "Set release to a specific number instead of incrementing by one"
+        )]
+        release: Option<u64>,
+    },
     #[command(about = "Create skeletal stone.yaml recipe from source archive URIs")]
     New {
         #[arg(
@@ -91,6 +108,7 @@ fn parse_upstream(s: &str) -> Result<Upstream, String> {
 
 pub fn handle(command: Command, env: Env) -> Result<(), Error> {
     match command.subcommand {
+        Subcommand::Bump { recipe, release } => bump(recipe, release),
         Subcommand::New { output, upstreams } => new(output, upstreams),
         Subcommand::Update {
             recipe,
@@ -100,6 +118,34 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
         } => update(recipe, overwrite, version, upstreams),
         Subcommand::Macros { _macro } => macros(_macro, env),
     }
+}
+
+fn bump(recipe: PathBuf, release: Option<u64>) -> Result<(), Error> {
+    let path = recipe::resolve_path(&recipe).map_err(Error::ResolvePath)?;
+    let input = fs::read_to_string(path).map_err(Error::Read)?;
+
+    // Parsed allows us to access known values in a type safe way
+    let parsed: recipe::Parsed = serde_yaml::from_str(&input)?;
+
+    // Bump op
+    let prev = parsed.source.release;
+    let next = release.unwrap_or(parsed.source.release + 1);
+    let mut updater = yaml::Updater::new();
+    updater.update_value(next, |root| root / "release");
+
+    // Apply updates
+    let updated = updater.apply(input);
+
+    fs::write(&recipe, updated.as_bytes()).map_err(Error::Write)?;
+    println!(
+        "{}: {} release updated from {} to {}",
+        recipe.display(),
+        parsed.source.name,
+        prev,
+        next
+    );
+
+    Ok(())
 }
 
 fn new(output: PathBuf, upstreams: Vec<Url>) -> Result<(), Error> {
