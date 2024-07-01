@@ -43,6 +43,7 @@ use crate::{
     Installation, Package, Registry, State,
 };
 
+pub mod boot;
 pub mod cache;
 pub mod install;
 mod postblit;
@@ -331,6 +332,10 @@ impl Client {
         for trigger in sys_triggers {
             trigger.execute()?;
         }
+
+        // Last but not least, let us see some boot management on the current state
+        let layouts = self.layout_db.query(state.selections.iter().map(|s| &s.package))?;
+        boot::synchronize(&self.installation.root, &layouts)?;
 
         Ok(())
     }
@@ -939,6 +944,8 @@ pub enum Error {
     Blit(#[from] Errno),
     #[error("postblit")]
     PostBlit(#[from] postblit::Error),
+    #[error("boot")]
+    Boot(#[from] boot::Error),
     /// Had issues processing user-provided string input
     #[error("string processing")]
     Dialog(#[from] tui::dialoguer::Error),

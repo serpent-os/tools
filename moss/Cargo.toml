@@ -10,6 +10,7 @@ stone = { path = "../crates/stone" }
 tui = { path = "../crates/tui" }
 vfs = { path = "../crates/vfs" }
 
+blsforme.workspace = true
 bytes.workspace = true
 chrono.workspace = true
 clap.workspace = true
@@ -17,6 +18,7 @@ derive_more.workspace = true
 diesel.workspace = true
 diesel_migrations.workspace = true
 itertools.workspace = true
+fnmatch = { path = "../crates/fnmatch" }
 futures.workspace = true
 hex.workspace = true
 libsqlite3-sys.workspace = true

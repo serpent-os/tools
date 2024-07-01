@@ -170,6 +170,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "blsforme"
+version = "0.1.0"
+source = "git+https://github.com/serpent-os/blsforme.git?rev=b98a9140fb59d13a4146a07d9260dadde838b56a#b98a9140fb59d13a4146a07d9260dadde838b56a"
+dependencies = [
+ "gpt",
+ "log",
+ "nix 0.28.0",
+ "serde",
+ "serde_json",
+ "superblock",
+ "thiserror",
+ "topology",
+]
+
+[[package]]
 name = "boulder"
 version = "0.1.0"
 dependencies = [
@@ -185,7 +200,7 @@ dependencies = [
  "hex",
  "itertools 0.12.1",
  "moss",
- "nix",
+ "nix 0.27.1",
  "rayon",
  "regex",
  "serde",
@@ -258,6 +273,12 @@ name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
+
+[[package]]
+name = "cfg_aliases"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
 
 [[package]]
 name = "chrono"
@@ -373,7 +394,7 @@ dependencies = [
 name = "container"
 version = "0.1.0"
 dependencies = [
- "nix",
+ "nix 0.27.1",
  "strum",
  "thiserror",
 ]
@@ -398,6 +419,21 @@ checksum = "53fe5e26ff1b7aef8bca9c6080520cfb8d9333c7568e1829cef191a9723e5504"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "crc"
+version = "3.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69e6e4d7b33a94f0991c26729976b10ebde1d34c3ee82408fb536164fa10d636"
+dependencies = [
+ "crc-catalog",
+]
+
+[[package]]
+name = "crc-catalog"
+version = "2.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19d374276b40fb8bbdee95aef7c7fa6b5316ec764510eb64b8dd0e2ed0d7e7f5"
 
 [[package]]
 name = "crc32fast"
@@ -838,6 +874,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
+name = "gpt"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8283e7331b8c93b9756e0cfdbcfb90312852f953c6faf9bf741e684cc3b6ad69"
+dependencies = [
+ "bitflags",
+ "crc",
+ "log",
+ "uuid",
+]
+
+[[package]]
 name = "h2"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1248,6 +1296,7 @@ dependencies = [
 name = "moss"
 version = "0.1.0"
 dependencies = [
+ "blsforme",
  "bytes",
  "chrono",
  "clap",
@@ -1257,12 +1306,13 @@ dependencies = [
  "derive_more",
  "diesel",
  "diesel_migrations",
+ "fnmatch",
  "futures",
  "hex",
  "itertools 0.12.1",
  "libsqlite3-sys",
  "log",
- "nix",
+ "nix 0.27.1",
  "rayon",
  "reqwest",
  "serde",
@@ -1289,6 +1339,18 @@ checksum = "2eb04e9c688eff1c89d72b407f168cf79bb9e867a9d3323ed6c01519eb9cc053"
 dependencies = [
  "bitflags",
  "cfg-if",
+ "libc",
+]
+
+[[package]]
+name = "nix"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab2156c4fce2f8df6c499cc1c763e4394b7482525bf2a9701c9d79d215f519e4"
+dependencies = [
+ "bitflags",
+ "cfg-if",
+ "cfg_aliases",
  "libc",
 ]
 
@@ -1928,6 +1990,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81cdd64d312baedb58e21336b31bc043b77e01cc99033ce76ef539f78e965ebc"
 
 [[package]]
+name = "superblock"
+version = "0.1.0"
+source = "git+https://github.com/serpent-os/blsforme.git?rev=b98a9140fb59d13a4146a07d9260dadde838b56a#b98a9140fb59d13a4146a07d9260dadde838b56a"
+dependencies = [
+ "log",
+ "thiserror",
+ "uuid",
+]
+
+[[package]]
 name = "syn"
 version = "1.0.109"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2143,6 +2215,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "topology"
+version = "0.1.0"
+source = "git+https://github.com/serpent-os/blsforme.git?rev=b98a9140fb59d13a4146a07d9260dadde838b56a#b98a9140fb59d13a4146a07d9260dadde838b56a"
+dependencies = [
+ "gpt",
+ "log",
+ "nix 0.28.0",
+ "superblock",
+ "thiserror",
+]
+
+[[package]]
 name = "tower"
 version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2278,6 +2362,15 @@ name = "utf8parse"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
+
+[[package]]
+name = "uuid"
+version = "1.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5de17fd2f7da591098415cff336e12965a28061ddace43b59cb3c430179c9439"
+dependencies = [
+ "getrandom",
+]
 
 [[package]]
 name = "vcpkg"

@@ -13,6 +13,7 @@ resolver = "2"
 edition = "2021"
 
 [workspace.dependencies]
+blsforme = { git = "https://github.com/serpent-os/blsforme.git", rev = "b98a9140fb59d13a4146a07d9260dadde838b56a" }
 bytes = "1.6.0"
 chrono = "0.4.38"
 clap = { version = "4.5.4", features = ["derive", "string"] }
