@@ -14,7 +14,7 @@ use thiserror::Error;
 #[derive(Debug, Parser)]
 #[command(about = "Chroot into the build environment")]
 pub struct Command {
-    #[arg(default_value = "./stone.yml", help = "Path to recipe file")]
+    #[arg(default_value = "./stone.yaml", help = "Path to recipe file")]
     recipe: PathBuf,
 }
 
