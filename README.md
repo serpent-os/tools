@@ -28,7 +28,14 @@ Current Milestone target: [oxide-prealpha1](https://github.com/serpent-os/moss/m
 ## Onboarding
 
 ```bash
-# This will build boulder and moss and install them to ${HOME}/.local/ by default
+# clone the serpent-os moss repo somewhere reasonable
+mkdir -pv ~/repos/serpent-os/
+cd ~/repos/serpent-os/
+git clone https://github.com/serpent-os/moss.git
+cd moss/
+
+# from inside the moss clone, this will build boulder and moss
+# and install them to ${HOME}/.local/bin/ by default
 just get-started
 
 # boulder and moss rely on so-called subuid and subgid support.
