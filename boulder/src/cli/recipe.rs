@@ -51,7 +51,10 @@ pub enum Subcommand {
         )]
         release: Option<u64>,
     },
-    #[command(about = "Create skeletal stone.yaml recipe from source archive URIs", arg_required_else_help(true))]
+    #[command(
+        about = "Create skeletal stone.yaml recipe from source archive URIs",
+        arg_required_else_help(true)
+    )]
     New {
         #[arg(
             short,
