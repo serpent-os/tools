@@ -20,6 +20,7 @@ pub fn command() -> Command {
         .visible_alias("sr")
         .about("Search packages")
         .long_about("Search packages by looking into package names and summaries.")
+        .arg_required_else_help(true)
         .arg(
             Arg::new(ARG_KEYWORD)
                 .required(true)

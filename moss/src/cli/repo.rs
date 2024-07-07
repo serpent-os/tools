@@ -30,6 +30,7 @@ pub fn command() -> Command {
     Command::new("repo")
         .about("Manage software repositories")
         .long_about("Manage the available software repositories visible to the installed system")
+        .arg_required_else_help(true)
         .subcommand_required(true)
         .subcommand(
             Command::new("add")

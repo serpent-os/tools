@@ -21,8 +21,9 @@ pub fn command() -> Command {
     Command::new("info")
         .about("Query packages")
         .long_about("List detailed package information from all available sources")
+        .arg_required_else_help(true)
         .arg(arg!(<NAME> ... "Packages to query").value_parser(clap::value_parser!(String)))
-        .arg(arg!(-f --files ... "Show files provided by package").action(clap::ArgAction::SetTrue))
+        .arg(arg!(-f --files ... "Show files provided by package").action(clap::ArgAction::SetTrue)) 
 }
 
 /// For all arguments, try to match a package

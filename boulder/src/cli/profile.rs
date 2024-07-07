@@ -23,7 +23,7 @@ pub struct Command {
 pub enum Subcommand {
     #[command(about = "List profiles")]
     List,
-    #[command(about = "Add a new profile")]
+    #[command(about = "Add a new profile", arg_required_else_help(true))]
     Add {
         #[arg(help = "profile name")]
         name: String,

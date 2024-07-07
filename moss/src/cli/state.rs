@@ -14,6 +14,7 @@ pub fn command() -> Command {
     Command::new("state")
         .about("Manage state")
         .long_about("Manage state ...")
+        .arg_required_else_help(true)
         .subcommand_required(true)
         .subcommand(Command::new("active").about("List the active state"))
         .subcommand(Command::new("list").about("List all states"))

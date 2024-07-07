@@ -26,6 +26,7 @@ pub fn command() -> Command {
         .visible_alias("up")
         .about("Sync packages")
         .long_about("Sync package selections with candidates from the highest priority repository")
+        .arg_required_else_help(true)
         .arg(arg!(-u --"update" "Update repositories before syncing"))
         .arg(arg!(--"upgrade-only" "Only sync packages that have a version upgrade"))
         .arg(

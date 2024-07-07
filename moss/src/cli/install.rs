@@ -14,6 +14,7 @@ pub fn command() -> Command {
         .visible_alias("it")
         .about("Install packages")
         .long_about("Install the requested software to the local system")
+        .arg_required_else_help(true)
         .arg(arg!(<NAME> ... "packages to install").value_parser(value_parser!(String)))
         .arg(
             arg!(--to <blit_target> "Blit this install to the provided directory instead of the root")

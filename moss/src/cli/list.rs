@@ -18,6 +18,7 @@ pub fn command() -> Command {
     Command::new("list")
         .about("List packages")
         .long_about("List packages according to a filter")
+        .arg_required_else_help(true)
         .subcommand_required(true)
         .subcommand(
             Command::new("installed")

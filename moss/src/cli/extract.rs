@@ -20,6 +20,7 @@ pub fn command() -> Command {
     Command::new("extract")
         .about("Extract a `.stone` content to disk")
         .long_about("For all valid content-bearing archives, extract to disk")
+        .arg_required_else_help(true)
         .arg(arg!(<PATH> ... "files to inspect").value_parser(clap::value_parser!(PathBuf)))
 }
 

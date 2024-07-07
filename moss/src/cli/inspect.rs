@@ -16,6 +16,7 @@ pub fn command() -> Command {
     Command::new("inspect")
         .about("Examine raw stone files")
         .long_about("Show detailed (debug) information on a local `.stone` file")
+        .arg_required_else_help(true)
         .arg(arg!(<PATH> ... "files to inspect").value_parser(clap::value_parser!(PathBuf)))
 }
 

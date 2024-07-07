@@ -22,6 +22,7 @@ pub fn command() -> Command {
     Command::new("index")
         .visible_alias("ix")
         .about("Index a collection of packages")
+        .arg_required_else_help(true)
         .arg(arg!(<INDEX_DIR> "directory of index files").value_parser(value_parser!(PathBuf)))
 }
 

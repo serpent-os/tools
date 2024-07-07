@@ -51,7 +51,7 @@ pub enum Subcommand {
         )]
         release: Option<u64>,
     },
-    #[command(about = "Create skeletal stone.yaml recipe from source archive URIs")]
+    #[command(about = "Create skeletal stone.yaml recipe from source archive URIs", arg_required_else_help(true))]
     New {
         #[arg(
             short,
@@ -63,7 +63,7 @@ pub enum Subcommand {
         #[arg(required = true, value_name = "URI", help = "Source archive URIs")]
         upstreams: Vec<Url>,
     },
-    #[command(about = "Update a recipe file")]
+    #[command(about = "Update a recipe file", arg_required_else_help(true))]
     Update {
         #[arg(short, long, required = true, help = "Update version")]
         version: String,
