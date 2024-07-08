@@ -335,7 +335,7 @@ impl Client {
 
         // Last but not least, let us see some boot management on the current state
         let layouts = self.layout_db.query(state.selections.iter().map(|s| &s.package))?;
-        boot::synchronize(&self.installation.root, &layouts)?;
+        boot::synchronize(&self.installation, &layouts)?;
 
         Ok(())
     }

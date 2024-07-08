@@ -5,20 +5,28 @@
 //! Boot management integration in moss
 
 use std::{
+    fs, io,
     path::{Path, PathBuf},
     str::FromStr,
 };
 
+use blsforme::os_release::{self, OsRelease};
 use fnmatch::Pattern;
 use stone::payload::{layout, Layout};
 use thiserror::{self, Error};
 
-use crate::package::Id;
+use crate::{package::Id, Installation};
 
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("blsforme: {0}")]
     Blsforme(#[from] blsforme::Error),
+
+    #[error("io: {0}")]
+    IO(#[from] io::Error),
+
+    #[error("os_release: {0}")]
+    OsRelease(#[from] os_release::Error),
 
     /// fnmatch pattern compilation for boot, etc.
     #[error("fnmatch pattern: {0}")]
@@ -42,7 +50,13 @@ impl<'a> AsRef<Path> for KernelCandidate<'a> {
 }
 
 /// From a given set of input paths, produce a set of match pairs
-fn kernel_files_from_state<'a>(layouts: &'a [(Id, Layout)], pattern: &'a Pattern) -> Vec<KernelCandidate<'a>> {
+/// NOTE: This only works for a *new* blit and doesn't retroactively
+/// sync old kernels!
+fn kernel_files_from_state<'a>(
+    install: &Installation,
+    layouts: &'a [(Id, Layout)],
+    pattern: &'a Pattern,
+) -> Vec<KernelCandidate<'a>> {
     let mut kernel_entries = vec![];
 
     for (_, path) in layouts.iter() {
@@ -50,7 +64,7 @@ fn kernel_files_from_state<'a>(layouts: &'a [(Id, Layout)], pattern: &'a Pattern
             layout::Entry::Regular(_, target) => {
                 if pattern.match_path(target).is_some() {
                     kernel_entries.push(KernelCandidate {
-                        path: PathBuf::from(target),
+                        path: install.root.join("usr").join(target),
                         _layout: path,
                     });
                 }
@@ -58,7 +72,7 @@ fn kernel_files_from_state<'a>(layouts: &'a [(Id, Layout)], pattern: &'a Pattern
             layout::Entry::Symlink(_, target) => {
                 if pattern.match_path(target).is_some() {
                     kernel_entries.push(KernelCandidate {
-                        path: PathBuf::from(target),
+                        path: install.root.join("usr").join(target),
                         _layout: path,
                     });
                 }
@@ -70,34 +84,66 @@ fn kernel_files_from_state<'a>(layouts: &'a [(Id, Layout)], pattern: &'a Pattern
     kernel_entries
 }
 
-pub fn synchronize(root: impl AsRef<Path>, layouts: &[(Id, Layout)]) -> Result<(), Error> {
-    let root = root.as_ref();
+/// Find bootloader assets
+fn boot_files_from_state<'a>(
+    install: &Installation,
+    layouts: &'a [(Id, Layout)],
+    pattern: &'a Pattern,
+) -> Vec<PathBuf> {
+    let mut rets = vec![];
+
+    for (_, path) in layouts.iter() {
+        if let layout::Entry::Regular(_, target) = &path.entry {
+            if pattern.match_path(target).is_some() {
+                rets.push(install.root.join("usr").join(target));
+            }
+        }
+    }
+
+    rets
+}
+
+pub fn synchronize(install: &Installation, layouts: &[(Id, Layout)]) -> Result<(), Error> {
+    let root = install.root.clone();
     let is_native = root.to_string_lossy() == "/";
     // Create an appropriate configuration
     let config = blsforme::Configuration {
         root: if is_native {
-            blsforme::Root::Native(root.into())
+            blsforme::Root::Native(root.clone())
         } else {
-            blsforme::Root::Image(root.into())
+            blsforme::Root::Image(root.clone())
         },
-        vfs: root.into(),
+        vfs: "/".into(),
     };
 
     let pattern = fnmatch::Pattern::from_str("lib/kernel/(version:*)/*")?;
+    let systemd = fnmatch::Pattern::from_str("lib*/systemd/boot/efi/*.efi")?;
+    let booty_bits = boot_files_from_state(install, layouts, &systemd);
 
     // No kernels? No bother.
-    let kernels = kernel_files_from_state(layouts, &pattern);
+    let kernels = kernel_files_from_state(install, layouts, &pattern);
     if kernels.is_empty() {
         return Ok(());
     }
-    let schema = blsforme::Schema::Blsforme;
+    // no fun times
+    if booty_bits.is_empty() {
+        return Ok(());
+    }
+
+    // Read the os-release file we created
+    let fp = fs::read_to_string(install.root.join("usr").join("lib").join("os-release"))?;
+    let os_release = OsRelease::from_str(&fp)?;
+    let schema = blsforme::Schema::Blsforme {
+        os_release: &os_release,
+    };
     let discovered = schema.discover_system_kernels(kernels.iter())?;
 
-    eprintln!("Discovered kernels in current state: ");
-    discovered.iter().for_each(|p| eprintln!("kernel = {p:?}"));
-
-    // Init the manager
-    let _ = blsforme::Manager::new(&config)?.with_kernels(discovered);
+    // pipe all of our entries into blsforme
+    let entries = discovered.iter().map(blsforme::Entry::new);
+    let manager = blsforme::Manager::new(&config)?
+        .with_entries(entries)
+        .with_bootloader_assets(booty_bits);
+    manager.sync(&schema)?;
 
     Ok(())
 }

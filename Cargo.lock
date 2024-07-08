@@ -205,7 +205,7 @@ dependencies = [
 [[package]]
 name = "blsforme"
 version = "0.1.0"
-source = "git+https://github.com/serpent-os/blsforme.git?rev=c6f5c44e6825a4174c7fc97cd1ee538f0d912420#c6f5c44e6825a4174c7fc97cd1ee538f0d912420"
+source = "git+https://github.com/serpent-os/blsforme.git?rev=0aaece601fe4d11025382fa6e0e45deb1d668c92#0aaece601fe4d11025382fa6e0e45deb1d668c92"
 dependencies = [
  "blake3",
  "gpt",
@@ -2178,7 +2178,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "superblock"
 version = "0.1.0"
-source = "git+https://github.com/serpent-os/blsforme.git?rev=c6f5c44e6825a4174c7fc97cd1ee538f0d912420#c6f5c44e6825a4174c7fc97cd1ee538f0d912420"
+source = "git+https://github.com/serpent-os/blsforme.git?rev=0aaece601fe4d11025382fa6e0e45deb1d668c92#0aaece601fe4d11025382fa6e0e45deb1d668c92"
 dependencies = [
  "log",
  "thiserror",
@@ -2381,7 +2381,7 @@ dependencies = [
 [[package]]
 name = "topology"
 version = "0.1.0"
-source = "git+https://github.com/serpent-os/blsforme.git?rev=c6f5c44e6825a4174c7fc97cd1ee538f0d912420#c6f5c44e6825a4174c7fc97cd1ee538f0d912420"
+source = "git+https://github.com/serpent-os/blsforme.git?rev=0aaece601fe4d11025382fa6e0e45deb1d668c92#0aaece601fe4d11025382fa6e0e45deb1d668c92"
 dependencies = [
  "gpt",
  "log",
