@@ -210,7 +210,7 @@ dependencies = [
  "blake3",
  "gpt",
  "log",
- "nix 0.28.0",
+ "nix",
  "serde",
  "serde_json",
  "superblock",
@@ -234,7 +234,7 @@ dependencies = [
  "hex",
  "itertools 0.13.0",
  "moss",
- "nix 0.27.1",
+ "nix",
  "regex",
  "serde",
  "serde_json",
@@ -432,7 +432,7 @@ checksum = "f7144d30dcf0fafbce74250a3963025d8d52177934239851c917d29f1df280c2"
 name = "container"
 version = "0.1.0"
 dependencies = [
- "nix 0.27.1",
+ "nix",
  "strum",
  "thiserror",
 ]
@@ -1410,7 +1410,7 @@ dependencies = [
  "itertools 0.13.0",
  "libsqlite3-sys",
  "log",
- "nix 0.27.1",
+ "nix",
  "rayon",
  "reqwest",
  "serde",
@@ -1425,17 +1425,6 @@ dependencies = [
  "url",
  "vfs",
  "xxhash-rust",
-]
-
-[[package]]
-name = "nix"
-version = "0.27.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2eb04e9c688eff1c89d72b407f168cf79bb9e867a9d3323ed6c01519eb9cc053"
-dependencies = [
- "bitflags",
- "cfg-if",
- "libc",
 ]
 
 [[package]]
@@ -2385,7 +2374,7 @@ source = "git+https://github.com/serpent-os/blsforme.git?rev=c6f5c44e6825a4174c7
 dependencies = [
  "gpt",
  "log",
- "nix 0.28.0",
+ "nix",
  "superblock",
  "thiserror",
 ]
