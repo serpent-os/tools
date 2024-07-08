@@ -12,6 +12,7 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.78"
 
 [workspace.dependencies]
 blsforme = { git = "https://github.com/serpent-os/blsforme.git", rev = "0aaece601fe4d11025382fa6e0e45deb1d668c92" }
