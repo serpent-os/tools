@@ -11,9 +11,9 @@ mod build;
 mod chroot;
 mod profile;
 mod recipe;
+mod version;
 
 #[derive(Debug, Parser)]
-#[command(version = serpent_buildinfo::get_simple_version())]
 pub struct Command {
     #[command(flatten)]
     pub global: Global,
@@ -23,6 +23,14 @@ pub struct Command {
 
 #[derive(Debug, Args)]
 pub struct Global {
+    #[arg(
+        short,
+        long = "verbose",
+        help = "Prints additional information about what boulder is doing",
+        default_value = "false",
+        global = true
+    )]
+    pub verbose: bool,
     #[arg(long, global = true)]
     pub cache_dir: Option<PathBuf>,
     #[arg(long, global = true)]
@@ -39,11 +47,19 @@ pub enum Subcommand {
     Chroot(chroot::Command),
     Profile(profile::Command),
     Recipe(recipe::Command),
+    Version(version::Command),
 }
 
 pub fn process() -> Result<(), Error> {
     let args = replace_aliases(std::env::args());
     let Command { global, subcommand } = Command::parse_from(args);
+
+    if global.verbose {
+        match subcommand {
+            Subcommand::Version(_) => (),
+            _ => version::print(),
+        }
+    }
 
     let env = Env::new(global.cache_dir, global.config_dir, global.data_dir, global.moss_root)?;
 
@@ -52,6 +68,7 @@ pub fn process() -> Result<(), Error> {
         Subcommand::Chroot(command) => chroot::handle(command, env)?,
         Subcommand::Profile(command) => profile::handle(command, env)?,
         Subcommand::Recipe(command) => recipe::handle(command, env)?,
+        Subcommand::Version(command) => version::handle(command),
     }
 
     Ok(())
