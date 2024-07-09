@@ -239,6 +239,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "serpent_buildinfo",
  "sha2",
  "stone",
  "stone_recipe",
@@ -1414,6 +1415,7 @@ dependencies = [
  "rayon",
  "reqwest",
  "serde",
+ "serpent_buildinfo",
  "sha2",
  "stone",
  "strum",
@@ -2038,6 +2040,14 @@ dependencies = [
  "ryu",
  "serde",
  "unsafe-libyaml",
+]
+
+[[package]]
+name = "serpent_buildinfo"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "thiserror",
 ]
 
 [[package]]

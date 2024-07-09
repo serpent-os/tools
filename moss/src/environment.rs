@@ -3,8 +3,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 pub const NAME: &str = env!("CARGO_PKG_NAME");
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-pub const GIT_HASH: Option<&str> = option_env!("GIT_HASH");
 /// Max concurrency for disk tasks
 pub const MAX_DISK_CONCURRENCY: usize = 16;
 /// Max concurrency for network tasks

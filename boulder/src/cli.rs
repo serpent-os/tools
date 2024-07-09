@@ -13,7 +13,7 @@ mod profile;
 mod recipe;
 
 #[derive(Debug, Parser)]
-#[command(version = version())]
+#[command(version = serpent_buildinfo::get_simple_version())]
 pub struct Command {
     #[command(flatten)]
     pub global: Global,
@@ -93,16 +93,4 @@ pub enum Error {
     Env(#[from] env::Error),
     #[error("recipe")]
     Recipe(#[from] recipe::Error),
-}
-
-fn version() -> String {
-    use moss::environment;
-
-    pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-    let hash = environment::GIT_HASH
-        .map(|hash| format!(" ({hash})"))
-        .unwrap_or_default();
-
-    format!("{VERSION}{hash}")
 }

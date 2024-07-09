@@ -8,6 +8,7 @@ rust-version.workspace = true
 config = { path = "../crates/config" }
 container = { path = "../crates/container" }
 dag = { path = "../crates/dag" }
+serpent_buildinfo = { path = "../crates/serpent_buildinfo" }
 stone = { path = "../crates/stone" }
 triggers = { path = "../crates/triggers" }
 tui = { path = "../crates/tui" }

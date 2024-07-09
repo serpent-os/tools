@@ -10,6 +10,7 @@ rust-version.workspace = true
 config = { path = "../crates/config" }
 container = { path = "../crates/container" }
 moss = { path = "../moss" }
+serpent_buildinfo = { path = "../crates/serpent_buildinfo" }
 stone = { path = "../crates/stone" }
 stone_recipe = { path = "../crates/stone_recipe" }
 tui = { path = "../crates/tui" }

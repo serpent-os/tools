@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use clap::Command;
-use moss::environment;
 
 /// Construct the Version command
 pub fn command() -> Command {
@@ -12,9 +11,5 @@ pub fn command() -> Command {
 
 /// Print program version
 pub fn print() {
-    let hash = environment::GIT_HASH
-        .map(|hash| format!(" ({hash})"))
-        .unwrap_or_default();
-
-    println!("moss {}{hash}", environment::VERSION);
+    println!("moss {}", serpent_buildinfo::get_simple_version());
 }
