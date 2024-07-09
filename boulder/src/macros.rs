@@ -21,7 +21,7 @@ impl Macros {
         let actions_dir = macros_dir.join("actions");
         let arch_dir = macros_dir.join("arch");
 
-        let matcher = |p: &Path| p.extension().and_then(|s| s.to_str()) == Some("yml");
+        let matcher = |p: &Path| p.extension().and_then(|s| s.to_str()) == Some("yaml");
 
         let arch_files = util::enumerate_files(&arch_dir, matcher).map_err(Error::ArchFiles)?;
         let action_files = util::enumerate_files(&actions_dir, matcher).map_err(Error::ActionFiles)?;

@@ -90,9 +90,9 @@ impl Recipe {
 pub fn resolve_path(path: impl AsRef<Path>) -> Result<PathBuf, Error> {
     let path = path.as_ref();
 
-    // Resolve dir to dir + stone.yml
+    // Resolve dir to dir + stone.yaml
     let path = if path.is_dir() {
-        path.join("stone.yml")
+        path.join("stone.yaml")
     } else {
         path.to_path_buf()
     };
