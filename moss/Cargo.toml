@@ -1,12 +1,14 @@
 [package]
 name = "moss"
-version = "0.1.0"
 edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 config = { path = "../crates/config" }
 container = { path = "../crates/container" }
 dag = { path = "../crates/dag" }
+serpent_buildinfo = { path = "../crates/serpent_buildinfo" }
 stone = { path = "../crates/stone" }
 triggers = { path = "../crates/triggers" }
 tui = { path = "../crates/tui" }

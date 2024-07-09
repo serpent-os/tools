@@ -774,7 +774,7 @@ PRETTY_NAME="Serpent OS {version} (fstx #{tx})"
 ANSI_COLOR="1;35"
 HOME_URL="https://serpentos.com"
 BUG_REPORT_URL="https://github.com/serpent-os""#,
-        version = environment::VERSION,
+        version = serpent_buildinfo::get_version(),
         // TODO: Better id for ephemeral transactions
         tx = state_id.unwrap_or_default()
     );

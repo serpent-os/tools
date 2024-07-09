@@ -1,0 +1,13 @@
+[package]
+name = "serpent_buildinfo"
+edition.workspace = true
+version.workspace = true
+rust-version.workspace = true
+build = "build.rs"
+
+[dependencies]
+chrono.workspace = true
+
+[build-dependencies]
+chrono.workspace = true
+thiserror.workspace = true
