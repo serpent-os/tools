@@ -150,6 +150,8 @@ impl Phase {
 
         parser.add_definition("compiler_cache", "/mason/ccache");
 
+        parser.add_definition("sourcedateepoch", recipe.build_time.timestamp());
+
         let path = if ccache {
             "/usr/lib/ccache/bin:/usr/bin:/bin"
         } else {

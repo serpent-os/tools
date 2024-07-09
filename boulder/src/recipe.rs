@@ -3,10 +3,12 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
-    fs, io,
+    env, fs, io,
     path::{Path, PathBuf},
+    process::Command,
 };
 
+use chrono::{DateTime, Utc};
 use thiserror::Error;
 
 use crate::architecture::{self, BuildTarget};
@@ -18,6 +20,7 @@ pub struct Recipe {
     pub path: PathBuf,
     pub source: String,
     pub parsed: Parsed,
+    pub build_time: DateTime<Utc>,
 }
 
 impl Recipe {
@@ -25,8 +28,14 @@ impl Recipe {
         let path = resolve_path(path)?;
         let source = fs::read_to_string(&path)?;
         let parsed = stone_recipe::from_str(&source)?;
+        let build_time = resolve_build_time(&path);
 
-        Ok(Self { path, source, parsed })
+        Ok(Self {
+            path,
+            source,
+            parsed,
+            build_time,
+        })
     }
 
     pub fn build_targets(&self) -> Vec<BuildTarget> {
@@ -99,6 +108,37 @@ pub fn resolve_path(path: impl AsRef<Path>) -> Result<PathBuf, Error> {
 
     // Ensure it's absolute & exists
     fs::canonicalize(&path).map_err(|_| Error::MissingRecipe(path))
+}
+
+fn resolve_build_time(path: &Path) -> DateTime<Utc> {
+    // Propagate SOURCE_DATE_EPOCH if set
+    if let Ok(epoch_env) = env::var("SOURCE_DATE_EPOCH") {
+        if let Ok(parsed) = epoch_env.parse::<i64>() {
+            if let Some(timestamp) = DateTime::from_timestamp(parsed, 0) {
+                return timestamp;
+            }
+        }
+    }
+
+    // If we are building from a git repo and have the git binary available to us then use the last commit timestamp
+    if let Some(recipe_dir) = path.parent() {
+        if let Ok(git_log) = Command::new("git")
+            .args(["log", "-1", "--format=\"%at\""])
+            .current_dir(recipe_dir)
+            .output()
+        {
+            if let Ok(stdout) = String::from_utf8(git_log.stdout) {
+                if let Ok(parsed) = stdout.replace(['\n', '"'], "").parse::<i64>() {
+                    if let Some(timestamp) = DateTime::from_timestamp(parsed, 0) {
+                        return timestamp;
+                    }
+                }
+            }
+        }
+    }
+
+    // As a final fallback use the current time
+    Utc::now()
 }
 
 #[derive(Debug, Error)]
