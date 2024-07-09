@@ -26,9 +26,11 @@ fn command() -> Command {
     Command::new("moss")
         .about("Next generation package manager")
         .arg(
-            Arg::new("version")
+            Arg::new("verbose")
                 .short('v')
-                .long("version")
+                .long("verbose")
+                .global(true)
+                .help("Prints additional information about what moss is doing")
                 .action(ArgAction::SetTrue),
         )
         .arg(
@@ -77,9 +79,13 @@ pub fn process() -> Result<(), Error> {
     let args = replace_aliases(env::args());
     let matches = command().get_matches_from(args);
 
-    if matches.get_flag("version") {
-        version::print();
-        return Ok(());
+    // Print the version, but not if the user is using the version subcommand
+    if matches.get_flag("verbose") {
+        if let Some(command) = matches.subcommand_name() {
+            if command != "version" {
+                version::print();
+            }
+        }
     }
 
     let root = matches.get_one::<PathBuf>("root").unwrap();
@@ -105,8 +111,8 @@ pub fn process() -> Result<(), Error> {
         Some(("search", args)) => search::handle(args, installation).map_err(Error::Search),
         Some(("state", args)) => state::handle(args, installation).map_err(Error::State),
         Some(("sync", args)) => sync::handle(args, installation).map_err(Error::Sync),
-        Some(("version", _)) => {
-            version::print();
+        Some(("version", args)) => {
+            version::handle(args);
             Ok(())
         }
         None => {
