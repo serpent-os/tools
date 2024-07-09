@@ -16,7 +16,7 @@ edition = "2021"
 blsforme = { git = "https://github.com/serpent-os/blsforme.git", rev = "0aaece601fe4d11025382fa6e0e45deb1d668c92" }
 bytes = "1.6.0"
 chrono = "0.4.38"
-clap = { version = "4.5.8", features = ["derive", "string"] }
+clap = { version = "4.5.9", features = ["derive", "string"] }
 criterion = { version = "0.5.1", features = ["html_reports"] }
 crossterm = "0.27.0"
 derive_more = "0.99.18"
@@ -34,7 +34,7 @@ indextree = "4.6.1"
 libsqlite3-sys = { version = "0.28.0", features = ["bundled"] }
 log = "0.4.22"
 nom = "7.1.3"
-nix = { version = "0.27.1", features = ["user", "fs", "sched", "process", "mount", "hostname", "signal", "term"] }
+nix = { version = "0.28.0", features = ["user", "fs", "sched", "process", "mount", "hostname", "signal", "term"] }
 petgraph = "0.6.5"
 rayon = "1.10.0"
 regex = "1.10.5"
