@@ -140,9 +140,13 @@ pub fn synchronize(install: &Installation, layouts: &[(Id, Layout)]) -> Result<(
 
     // pipe all of our entries into blsforme
     let entries = discovered.iter().map(blsforme::Entry::new);
-    let manager = blsforme::Manager::new(&config)?
-        .with_entries(entries)
-        .with_bootloader_assets(booty_bits);
+
+    // If we can't get a manager, find, but don't bomb. Its probably a topology failure.
+    let manager = match blsforme::Manager::new(&config) {
+        Ok(m) => m.with_entries(entries).with_bootloader_assets(booty_bits),
+        Err(_) => return Ok(()),
+    };
+
     manager.sync(&schema)?;
 
     Ok(())
