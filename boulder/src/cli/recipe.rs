@@ -5,6 +5,7 @@ use std::{
     fs,
     io::{self, Read},
     path::PathBuf,
+    time::Duration,
 };
 
 use boulder::{
@@ -21,7 +22,7 @@ use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 use tui::{
     pretty::{self, ColumnDisplay},
-    Styled,
+    MultiProgress, ProgressBar, ProgressStyle, Styled,
 };
 use url::Url;
 
@@ -65,10 +66,9 @@ pub enum Subcommand {
     },
     #[command(about = "Update a recipe file")]
     Update {
-        #[arg(short, long, required = true, help = "Update version")]
+        #[arg(long = "ver", required = true, help = "Update version")]
         version: String,
         #[arg(
-            short,
             long = "upstream",
             required = true,
             value_parser = parse_upstream,
@@ -224,6 +224,8 @@ fn update(recipe: Option<PathBuf>, overwrite: bool, version: String, upstreams: 
     // Needed to fetch
     let _guard = runtime::init();
 
+    let mpb = MultiProgress::new();
+
     // Add all update operations
     let mut updater = yaml::Updater::new();
     for update in updates {
@@ -235,7 +237,7 @@ fn update(recipe: Option<PathBuf>, overwrite: bool, version: String, upstreams: 
                 updater.update_value(version, |root| root / "version");
             }
             Update::PlainUpstream(i, key, new_uri) => {
-                let hash = runtime::block_on(fetch_hash(new_uri.clone()))?;
+                let hash = runtime::block_on(fetch_hash(new_uri.clone(), &mpb))?;
 
                 let path = |root| root / "upstreams" / i / key.as_str().unwrap_or_default();
 
@@ -255,6 +257,8 @@ fn update(recipe: Option<PathBuf>, overwrite: bool, version: String, upstreams: 
         }
     }
 
+    let _ = mpb.clear();
+
     // Apply updates
     let updated = updater.apply(input);
 
@@ -269,7 +273,18 @@ fn update(recipe: Option<PathBuf>, overwrite: bool, version: String, upstreams: 
     Ok(())
 }
 
-async fn fetch_hash(uri: Url) -> Result<String, Error> {
+async fn fetch_hash(uri: Url, mpb: &MultiProgress) -> Result<String, Error> {
+    let pb = mpb.add(
+        ProgressBar::new(u64::MAX)
+            .with_message(format!("{} {}", "Fetching".blue(), uri.to_string().bold(),))
+            .with_style(
+                ProgressStyle::with_template(" {spinner} {wide_msg} {binary_bytes_per_sec:>.dim} ")
+                    .unwrap()
+                    .tick_chars("--=≡■≡=--"),
+            ),
+    );
+    pb.enable_steady_tick(Duration::from_millis(150));
+
     let mut stream = request::get(uri).await?;
 
     let mut hasher = Sha256::new();
@@ -278,6 +293,9 @@ async fn fetch_hash(uri: Url) -> Result<String, Error> {
 
     while let Some(chunk) = stream.next().await {
         let bytes = &chunk?;
+
+        pb.inc(bytes.len() as u64);
+
         hasher.update(bytes);
         out.write_all(bytes).await.map_err(Error::FetchIo)?;
     }
@@ -285,6 +303,9 @@ async fn fetch_hash(uri: Url) -> Result<String, Error> {
     out.flush().await.map_err(Error::FetchIo)?;
 
     let hash = hex::encode(hasher.finalize());
+
+    pb.finish();
+    mpb.remove(&pb);
 
     Ok(hash)
 }
