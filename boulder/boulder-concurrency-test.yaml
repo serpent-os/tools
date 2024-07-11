@@ -10,31 +10,32 @@ setup      : |
   # shuf generates a single number within the range
   for f in a b c d e f g h
   do
-    touch "$f" && sleep $(shuf -i 3-7 -n1)
+    touch "$f" && sleep $(shuf -i 1-5 -n1)
   done
 build      : |
+  [[ -f build.log ]] && rm build.log
   for f in a b c d e f g h
   do
-    echo "$(shuf -i 1-10000 -n1)" > "$f" && echo "$f: $(cat $f)" > build.log && sleep $(shuf -i 3-7 -n1)
+    echo "$(shuf -i 1-10000 -n1)" > "$f" && echo "$f: $(cat $f)" >> build.log && sleep $(shuf -i 1-5 -n1)
   done
   cat << EOF > test_values.sh
   #!/usr/bin/env bash
   #
   set -euo pipefail
   
-  test -f build.log
+  [[ -f build.log ]] || exit 1
   for a b c d e f g h
   do
-    [[ -f "$f"]]
-    echo -e "testing $f: $(grep $f build.log |cut -f2 -d':') == $(cat $f)?"
-    [[ "$(grep $f build.log |cut -f2 -d':')" == "$(cat $f)" ]] && echo -e " True\n" || echo -e " False\n"
+    [[ -f "$f" ]]
+    echo -e "testing $f: $(grep $f build.log |cut -f2 -d':') == $(cat $f)? "
+    [[ "$(grep $f build.log |cut -f2 -d':')" == "$(cat $f)" ]] && echo -e "True\n" || echo -e "False\n"
   done
   EOF
 install    : |
   %install_dir %(installroot)%(libexecdir)
   for f in a b c d e f g h
   do
-    %install_file $f %(installroot)%(libexecdir)/$f && sleep $(shuf -i 3-7 -n1)
+    %install_file $f %(installroot)%(libexecdir)/$f && sleep $(shuf -i 1-5 -n1)
     %install_file build.log %(installroot)%(libexecdir)/build.log
     %install_exe test_values.sh %(installroot)%(libexecdir)/test_values.sh
   done
