@@ -94,10 +94,7 @@ pub fn process() -> Result<(), Error> {
     // Make async runtime available to all of moss
     let _guard = runtime::init();
 
-    let mut installation = Installation::open(root)?;
-    if let Some(dir) = cache {
-        installation = installation.with_cache_dir(dir)?;
-    }
+    let installation = Installation::open(root, cache.cloned())?;
 
     match matches.subcommand() {
         Some(("extract", args)) => extract::handle(args).map_err(Error::Extract),
