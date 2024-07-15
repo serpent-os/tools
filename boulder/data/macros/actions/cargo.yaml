@@ -20,8 +20,10 @@ actions:
         description: Install the built binary
         command: |
             cargo_install(){
-                if [ $# -eq 1 ]; then
-                    %install_bin target/%(target_triple)/release/"$1"
+                if [ $# -gt 0 ]; then
+                    for binary in "$@"; do
+                       %install_bin target/%(target_triple)/release/"$binary"
+                    done
                 else
                     %install_bin target/%(target_triple)/release/%(name)
                 fi
