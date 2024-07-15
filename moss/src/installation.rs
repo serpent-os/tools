@@ -12,8 +12,11 @@ use std::{
 use log::{trace, warn};
 use nix::unistd::{access, AccessFlags, Uid};
 use thiserror::Error;
+use tui::Styled;
 
 use crate::state;
+
+mod lockfile;
 
 /// System mutability - do we have readwrite?
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display)]
@@ -40,6 +43,10 @@ pub struct Installation {
     /// Custom cache directory location,
     /// otherwise derived from root
     pub cache_dir: Option<PathBuf>,
+
+    /// Acquired locks that guarantee exclusive access
+    /// to the installation for mutable operations
+    _locks: Vec<lockfile::Lock>,
 }
 
 impl Installation {
@@ -47,12 +54,21 @@ impl Installation {
     /// This will query the potential active state if found,
     /// and determine the mutability per the current user identity
     /// and ACL permissions.
-    pub fn open(root: impl Into<PathBuf>) -> Result<Self, Error> {
+    pub fn open(root: impl Into<PathBuf>, cache_dir: Option<PathBuf>) -> Result<Self, Error> {
         let root: PathBuf = root.into();
 
         if !root.exists() || !root.is_dir() {
             return Err(Error::RootInvalid);
         }
+
+        if let Some(dir) = cache_dir.as_ref() {
+            if !dir.exists() || !dir.is_dir() {
+                return Err(Error::CacheInvalid);
+            }
+        }
+
+        // Get exclusive access to work within these directories
+        let _locks = acquire_locks(&root.join(".moss"), cache_dir.as_deref())?;
 
         let active_state = read_state_id(&root);
 
@@ -84,23 +100,7 @@ impl Installation {
             mutability,
             active_state,
             cache_dir: None,
-        })
-    }
-
-    /// Construct an Installation with a specific cache directory
-    ///
-    /// This is useful when we wish to have a cache directory separate from the internal
-    /// moss trees, such as when scripting `.iso` tools or for package builds.
-    pub fn with_cache_dir(self, dir: impl Into<PathBuf>) -> Result<Self, Error> {
-        let dir = dir.into();
-
-        if !dir.exists() || !dir.is_dir() {
-            return Err(Error::CacheInvalid);
-        }
-
-        Ok(Self {
-            cache_dir: Some(dir),
-            ..self
+            _locks,
         })
     }
 
@@ -163,6 +163,29 @@ impl Installation {
     pub fn isolation_path(&self, path: impl AsRef<Path>) -> PathBuf {
         self.root_path("isolation").join(path)
     }
+}
+
+/// Blocks until lockfiles can be obtained for the
+/// root `moss` path and if provided, the custom
+/// cache path
+///
+/// Locks are held until dropped
+pub fn acquire_locks(moss_path: &Path, cache_dir: Option<&Path>) -> Result<Vec<lockfile::Lock>, Error> {
+    let mut locks = vec![];
+
+    locks.push(lockfile::acquire(
+        moss_path.join(".moss-lockfile"),
+        format!("{} another process is using the moss root", "Blocking".yellow().bold()),
+    )?);
+
+    if let Some(path) = cache_dir {
+        locks.push(lockfile::acquire(
+            path.join(".moss-lockfile"),
+            format!("{} another process is using the cache dir", "Blocking".yellow().bold()),
+        )?);
+    }
+
+    Ok(locks)
 }
 
 /// In older versions of moss, the `/usr` entry was a symlink
@@ -232,4 +255,6 @@ pub enum Error {
     RootInvalid,
     #[error("Cache dir is invalid")]
     CacheInvalid,
+    #[error("acquiring lockfile")]
+    Lockfile(#[from] lockfile::Error),
 }

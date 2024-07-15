@@ -133,7 +133,7 @@ pub fn add<'a>(
 pub fn update<'a>(env: &'a Env, manager: profile::Manager<'a>, profile: &profile::Id) -> Result<(), Error> {
     let repos = manager.repositories(profile)?.clone();
 
-    let installation = Installation::open(&env.moss_dir)?;
+    let installation = Installation::open(&env.moss_dir, None)?;
     let mut moss_client = moss::Client::with_explicit_repositories("boulder", installation, repos)?;
     runtime::block_on(moss_client.refresh_repositories())?;
 
