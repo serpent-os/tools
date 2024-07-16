@@ -67,17 +67,6 @@ impl Installation {
             }
         }
 
-        // Get exclusive access to work within these directories
-        let _locks = acquire_locks(&root.join(".moss"), cache_dir.as_deref())?;
-
-        let active_state = read_state_id(&root);
-
-        if let Some(id) = &active_state {
-            trace!("Active State ID: {id}");
-        } else {
-            warn!("Unable to discover Active State ID");
-        }
-
         // Make sure directories exist (silently fail if read-only)
         //
         // It's important we try this first in-case `root` needs to be created
@@ -94,6 +83,21 @@ impl Installation {
 
         trace!("Mutability: {mutability}");
         trace!("Root dir: {root:?}");
+
+        // Get exclusive access to work within these directories
+        let _locks = if matches!(mutability, Mutability::ReadWrite) {
+            acquire_locks(&root.join(".moss"), cache_dir.as_deref())?
+        } else {
+            vec![]
+        };
+
+        let active_state = read_state_id(&root);
+
+        if let Some(id) = &active_state {
+            trace!("Active State ID: {id}");
+        } else {
+            warn!("Unable to discover Active State ID");
+        }
 
         Ok(Self {
             root,
