@@ -2,7 +2,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{io, path::PathBuf};
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 
 use thiserror::Error;
 
@@ -65,9 +68,13 @@ fn resolve_data_dir(custom: Option<PathBuf>) -> PathBuf {
 
 fn resolve_moss_root(is_root: bool, custom: Option<PathBuf>) -> Result<PathBuf, Error> {
     if let Some(dir) = custom {
-        Ok(dir)
+        if dir == Path::new("/.moss") {
+            Err(Error::MossSystemRoot)
+        } else {
+            Ok(dir)
+        }
     } else if is_root {
-        Ok(PathBuf::from("/"))
+        Ok(PathBuf::from("/var/cache/boulder/moss"))
     } else {
         Ok(dirs::cache_dir().ok_or(Error::UserCache)?.join("moss"))
     }
@@ -79,6 +86,8 @@ pub enum Error {
     UserCache,
     #[error("cannot find config dir, $XDG_CONFIG_HOME or $HOME env not set")]
     UserConfig,
+    #[error("boulder cannot use a moss system root")]
+    MossSystemRoot,
     #[error("io")]
     Io(#[from] io::Error),
 }
@@ -86,5 +95,22 @@ pub enum Error {
 impl From<config::CreateUserError> for Error {
     fn from(_: config::CreateUserError) -> Self {
         Error::UserConfig
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn reject_moss_system_root() {
+        assert!(matches!(
+            resolve_moss_root(false, Some(PathBuf::from("/.moss"))),
+            Err(Error::MossSystemRoot)
+        ));
+        assert!(matches!(
+            resolve_moss_root(true, Some(PathBuf::from("/.moss"))),
+            Err(Error::MossSystemRoot)
+        ));
     }
 }
