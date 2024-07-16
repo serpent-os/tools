@@ -67,7 +67,7 @@ fn resolve_moss_root(is_root: bool, custom: Option<PathBuf>) -> Result<PathBuf, 
     if let Some(dir) = custom {
         Ok(dir)
     } else if is_root {
-        Ok(PathBuf::from("/"))
+        Ok(PathBuf::from("/var/cache/boulder/moss"))
     } else {
         Ok(dirs::cache_dir().ok_or(Error::UserCache)?.join("moss"))
     }
