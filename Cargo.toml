@@ -27,6 +27,7 @@ diesel = { version = "2.2.1", features = ["sqlite", "returning_clauses_for_sqlit
 diesel_migrations = "2.2.0"
 dirs = "5.0.1"
 elf = "0.7.4"
+etc-os-release = "0.1.0"
 indicatif = "0.17.8"
 itertools = "0.13.0"
 futures = "0.3.30"
@@ -54,6 +55,19 @@ url = { version = "2.5.2", features = ["serde"] }
 xxhash-rust = { version = "0.8.11", features = ["xxh3"] }
 zstd = { version = "0.13.2", features = ["zstdmt"] }
 
+# We want people who use the onboarding steps to get a nice compromise
+# between fast compilation and fast runtime, but with checks in place
+# and full backtraces. Hyperfine tests shows opt-level = 1 to be a good
+# compromise between compile speed and runtime speed.
+# During testing, opt-level = 2 caused a non-trivial slowdown in compilation
+# iteration speed, but also sped up execution times commensurably. /ermo
+[profile.onboarding]
+inherits = "dev"
+opt-level = 1
+lto = "thin"
+debug = true
+strip = "none"
+
 [profile.release]
 lto = "thin"
 
@@ -66,13 +80,4 @@ opt-level = 3
 strip = "none"
 debug = true
 
-# We want people who use the onboarding steps to get a nice compromise
-# between fast compilation and fast runtime, but with checks in place
-# and full backtraces. Hyperfine tests shows opt-level = 1 to be a good
-# compromise between compile speed and runtime speed.
-[profile.onboarding]
-inherits = "dev"
-opt-level = 1
-lto = "thin"
-debug = true
-strip = "none"
+# NB: Consult .cargo/config.toml to read more about the conditional [target] rustflags we use!

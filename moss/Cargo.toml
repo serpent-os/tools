@@ -21,10 +21,10 @@ clap.workspace = true
 derive_more.workspace = true
 diesel.workspace = true
 diesel_migrations.workspace = true
-itertools.workspace = true
 fnmatch = { path = "../crates/fnmatch" }
 futures.workspace = true
 hex.workspace = true
+itertools.workspace = true
 libsqlite3-sys.workspace = true
 log.workspace = true
 nix.workspace = true
@@ -38,6 +38,9 @@ tokio-util.workspace = true
 thiserror.workspace = true
 url.workspace = true
 xxhash-rust.workspace = true
+
+[build-dependencies]
+etc-os-release.workspace = true
 
 [package.metadata.cargo-machete]
 # Needed for unixepoch() in src/db/state/migrations/2024-03-04-201550_init/up.sql
