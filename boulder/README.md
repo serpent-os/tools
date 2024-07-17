@@ -19,5 +19,9 @@ Refer to the moss onboarding instructions [here](https://github.com/serpent-os/m
 Assuming you've followed the onboarding instructions above, you can attempt to run multiple boulder instances on a system at the same time:
 
     for i in 1 2 3; do
-      boulder build ./boulder-concurrency-test.yaml -b"$i" > "build-$i".log 2>&1 &
+      rm -rf "build-$i"
+      mkdir -pv "build-$i" && \
+      pushd "build-$i" && \
+      boulder build ./boulder-concurrency-test.yaml -b"$i" > "build-$i".log 2>&1 &  
+      popd
     done
