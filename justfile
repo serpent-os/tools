@@ -4,8 +4,12 @@ default: moss
 root-dir := justfile_directory()
 build-mode := env_var_or_default("MODE", "onboarding")
 # Keep it simple for now and make installs user-local
-xdg-data-home := "$HOME/.local/share"
-xdg-bin-home := "$HOME/.local/bin"
+home := env_var("HOME")
+# Hacky -- should really check for the XDG_*_DIR env vars...
+xdg-data-home := home + "/.local/share"
+xdg-bin-home := home + "/.local/bin"
+# Read '=~' as 'contains' in the regexp sense
+xdg-bin-home-in-path := if env_var("PATH") =~ xdg-bin-home { 'is already in \$PATH. Excellent.' } else { 'is not yet in \$PATH. Please add it.' }
 
 [private]
 help:
@@ -25,18 +29,21 @@ moss: (build "moss")
 get-started: (build "boulder") (build "moss")
   @echo ""
   @echo "Installing boulder and moss to {{xdg-bin-home}}/ ..."
-  mkdir -pv "{{xdg-bin-home}}/"
-  cp "{{root-dir}}/target/{{build-mode}}"/{boulder,moss} "{{xdg-bin-home}}/"
-  rm -rf "{{xdg-data-home}}/boulder"
-  mkdir -pv "{{xdg-data-home}}/boulder/"
-  cp -R "{{root-dir}}/boulder/data"/* "{{xdg-data-home}}/boulder/"
+  @mkdir -p "{{xdg-bin-home}}/"
+  @cp "{{root-dir}}/target/{{build-mode}}"/{boulder,moss} "{{xdg-bin-home}}/"
+  @rm -rf "{{xdg-data-home}}/boulder"
+  @mkdir -p "{{xdg-data-home}}/boulder/"
+  @cp -R "{{root-dir}}/boulder/data"/* "{{xdg-data-home}}/boulder/"
   @echo ""
   @echo "Listing installed files..."
-  ls -hlF "{{xdg-bin-home}}"/{boulder,moss} "{{xdg-data-home}}/boulder"
+  @ls -hlF "{{xdg-bin-home}}"/{boulder,moss} "{{xdg-data-home}}/boulder"
   @echo ""
-  @echo "Checking the system path to boulder and moss executables:"
-  command -v boulder
-  command -v moss
+  @echo "Checking that {{xdg-bin-home}} is in \$PATH..."
+  @echo "... {{xdg-bin-home}} {{xdg-bin-home-in-path}}"
+  @echo ""
+  @echo "Checking the location of boulder and moss executables when executed in a shell:"
+  @command -v boulder
+  @command -v moss
   @echo ""
   @echo "Done."
   @echo ""
