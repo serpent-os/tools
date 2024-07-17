@@ -13,7 +13,7 @@ help:
 
 [private]
 build package:
-  cargo build --profile {{build-mode}} -p {{package}}
+  cargo build --verbose --profile {{build-mode}} -p {{package}}
 
 # Compile boulder
 boulder: (build "boulder")

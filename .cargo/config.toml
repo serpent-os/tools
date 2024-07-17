@@ -1,22 +1,42 @@
-[target."x86_64-unknown-linux-gnu"]
-# - On systems that do not use lld as the system linker (such as Solus) using lld directly saves about a second 
-# of build time for incremental compiles for building boulder (from 2.191s to 1.198s on my machine).
-# - Compressing debug symbols with zstd shrinks the dev profile boulder binary from 206.03MB to 81.44MB, a 124.59MB
-# or ~60% savings. It doesn't affect the binary size for packaging builds since we strip those, but the debug symbols
-# are reduced in size from 113.16MB to 34.63MB. It adds about ~152ms to the build times which is less than we gained 
-# by switching to lld
-# - The new symbol mangling format (https://doc.rust-lang.org/rustc/symbol-mangling/v0.html) improves the backtrace
-# shown by RUST_BACKTRACE=1 and other debug utilities. It should also be helpful once we have ABI reports. Upstream
-# hasn't switched to it yet by default due to stable distros not having new enough tools, but that doesn't matter for us
+# Having a way to detect on which system we are compiled means we can get
+# away with adding rustflags here that we know are present in the system
+# toolchain builds.
+#
+# We can set these extra flags via matching on a target cfg() expression.
+#
+# - On systems that do not use lld as the system linker (such as Solus) using
+#   lld directly saves about a second  of build time for incremental compiles
+#   for building boulder (from 2.191s to 1.198s on Reilly's machine).
+#
+# - In testing, compression of debug symbols with zstd shrinks the dev profile
+#   boulder binary from 206.03MB to 81.44MB, a 124.59MB or ~60% savings.
+#   It doesn't affect the binary size for packaging builds since we strip those,
+#   but the debug symbols are reduced in size from 113.16MB to 34.63MB.
+#   It adds about ~152ms to the build times which is less than we gained by
+#   switching to lld. This feature requires a compiler compiled with support
+#   for zstd debug symbols.
+#
+# - The new symbol mangling format[1] improves the backtrace shown by
+#   RUST_BACKTRACE=1 and other debug utilities. It should also be helpful once
+#   we have ABI reports. Upstream hasn't switched to it yet by default due to
+#   stable distros not having new enough tools, but that doesn't matter for us
+#   [1]:  https://doc.rust-lang.org/rustc/symbol-mangling/v0.html
+#
+
+# NB: os_release patterns need to be added to both target configs for this to
+#     work...
+#
+# The Solus toolchain supports zstd debug sections currently (Serpent doesn't)
+[target.'cfg(os_release_id = "solus")']
 rustflags = [
     "-Clink-arg=-fuse-ld=lld",
     "-Clink-arg=-Wl,--compress-debug-sections=zstd",
     "-Csymbol-mangling-version=v0",
 ]
 
-[target."aarch64-unknown-linux-gnu"]
+# Default flags
+[target.'cfg(not(os_release_id = "solus"))']
 rustflags = [
     "-Clink-arg=-fuse-ld=lld",
-    "-Clink-arg=-Wl,--compress-debug-sections=zstd",
     "-Csymbol-mangling-version=v0",
 ]
