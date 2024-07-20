@@ -147,7 +147,13 @@ pub fn synchronize(install: &Installation, layouts: &[(Id, Layout)]) -> Result<(
         Err(_) => return Ok(()),
     };
 
-    manager.sync(&schema)?;
+    // Only allow mounting pre-sync for a native run
+    if is_native {
+        let _mounts = manager.mount_partitions()?;
+        manager.sync(&schema)?;
+    } else {
+        manager.sync(&schema)?;
+    }
 
     Ok(())
 }
