@@ -41,7 +41,7 @@ impl System {
     pub fn environment(&self) -> Option<&'static str> {
         match self {
             System::Autotools => None,
-            System::Cargo => Some(cargo::environment()),
+            System::Cargo => None,
             System::Cmake => None,
             System::Meson => None,
             System::PythonPep517 => None,
