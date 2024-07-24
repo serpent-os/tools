@@ -18,3 +18,4 @@ flags:
     - architecture:
         c         : "-march=i686 -mtune=i686"
         cxx       : "-march=i686 -mtune=i686"
+        rust      : "-C target-cpu=i686"

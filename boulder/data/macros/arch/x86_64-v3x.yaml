@@ -17,4 +17,4 @@ flags:
     - architecture:
         c         : "-march=x86-64-v3 -mtune=znver1 -maes -mfsgsbase -mpclmul -mrdrnd -maes -mxsaveopt"
         cxx       : "-march=x86-64-v3 -mtune=znver1 -maes -mfsgsbase -mpclmul -mrdrnd -maes -mxsaveopt"
-
+        rust      : "-C target-cpu=x86-64-v3 -C target-features=+aes,+fsgsbase,+pclmulqdq,+xsaveopt"

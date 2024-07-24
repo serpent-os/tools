@@ -20,3 +20,4 @@ flags:
         c         : "-march=x86-64-v2 -mtune=ivybridge"
         cxx       : "-march=x86-64-v2 -mtune=ivybridge"
         d         : "-mcpu=x86-64-v2"
+        rust      : "-C target-cpu=x86-64-v2"
