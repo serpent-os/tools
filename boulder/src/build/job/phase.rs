@@ -193,6 +193,17 @@ impl Phase {
             parser.add_definition("compiler_path", path);
         }
 
+        /* Allow packagers to do stage specific actions in a pgo build */
+        if matches!(pgo_stage, Some(pgo::Stage::One)) {
+            parser.add_definition("pgo_stage", "ONE");
+        } else if matches!(pgo_stage, Some(pgo::Stage::Two)) {
+            parser.add_definition("pgo_stage", "TWO");
+        } else if matches!(pgo_stage, Some(pgo::Stage::Use)) {
+            parser.add_definition("pgo_stage", "USE");
+        } else {
+            parser.add_definition("pgo_stage", "NONE");
+        }
+
         parser.add_definition("pgo_dir", format!("{}-pgo", build_dir.display()));
 
         add_tuning(target, pgo_stage, recipe, macros, &mut parser)?;
