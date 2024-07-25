@@ -149,6 +149,7 @@ impl Phase {
         parser.add_definition("workdir", work_dir.display());
 
         parser.add_definition("compiler_cache", "/mason/ccache");
+        parser.add_definition("scompiler_cache", "/mason/sccache");
 
         parser.add_definition("sourcedateepoch", recipe.build_time.timestamp());
 
@@ -157,6 +158,12 @@ impl Phase {
         } else {
             "/usr/bin:/bin"
         };
+
+        if ccache {
+            parser.add_definition("rustc_wrapper", "/usr/bin/sccache");
+        } else {
+            parser.add_definition("rustc_wrapper", "");
+        }
 
         /* Set the relevant compilers */
         if matches!(recipe.parsed.options.toolchain, Toolchain::Llvm) {
