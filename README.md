@@ -50,7 +50,7 @@ sudo usermod --add-subuids 1065536-1131071 --add-subgids 1065536-1131071 ${USER}
 location of the boulder data files (which live in ${HOME}/.local/share/boulder if you used `just get-started` like above):
 
 ```bash
-alias boulder="${HOME}/.local/bin/boulder --data-dir=${HOME}/.local/share/boulder/ --config-dir=${HOME}/.local/share/boulder/ --moss-root=${HOME}/.cache/boulder/"
+alias boulder="${HOME}/.local/bin/boulder --data-dir=${HOME}/.local/share/boulder/ --config-dir=${HOME}/.config/boulder/ --moss-root=${HOME}/.cache/boulder/"
 ```
 
 
