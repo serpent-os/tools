@@ -292,7 +292,7 @@ flags               :
         cxx       : "-pipe -Wformat -Wformat-security -Wno-error -fPIC"
         ld        : "-Wl,-O2,--gc-sections"
         d         : "-release -Hkeep-all-bodies -relocation-model=pic -wi"
-        rust      : ""
+        rust      : "-C strip=none"
 
     - omit-frame-pointer:
         c         : "-fomit-frame-pointer -momit-leaf-frame-pointer"
@@ -304,7 +304,7 @@ flags               :
         c         : "-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
         cxx       : "-fno-omit-frame-pointer -mno-omit-leaf-frame-pointer"
         d         : "-frame-pointer=all"
-        rust      : "-Cforce-frame-pointers"
+        rust      : "-C force-frame-pointers"
 
     # Toggle bindnow (ON)
     - bindnow:
@@ -359,21 +359,27 @@ flags               :
         c         : "-O2"
         cxx       : "-O2"
         d         : "-O2"
+        # opt-level=3 is common in the rust world so let that
+        # be our generic opt case.
+        rust      : "-C opt-level=3 -C codegen-units=16"
 
     # Optimize for size (OFF)
     - optimize-size:
         c     : "-Os"
         cxx   : "-Os"
         d     : "-Os"
+        rust  : "-C opt-level=s -C codegen-units=16"
 
     # Optimize for speed (OFF)
     - optimize-speed:
         c         : "-O3"
         cxx       : "-O3"
         d         : "-O3"
+        rust      : "-C opt-level=3 -C codegen-units=16"
 
     # Enable LTO optimisations (OFF)
     - lto-full:
+        rust      : "-C lto=fat -C linker-plugin-lto -C embed-bitcode=yes"
         gnu:
             c         : "-flto=%(jobs)"
             cxx       : "-flto=%(jobs)"
@@ -386,6 +392,7 @@ flags               :
 
     # Enable Thin-LTO optimisations (OFF)
     - lto-thin:
+        rust      : "-C lto=thin -C linker-plugin-lto -C embed-bitcode=yes"
         llvm:
             c         : "-flto=thin"
             cxx       : "-flto=thin"
@@ -445,6 +452,7 @@ flags               :
 
     # Toggle debug-lines optimisations
     - debug-lines:
+        rust      : "-C debuginfo=line-tables-only -C split-debuginfo=off"
         llvm:
             c         : "-gline-tables-only -fasynchronous-unwind-tables"
             cxx       : "-gline-tables-only -fasynchronous-unwind-tables"
@@ -453,6 +461,7 @@ flags               :
     # Toggle debug-std optimisations (ON)
     - debug-std:
         d         : "-g -gc -d-debug"
+        rust      : "-C debuginfo=2 -C split-debuginfo=off"
         gnu:
             c         : "-g -feliminate-unused-debug-types -fasynchronous-unwind-tables"
             cxx       : "-g -feliminate-unused-debug-types -fasynchronous-unwind-tables"

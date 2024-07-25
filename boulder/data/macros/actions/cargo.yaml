@@ -9,10 +9,7 @@ actions:
     - cargo_build:
         description: Build the rust project
         command: |
-            cargo build -v -j "%(jobs)" --frozen --release --target %(target_triple) \
-              --config profile.release.debug=\"full\" \
-              --config profile.release.split-debuginfo=\"off\" \
-              --config profile.release.strip=\"none\"
+            cargo build -v -j "%(jobs)" --frozen --target %(target_triple)
         dependencies:
             - rust
 
@@ -22,10 +19,10 @@ actions:
             cargo_install(){
                 if [ $# -gt 0 ]; then
                     for binary in "$@"; do
-                       %install_bin target/%(target_triple)/release/"$binary"
+                       %install_bin target/%(target_triple)/debug/"$binary"
                     done
                 else
-                    %install_bin target/%(target_triple)/release/%(name)
+                    %install_bin target/%(target_triple)/debug/%(name)
                 fi
             }
             cargo_install
@@ -35,6 +32,6 @@ actions:
     - cargo_test:
         description: Run tests
         command: |
-            cargo test -v -j "%(jobs)" --frozen --release --target %(target_triple) --workspace
+            cargo test -v -j "%(jobs)" --frozen --target %(target_triple) --workspace
         dependencies:
             - rust
