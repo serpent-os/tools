@@ -9,7 +9,7 @@ pub fn phases() -> Phases {
         setup: Some("%cargo_fetch"),
         build: Some("%cargo_build"),
         install: Some("%cargo_install"),
-        check: Some("%cargo_install"),
+        check: Some("%cargo_test"),
     }
 }
 
