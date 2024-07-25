@@ -6,7 +6,9 @@ actions:
             test -e ./meson.build || ( echo "%%meson: The ./meson.build script could not be found" ; exit 1 )
             CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" LDFLAGS="${LDFLAGS}" meson setup %(options_meson)
         dependencies:
+            - cmake
             - meson
+            - pkgconf
 
     - meson_unity:
         description: Run meson with unity build enabled
@@ -14,7 +16,9 @@ actions:
             test -e ./meson.build || ( echo "%%meson: The ./meson.build script could not be found" ; exit 1 )
             CFLAGS="${CFLAGS}" CXXFLAGS="${CXXFLAGS}" LDFLAGS="${LDFLAGS}" meson setup --unity on %(options_meson)
         dependencies:
+            - cmake
             - meson
+            - pkgconf
 
     - meson_build:
         description: Build the meson project
