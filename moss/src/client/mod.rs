@@ -353,7 +353,7 @@ impl Client {
             postblit::TriggerScope::Transaction(&self.installation, &self.scope),
             &fstree,
         )?;
-        for trigger in triggers {
+        for trigger in triggers.iter() {
             trigger.execute()?;
         }
         // ephemeral system triggers
