@@ -13,15 +13,3 @@ This will produce a debug build by default, which is available as  `./target/deb
 ## Onboarding
 
 Refer to the moss onboarding instructions [here](https://github.com/serpent-os/moss?tab=readme-ov-file#onboarding).
-
-## Concurrency test recipe
-
-Assuming you've followed the onboarding instructions above, you can attempt to run multiple boulder instances on a system at the same time:
-
-    for i in 1 2 3; do
-      rm -rf "build-$i"
-      mkdir -pv "build-$i" && \
-      pushd "build-$i" && \
-      boulder build ./boulder-concurrency-test.yaml -b"$i" > "build-$i".log 2>&1 &  
-      popd
-    done
