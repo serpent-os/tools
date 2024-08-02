@@ -165,6 +165,7 @@ const BASE_PACKAGES: &[&str] = &[
     "gawk",
     "glibc-devel",
     "grep",
+    "layout",
     "libarchive",
     "linux-headers",
     "pkgconf",
