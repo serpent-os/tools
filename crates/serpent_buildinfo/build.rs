@@ -42,6 +42,10 @@ fn command(prog: &str, args: &[&str], cwd: Option<std::path::PathBuf>) -> Result
 
 /// Checks to see if we're building from a git source and if so attempts to gather information about the git status
 fn get_git_info() -> Result<(), Box<dyn std::error::Error>> {
+    // These are cfgs that can be set by this script. We need to declare them always to ensure that clippy is happy
+    println!("cargo:rustc-check-cfg=cfg(BUILDINFO_IS_DIRTY)");
+    println!("cargo:rustc-check-cfg=cfg(BUILDINFO_IS_GIT_BUILD)");
+
     let pkg_dir = std::path::PathBuf::from(env("CARGO_MANIFEST_DIR")?);
     let git_dir = command("git", &["rev-parse", "--git-dir"], Some(pkg_dir.clone()));
     let git_dir = match git_dir {
