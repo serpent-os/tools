@@ -214,15 +214,15 @@ where
     E: std::error::Error + 'static,
 {
     // Ensure process is cleaned up if parent dies
-    set_pdeathsig(Signal::SIGKILL)?;
+    set_pdeathsig(Signal::SIGKILL).map_err(ContainerError::SetPDeathSig)?;
 
     // Wait for continue message
     let mut message = [0u8; 1];
-    read(sync.0, &mut message)?;
+    read(sync.0, &mut message).map_err(ContainerError::ReadContinueMsg)?;
     assert_eq!(message[0], Message::Continue as u8);
 
     // Close unused read end
-    close(sync.0)?;
+    close(sync.0).map_err(ContainerError::CloseReadFd)?;
 
     setup(container)?;
 
@@ -242,7 +242,7 @@ fn setup(container: &Container) -> Result<(), ContainerError> {
     }
 
     if let Some(hostname) = &container.hostname {
-        sethostname(hostname)?;
+        sethostname(hostname).map_err(ContainerError::SetHostname)?;
     }
 
     if let Some(dir) = &container.work_dir {
@@ -278,8 +278,8 @@ fn pivot(root: &Path, binds: &[Bind]) -> Result<(), ContainerError> {
         }
     }
 
-    enusure_directory(&old_root)?;
-    pivot_root(root, &old_root)?;
+    ensure_directory(&old_root)?;
+    pivot_root(root, &old_root).map_err(ContainerError::PivotRoot)?;
 
     set_current_dir("/")?;
 
@@ -298,14 +298,14 @@ fn pivot(root: &Path, binds: &[Bind]) -> Result<(), ContainerError> {
         MsFlags::MS_BIND | MsFlags::MS_REC | MsFlags::MS_SLAVE,
     )?;
 
-    umount2(OLD_PATH, MntFlags::MNT_DETACH)?;
+    umount2(OLD_PATH, MntFlags::MNT_DETACH).map_err(ContainerError::UnmountOldRoot)?;
     remove_dir(OLD_PATH)?;
 
     Ok(())
 }
 
 fn setup_root_user() -> Result<(), ContainerError> {
-    enusure_directory("/etc")?;
+    ensure_directory("/etc")?;
     fs::write("/etc/passwd", "root:x:0:0:root::/bin/bash")?;
     fs::write("/etc/group", "root:x:0:")?;
     umask(Mode::S_IWGRP | Mode::S_IWOTH);
@@ -313,13 +313,13 @@ fn setup_root_user() -> Result<(), ContainerError> {
 }
 
 fn setup_networking(root: &Path) -> Result<(), ContainerError> {
-    enusure_directory(root.join("etc"))?;
+    ensure_directory(root.join("etc"))?;
     copy("/etc/resolv.conf", root.join("etc/resolv.conf"))?;
     copy("/etc/protocols", root.join("etc/protocols"))?;
     Ok(())
 }
 
-fn enusure_directory(path: impl AsRef<Path>) -> Result<(), ContainerError> {
+fn ensure_directory(path: impl AsRef<Path>) -> Result<(), ContainerError> {
     let path = path.as_ref();
     if !path.exists() {
         create_dir_all(path)?;
@@ -333,14 +333,19 @@ fn add_mount<T: AsRef<Path>>(
     fs_type: Option<&str>,
     flags: MsFlags,
 ) -> Result<(), ContainerError> {
-    enusure_directory(&target)?;
+    let target = target.as_ref();
+    ensure_directory(target)?;
     mount(
         source.as_ref().map(AsRef::as_ref),
-        target.as_ref(),
+        target,
         fs_type,
         flags,
         Option::<&str>::None,
-    )?;
+    )
+    .map_err(|err| ContainerError::Mount {
+        target: target.to_owned(),
+        err,
+    })?;
     Ok(())
 }
 
@@ -430,9 +435,27 @@ enum ContainerError {
     #[error(transparent)]
     Run(#[from] Box<dyn std::error::Error>),
     #[error(transparent)]
-    Nix(#[from] nix::Error),
-    #[error(transparent)]
     Io(#[from] io::Error),
+
+    // Errors from linux system functions
+    #[error("set_pdeathsig")]
+    SetPDeathSig(#[source] nix::Error),
+    #[error("wait for continue message")]
+    ReadContinueMsg(#[source] nix::Error),
+    #[error("close read end of pipe")]
+    CloseReadFd(#[source] nix::Error),
+    #[error("sethostname")]
+    SetHostname(#[source] nix::Error),
+    #[error("pivotroot")]
+    PivotRoot(#[source] nix::Error),
+    #[error("unmount old root")]
+    UnmountOldRoot(#[source] nix::Error),
+    #[error("mount {}", target.display())]
+    Mount {
+        target: PathBuf,
+        #[source]
+        err: nix::Error,
+    },
 }
 
 #[repr(u8)]
