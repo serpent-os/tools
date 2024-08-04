@@ -278,7 +278,7 @@ fn pivot(root: &Path, binds: &[Bind]) -> Result<(), ContainerError> {
         }
     }
 
-    enusure_directory(&old_root)?;
+    ensure_directory(&old_root)?;
     pivot_root(root, &old_root).map_err(ContainerError::PivotRoot)?;
 
     set_current_dir("/")?;
@@ -305,7 +305,7 @@ fn pivot(root: &Path, binds: &[Bind]) -> Result<(), ContainerError> {
 }
 
 fn setup_root_user() -> Result<(), ContainerError> {
-    enusure_directory("/etc")?;
+    ensure_directory("/etc")?;
     fs::write("/etc/passwd", "root:x:0:0:root::/bin/bash")?;
     fs::write("/etc/group", "root:x:0:")?;
     umask(Mode::S_IWGRP | Mode::S_IWOTH);
@@ -313,13 +313,13 @@ fn setup_root_user() -> Result<(), ContainerError> {
 }
 
 fn setup_networking(root: &Path) -> Result<(), ContainerError> {
-    enusure_directory(root.join("etc"))?;
+    ensure_directory(root.join("etc"))?;
     copy("/etc/resolv.conf", root.join("etc/resolv.conf"))?;
     copy("/etc/protocols", root.join("etc/protocols"))?;
     Ok(())
 }
 
-fn enusure_directory(path: impl AsRef<Path>) -> Result<(), ContainerError> {
+fn ensure_directory(path: impl AsRef<Path>) -> Result<(), ContainerError> {
     let path = path.as_ref();
     if !path.exists() {
         create_dir_all(path)?;
@@ -334,7 +334,7 @@ fn add_mount<T: AsRef<Path>>(
     flags: MsFlags,
 ) -> Result<(), ContainerError> {
     let target = target.as_ref();
-    enusure_directory(target)?;
+    ensure_directory(target)?;
     mount(
         source.as_ref().map(AsRef::as_ref),
         target,
