@@ -11,7 +11,6 @@ use std::{
 
 use clap::{arg, ArgMatches, Command};
 use moss::package::{self, MissingMetaFieldError};
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use stone::{payload::layout, read::PayloadKind};
 use thiserror::{self, Error};
 use tui::{ProgressBar, ProgressStyle};
@@ -73,7 +72,7 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
 
             // Extract all indices from the `.stoneContent` into hash-indexed unique files
             payloads
-                .par_iter()
+                .iter()
                 .filter_map(PayloadKind::index)
                 .flat_map(|p| &p.body)
                 .map(|idx| {
