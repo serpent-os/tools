@@ -47,6 +47,7 @@ definitions:
     - strip          : "%(compiler_strip)"
     - path           : "%(compiler_path)"
     - ccachedir      : "%(compiler_cache)"
+    - sccachedir     : "%(scompiler_cache)"
     - pkgconfigpath  : "%(libdir)/pkgconfig:/usr/share/pkgconfig"
 
 actions              :
@@ -85,6 +86,10 @@ actions              :
             PATH="%(path)"; export PATH
             CCACHE_DIR="%(ccachedir)"; export CCACHE_DIR;
             test -z "$CCACHE_DIR" && unset CCACHE_DIR;
+            RUSTC_WRAPPER="%(rustc_wrapper)"; export RUSTC_WRAPPER;
+            test -z "$RUSTC_WRAPPER" && unset RUSTC_WRAPPER;
+            SCCACHE_DIR="%(sccachedir)"; export SCCACHE_DIR;
+            test -z "$SCCACHE_DIR" && unset SCCACHE_DIR;
             LANG="en_US.UTF-8"; export LANG
             LC_ALL="en_US.UTF-8"; export LC_ALL
             test -d "%(workdir)" || (echo "The work directory %(workdir) does not exist"; exit 1)

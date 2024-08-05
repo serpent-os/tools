@@ -104,7 +104,7 @@ fn packages(builder: &Builder) -> Vec<&str> {
     }
 
     if builder.ccache {
-        packages.push(CCACHE_PACKAGE);
+        packages.extend(CCACHE_PACKAGES);
     }
 
     packages.extend(builder.recipe.parsed.build.build_deps.iter().map(String::as_str));
@@ -185,7 +185,7 @@ const GNU32_PACKAGES: &[&str] = &["gcc-32bit-devel"];
 const LLVM_PACKAGES: &[&str] = &["clang"];
 const LLVM32_PACKAGES: &[&str] = &["clang-32bit", "libcxx-32bit-devel"];
 
-const CCACHE_PACKAGE: &str = "binary(ccache)";
+const CCACHE_PACKAGES: &[&str] = &["binary(ccache)", "binary(sccache)"];
 
 #[derive(Debug, Error)]
 pub enum Error {

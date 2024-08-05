@@ -50,6 +50,7 @@ impl Paths {
         util::ensure_dir_exists(&job.artefacts().host)?;
         util::ensure_dir_exists(&job.build().host)?;
         util::ensure_dir_exists(&job.ccache().host)?;
+        util::ensure_dir_exists(&job.sccache().host)?;
         util::ensure_dir_exists(&job.upstreams().host)?;
 
         Ok(job)
@@ -80,6 +81,13 @@ impl Paths {
         Mapping {
             host: self.host_root.join("ccache"),
             guest: self.guest_root.join("ccache"),
+        }
+    }
+
+    pub fn sccache(&self) -> Mapping {
+        Mapping {
+            host: self.host_root.join("sccache"),
+            guest: self.guest_root.join("sccache"),
         }
     }
 
