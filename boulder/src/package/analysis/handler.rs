@@ -23,7 +23,9 @@ pub fn ignore_blocked(_bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Re
     }
 
     // libtool files break the world
-    if info.file_name().ends_with(".la") && info.target_path.starts_with("/usr/lib") {
+    if info.file_name().ends_with(".la")
+        && (info.target_path.starts_with("/usr/lib") || info.target_path.starts_with("/usr/lib32"))
+    {
         return Ok(Decision::IgnoreFile {
             reason: "libtool file".into(),
         }
