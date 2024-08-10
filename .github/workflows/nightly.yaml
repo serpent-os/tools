@@ -34,8 +34,6 @@ jobs:
         path: |
           ~/.cargo/registry/index/
           ~/.cargo/registry/cache/
-          target/
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
     - name: Build project
       run: |
