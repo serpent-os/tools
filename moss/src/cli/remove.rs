@@ -58,7 +58,7 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
     // TODO: Add error hookups
     if !not_installed.is_empty() {
         println!("Missing packages in lookup: {:?}", not_installed);
-        return Err(Error::NotImplemented);
+        return Err(Error::NoSuchPackage);
     }
 
     // Add all installed packages to transaction
@@ -138,8 +138,8 @@ pub enum Error {
     #[error("cancelled")]
     Cancelled,
 
-    #[error("Not yet implemented")]
-    NotImplemented,
+    #[error("no such package")]
+    NoSuchPackage,
 
     #[error("client")]
     Client(#[from] client::Error),
