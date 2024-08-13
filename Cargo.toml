@@ -53,6 +53,7 @@ tokio-util = { version = "0.7.11", features = ["io"] }
 url = { version = "2.5.2", features = ["serde"] }
 xxhash-rust = { version = "0.8.11", features = ["xxh3"] }
 zstd = { version = "0.13.2", features = ["zstdmt"] }
+mailparse = "0.15.0"
 
 [profile.release]
 lto = "thin"

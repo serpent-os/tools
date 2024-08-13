@@ -4,6 +4,8 @@ use moss::{dependency, Dependency, Provider};
 
 use crate::package::collect::PathInfo;
 
+use mailparse::{parse_mail, MailHeaderMap};
+
 pub use self::elf::elf;
 use super::{BoxError, BucketMut, Decision, Response};
 
@@ -111,6 +113,30 @@ pub fn pkg_config(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Respons
             name: dep.to_string(),
         });
     }
+
+    Ok(Decision::NextHandler.into())
+}
+
+pub fn python(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Response, BoxError> {
+    let file_path = info.path.clone().into_os_string().into_string().unwrap_or_default();
+    let is_dist_info = file_path.contains(".dist-info") && info.file_name().ends_with("METADATA");
+    let is_egg_info = file_path.contains(".egg-info") && info.file_name().ends_with("PKG-INFO");
+
+    if !(is_dist_info || is_egg_info) {
+        return Ok(Decision::NextHandler.into());
+    }
+
+    let data = std::fs::read(&info.path)?;
+    let mail = parse_mail(&data)?;
+    let python_name = mail
+        .get_headers()
+        .get_first_value("Name")
+        .unwrap_or_else(|| panic!("Failed to parse {}", info.file_name()));
+
+    bucket.providers.insert(Provider {
+        kind: dependency::Kind::Python,
+        name: python_name.to_string(),
+    });
 
     Ok(Decision::NextHandler.into())
 }
