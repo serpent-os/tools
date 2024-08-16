@@ -68,23 +68,24 @@ pub async fn fetch(
     let url = meta.uri.as_ref().ok_or(Error::MissingUri)?.parse::<Url>()?;
     let hash = meta.hash.as_ref().ok_or(Error::MissingHash)?;
 
-    let download_path = download_path(installation, hash)?;
+    let destination_path = download_path(installation, hash)?;
+    let partial_path = destination_path.with_extension("part");
 
-    if let Some(parent) = download_path.parent() {
+    if let Some(parent) = destination_path.parent() {
         fs::create_dir_all(parent).await?;
     }
 
-    if fs::try_exists(&download_path).await? {
+    if fs::try_exists(&destination_path).await? {
         return Ok(Download {
             id: meta.id().into(),
-            path: download_path,
+            path: destination_path,
             installation: installation.clone(),
             was_cached: true,
         });
     }
 
     let mut bytes = request::get(url).await?;
-    let mut out = File::create(&download_path).await?;
+    let mut out = File::create(&partial_path).await?;
 
     let mut total = 0;
 
@@ -103,9 +104,11 @@ pub async fn fetch(
 
     out.flush().await?;
 
+    fs::rename(partial_path, &destination_path).await?;
+
     Ok(Download {
         id: meta.id().into(),
-        path: download_path,
+        path: destination_path,
         installation: installation.clone(),
         was_cached: false,
     })
