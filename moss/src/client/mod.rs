@@ -38,9 +38,9 @@ use self::verify::verify;
 use crate::{
     db, environment, installation, package,
     registry::plugin::{self, Plugin},
-    repository, runtime,
+    repository, runtime, signal,
     state::{self, Selection},
-    Installation, Package, Registry, State,
+    Installation, Package, Registry, Signal, State,
 };
 
 pub mod boot;
@@ -277,6 +277,8 @@ impl Client {
     ///
     /// Returns `None` if the client is ephemeral
     pub fn new_state(&self, selections: &[Selection], summary: impl ToString) -> Result<Option<State>, Error> {
+        let _guard = signal::ignore([Signal::SIGINT])?;
+
         let old_state = self.installation.active_state;
 
         let fstree = self.blit_root(selections.iter().map(|s| &s.package))?;
@@ -948,4 +950,6 @@ pub enum Error {
     /// The operation was explicitly cancelled at the user's request
     #[error("cancelled")]
     Cancelled,
+    #[error("ignore signals during blit")]
+    BlitSignalIgnore(#[from] signal::Error),
 }

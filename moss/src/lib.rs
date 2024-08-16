@@ -8,6 +8,7 @@ pub use self::installation::Installation;
 pub use self::package::Package;
 pub use self::registry::Registry;
 pub use self::repository::Repository;
+pub use self::signal::Signal;
 pub use self::state::State;
 
 pub mod client;
@@ -20,4 +21,5 @@ pub mod registry;
 pub mod repository;
 pub mod request;
 pub mod runtime;
+pub mod signal;
 pub mod state;
