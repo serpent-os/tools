@@ -240,10 +240,16 @@ fn remove_orphaned_files(
         let Some(file) = compute_path(hash.clone()) else {
             return Ok(());
         };
+        let partial = file.with_extension("part");
 
         // Remove if it exists
         if file.exists() {
             fs::remove_file(&file)?;
+        }
+
+        // Remove partial file if it exists
+        if partial.exists() {
+            fs::remove_file(&partial)?;
         }
 
         // Try to remove leading parent dirs if they're
