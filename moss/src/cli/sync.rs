@@ -166,6 +166,8 @@ fn resolve_with_sync(client: &Client, upgrade_only: bool, packages: &[Package]) 
     let with_sync = packages
         .iter()
         .map(|p| {
+            let is_explicit = p.flags.explicit;
+
             // Get first available = use highest priority
             if let Some(lookup) = client
                 .registry
@@ -178,18 +180,14 @@ fn resolve_with_sync(client: &Client, upgrade_only: bool, packages: &[Package]) 
                     true
                 };
 
-                let is_explicit = p.flags.explicit;
-
                 if !all_ids.contains(&lookup.id) && upgrade_check {
-                    Ok((lookup.id, is_explicit, true))
-                } else {
-                    Ok((p.id.clone(), is_explicit, false))
+                    return (lookup.id, is_explicit, true);
                 }
-            } else {
-                Err(Error::NameNotFound(p.meta.name.clone()))
             }
+
+            (p.id.clone(), is_explicit, false)
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Vec<_>>();
 
     // Packages that are explicitly installed
     let explicit = with_sync
@@ -217,9 +215,6 @@ fn resolve_with_sync(client: &Client, upgrade_only: bool, packages: &[Package]) 
 pub enum Error {
     #[error("cancelled")]
     Cancelled,
-
-    #[error("unknown package name")]
-    NameNotFound(package::Name),
 
     #[error("no installation")]
     NoInstall,
