@@ -2,6 +2,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+// [`Pattern`] has Regex inside which has interior mutability,
+// but we don't Ord or Hash off that field
+#![allow(clippy::mutable_key_type)]
+
 use std::collections::BTreeMap;
 
 use fnmatch::Pattern;
