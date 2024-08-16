@@ -15,7 +15,7 @@ use vfs::tree::BlitFile;
 
 use crate::{
     client::{self, cache},
-    package, runtime, state, Client,
+    package, runtime, signal, state, Client, Signal,
 };
 
 pub fn verify(client: &Client, yes: bool, verbose: bool) -> Result<(), client::Error> {
@@ -223,6 +223,8 @@ pub fn verify(client: &Client, yes: bool, verbose: bool) -> Result<(), client::E
         .collect::<BTreeSet<_>>();
 
     println!("Reblitting affected states");
+
+    let _guard = signal::ignore([Signal::SIGINT])?;
 
     // Reblit each state
     for id in issue_states {
