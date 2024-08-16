@@ -84,7 +84,7 @@ pub fn sync(recipe: &Recipe, paths: &Paths) -> Result<(), Error> {
 
                 pb.finish();
                 mp.remove(&pb);
-                mp.println(format!("{} {}{}", "Shared".green(), upstream.name().bold(), cached_tag,))?;
+                mp.suspend(|| format!("{} {}{}", "Shared".green(), upstream.name().bold(), cached_tag,));
                 tp.inc(1);
 
                 Ok(()) as Result<_, Error>

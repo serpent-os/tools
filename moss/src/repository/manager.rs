@@ -154,7 +154,7 @@ impl Manager {
 
                 self.refresh(id).await?;
 
-                pb.println(format!("{} {}", "Refreshed".green(), *id));
+                pb.suspend(|| println!("{} {}", "Refreshed".green(), *id));
 
                 Ok(())
             })
@@ -207,7 +207,7 @@ impl Manager {
 
                 self.refresh(id).await?;
 
-                pb.println(format!("{} {}", "Refreshed".green(), *id));
+                pb.suspend(|| println!("{} {}", "Refreshed".green(), *id));
 
                 Ok(()) as Result<_, Error>
             })

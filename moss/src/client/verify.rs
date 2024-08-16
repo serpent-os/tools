@@ -64,7 +64,7 @@ pub fn verify(client: &Client, yes: bool, verbose: bool) -> Result<(), client::E
         if !path.exists() {
             pb.inc(1);
             if verbose {
-                pb.println(format!(" {} {display_hash} - {files:?}", "×".yellow()));
+                pb.suspend(|| println!(" {} {display_hash} - {files:?}", "×".yellow()));
             }
             issues.push(Issue::MissingAsset {
                 hash: display_hash,
@@ -88,7 +88,7 @@ pub fn verify(client: &Client, yes: bool, verbose: bool) -> Result<(), client::E
         if verified_hash != hash {
             pb.inc(1);
             if verbose {
-                pb.println(format!(" {} {display_hash} - {files:?}", "×".yellow()));
+                pb.suspend(|| println!(" {} {display_hash} - {files:?}", "×".yellow()));
             }
             issues.push(Issue::CorruptAsset {
                 hash: display_hash,
@@ -100,7 +100,7 @@ pub fn verify(client: &Client, yes: bool, verbose: bool) -> Result<(), client::E
 
         pb.inc(1);
         if verbose {
-            pb.println(format!(" {} {display_hash} - {files:?}", "»".green()));
+            pb.suspend(|| println!(" {} {display_hash} - {files:?}", "»".green()));
         }
     }
 
@@ -152,7 +152,7 @@ pub fn verify(client: &Client, yes: bool, verbose: bool) -> Result<(), client::E
         pb.inc(1);
         if verbose {
             let mark = if num_issues > 0 { "×".yellow() } else { "»".green() };
-            pb.println(format!(" {mark} state #{}", state.id));
+            pb.suspend(|| println!(" {mark} state #{}", state.id));
         }
     }
 

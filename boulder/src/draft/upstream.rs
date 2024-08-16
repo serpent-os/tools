@@ -50,7 +50,7 @@ pub fn fetch_and_extract(upstreams: &[Url], extract_root: &Path) -> Result<Vec<U
 
                 fs::remove_file(archive_path).await?;
 
-                pb.println(format!("{} {}", "Fetched".green(), *uri));
+                pb.suspend(|| format!("{} {}", "Fetched".green(), *uri));
 
                 Ok(Upstream { uri: uri.clone(), hash })
             })

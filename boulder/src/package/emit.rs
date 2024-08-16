@@ -218,7 +218,7 @@ fn emit_package(paths: &Paths, package: &Package) -> Result<(), Error> {
         out_file.flush()?;
     }
 
-    pb.println(format!("{} {filename}", "Emitted".green()));
+    pb.suspend(|| println!("{} {filename}", "Emitted".green()));
     pb.finish_and_clear();
 
     Ok(())
