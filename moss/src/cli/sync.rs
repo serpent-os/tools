@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
@@ -65,16 +64,8 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
         return Err(Error::NoInstall);
     }
 
-    // Resolve the finalized state w/ 2 passes.
-    //
-    // 1. Resolve a new state based on all explicit packages with sync applied
-    // 2. Resolve a new state based on `1`, this ensures applicable transitive
-    //    sync is applied
-    //
-    // By resolving only explicit first, this ensures any "orphaned" transitive deps
-    // are naturally dropped from the final state.
-    let first_pass = resolve_with_sync(&client, Resolution::Explicit, upgrade_only, &installed)?;
-    let finalized = resolve_with_sync(&client, Resolution::All, upgrade_only, &first_pass)?;
+    // Resolve the final state of packages after considering sync updates
+    let finalized = resolve_with_sync(&client, upgrade_only, &installed)?;
 
     // Synced are packages are:
     //
@@ -165,29 +156,15 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
     Ok(())
 }
 
-enum Resolution {
-    Explicit,
-    All,
-}
-
-/// Return a fully resolved package set w/ sync'd changes swapped in
-/// using the provided `packages` at the requested [`Resolution`]
-fn resolve_with_sync(
-    client: &Client,
-    resolution: Resolution,
-    upgrade_only: bool,
-    packages: &[Package],
-) -> Result<Vec<Package>, Error> {
+/// Returns the resolved package set w/ sync'd changes swapped in using
+/// the provided `packages`
+fn resolve_with_sync(client: &Client, upgrade_only: bool, packages: &[Package]) -> Result<Vec<Package>, Error> {
     let all_ids = packages.iter().map(|p| &p.id).collect::<BTreeSet<_>>();
 
     // For each package, replace it w/ it's sync'd change (if available)
     // or return the original package
     let with_sync = packages
         .iter()
-        .filter(|p| match resolution {
-            Resolution::Explicit => p.flags.explicit,
-            Resolution::All => true,
-        })
         .map(|p| {
             // Get first available = use highest priority
             if let Some(lookup) = client
@@ -201,10 +178,12 @@ fn resolve_with_sync(
                     true
                 };
 
+                let is_explicit = p.flags.explicit;
+
                 if !all_ids.contains(&lookup.id) && upgrade_check {
-                    Ok(Cow::Owned(lookup))
+                    Ok((lookup.id, is_explicit, true))
                 } else {
-                    Ok(Cow::Borrowed(p))
+                    Ok((p.id.clone(), is_explicit, false))
                 }
             } else {
                 Err(Error::NameNotFound(p.meta.name.clone()))
@@ -212,9 +191,23 @@ fn resolve_with_sync(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
+    // Packages that are explicitly installed
+    let explicit = with_sync
+        .iter()
+        .filter_map(|(id, is_explicit, _)| is_explicit.then_some(id.clone()))
+        .collect::<Vec<_>>();
+    // Packages that have an update
+    let updated = with_sync
+        .iter()
+        .filter_map(|(id, _, is_updated)| is_updated.then_some(id.clone()));
+
     // Build a new tx from this sync'd package set
     let mut tx = client.registry.transaction()?;
-    tx.add(with_sync.iter().map(|p| p.id.clone()).collect())?;
+    // Pin all updated packages so dependency resolution
+    // picks these versions
+    tx.pin_providers(updated);
+    // Add all explicit packages to build the final tx state
+    tx.add(explicit)?;
 
     // Resolve the tx
     Ok(client.resolve_packages(tx.finalize())?)

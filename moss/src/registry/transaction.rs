@@ -14,6 +14,10 @@ enum ProviderFilter {
     /// Filter the lookup to current selection scope
     Selections(Provider),
 
+    /// Use a pinned package if one exists
+    /// for this provider
+    Pinned(Provider),
+
     // Look beyond installed/selections
     All(Provider),
 }
@@ -31,6 +35,11 @@ pub struct Transaction<'a> {
 
     // unique set of package ids
     packages: Dag<package::Id>,
+
+    /// packages which are always considered first
+    /// during [`ProviderFilter::Pinned`] but
+    /// aren't part of `packages` DAG
+    pinned_providers: Vec<package::Id>,
 }
 
 /// Construct a new Transaction wrapped around the underlying Registry
@@ -40,6 +49,7 @@ pub(super) fn new(registry: &Registry) -> Result<Transaction<'_>, Error> {
     Ok(Transaction {
         registry,
         packages: Dag::default(),
+        pinned_providers: vec![],
     })
 }
 
@@ -54,6 +64,11 @@ impl<'a> Transaction<'a> {
     /// Add a package to this transaction
     pub fn add(&mut self, incoming: Vec<package::Id>) -> Result<(), Error> {
         self.update(incoming, Lookup::Global)
+    }
+
+    /// Pins to the provided packages if a provider lookup matches one of these
+    pub fn pin_providers(&mut self, packages: impl IntoIterator<Item = package::Id>) {
+        self.pinned_providers.extend(packages);
     }
 
     /// Remove a set of packages and their reverse dependencies
@@ -142,12 +157,18 @@ impl<'a> Transaction<'a> {
                 .by_provider_id_only(&provider, package::Flags::default())
                 .find(|id| self.packages.node_exists(id))
                 .ok_or(Error::NoCandidate(provider.to_string())),
+            ProviderFilter::Pinned(provider) => self
+                .registry
+                .by_provider_id_only(&provider, package::Flags::default())
+                .find(|id| self.pinned_providers.contains(id))
+                .ok_or(Error::NoCandidate(provider.to_string())),
         }
     }
 
     // Try all strategies to resolve a provider for installation
     fn resolve_installation_provider(&self, provider: Provider) -> Result<package::Id, Error> {
-        self.resolve_provider(ProviderFilter::Selections(provider.clone()))
+        self.resolve_provider(ProviderFilter::Pinned(provider.clone()))
+            .or_else(|_| self.resolve_provider(ProviderFilter::Selections(provider.clone())))
             .or_else(|_| self.resolve_provider(ProviderFilter::InstalledOnly(provider.clone())))
             .or_else(|_| self.resolve_provider(ProviderFilter::All(provider)))
     }
