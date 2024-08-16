@@ -92,17 +92,19 @@ impl<'a> Chain<'a> {
                 match response.decision {
                     Decision::NextHandler => continue 'handlers,
                     Decision::IgnoreFile { reason } => {
-                        pb.println(format!(
-                            "│A{} {} {}",
-                            "│ ×".yellow(),
-                            format!("{}", path.target_path.display()).dim(),
-                            format!("({reason})").yellow()
-                        ));
+                        pb.suspend(|| {
+                            println!(
+                                "│A{} {} {}",
+                                "│ ×".yellow(),
+                                format!("{}", path.target_path.display()).dim(),
+                                format!("({reason})").yellow()
+                            )
+                        });
                         pb.inc(1);
                         continue 'paths;
                     }
                     Decision::IncludeFile => {
-                        pb.println(format!("│A{} {}", "│ »".green(), path.target_path.display()));
+                        pb.suspend(|| println!("│A{} {}", "│ »".green(), path.target_path.display()));
                         pb.inc(1);
                         bucket.paths.push(path);
                         continue 'paths;

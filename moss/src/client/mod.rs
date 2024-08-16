@@ -536,12 +536,8 @@ impl Client {
                     .unwrap_or_default();
 
                 // Write installed line
-                multi_progress.println(format!(
-                    "{} {}{}",
-                    "Installed".green(),
-                    package_name.clone().bold(),
-                    cached_tag,
-                ))?;
+                multi_progress
+                    .suspend(|| println!("{} {}{}", "Installed".green(), package_name.clone().bold(), cached_tag,));
 
                 // Inc total progress by 1
                 total_progress.inc(1);

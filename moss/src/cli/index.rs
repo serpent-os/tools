@@ -142,7 +142,7 @@ fn get_meta(
 
     progress.finish();
     multi_progress.remove(&progress);
-    multi_progress.println(format!("{} {}", "Indexed".green(), relative_path.bold()))?;
+    multi_progress.suspend(|| println!("{} {}", "Indexed".green(), relative_path.bold()));
     total_progress.inc(1);
 
     Ok(meta)
