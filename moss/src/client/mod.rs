@@ -453,105 +453,105 @@ impl Client {
         let unpacking_in_progress = cache::UnpackingInProgress::default();
 
         // Download and unpack each package
-        stream::iter(packages.iter().map(|package| async {
-            let package: &Package = package.borrow();
+        stream::iter(packages)
+            .map(Ok)
+            // Use max network concurrency since we download files here
+            .try_for_each_concurrent(environment::MAX_NETWORK_CONCURRENCY, |package| async {
+                let package: &Package = package.borrow();
 
-            // Setup the progress bar and set as downloading
-            let progress_bar = multi_progress.insert_before(
-                &total_progress,
-                ProgressBar::new(package.meta.download_size.unwrap_or_default())
-                    .with_message(format!(
-                        "{} {}",
-                        "Downloading".blue(),
-                        package.meta.name.to_string().bold(),
-                    ))
-                    .with_style(
-                        ProgressStyle::with_template(
-                            " {spinner} |{percent:>3}%| {wide_msg} {binary_bytes_per_sec:>.dim} ",
-                        )
-                        .unwrap()
-                        .tick_chars("--=≡■≡=--"),
-                    ),
-            );
-            progress_bar.enable_steady_tick(Duration::from_millis(150));
+                // Setup the progress bar and set as downloading
+                let progress_bar = multi_progress.insert_before(
+                    &total_progress,
+                    ProgressBar::new(package.meta.download_size.unwrap_or_default())
+                        .with_message(format!(
+                            "{} {}",
+                            "Downloading".blue(),
+                            package.meta.name.to_string().bold(),
+                        ))
+                        .with_style(
+                            ProgressStyle::with_template(
+                                " {spinner} |{percent:>3}%| {wide_msg} {binary_bytes_per_sec:>.dim} ",
+                            )
+                            .unwrap()
+                            .tick_chars("--=≡■≡=--"),
+                        ),
+                );
+                progress_bar.enable_steady_tick(Duration::from_millis(150));
 
-            // Download and update progress
-            let download = cache::fetch(&package.meta, &self.installation, |progress| {
-                progress_bar.inc(progress.delta);
+                // Download and update progress
+                let download = cache::fetch(&package.meta, &self.installation, |progress| {
+                    progress_bar.inc(progress.delta);
+                })
+                .await?;
+                let is_cached = download.was_cached;
+
+                // Move rest of blocking code to threadpool
+
+                let multi_progress = multi_progress.clone();
+                let total_progress = total_progress.clone();
+                let unpacking_in_progress = unpacking_in_progress.clone();
+                let layout_db = self.layout_db.clone();
+                let install_db = self.install_db.clone();
+                let package = (*package).clone();
+
+                runtime::unblock(move || {
+                    let package_name = package.meta.name.to_string();
+
+                    // Set progress to unpacking
+                    progress_bar.set_message(format!("{} {}", "Unpacking".yellow(), package_name.clone().bold(),));
+                    progress_bar.set_length(1000);
+                    progress_bar.set_position(0);
+
+                    // Unpack and update progress
+                    let unpacked = download.unpack(unpacking_in_progress.clone(), {
+                        let progress_bar = progress_bar.clone();
+
+                        move |progress| {
+                            progress_bar.set_position((progress.pct() * 1000.0) as u64);
+                        }
+                    })?;
+
+                    // Merge layoutdb
+                    progress_bar.set_message(format!("{} {}", "Store layout".white(), package_name.clone().bold()));
+                    // Remove old layout entries for package
+                    layout_db.remove(&package.id)?;
+                    // Add new entries in batches of 1k
+                    for chunk in progress_bar.wrap_iter(
+                        unpacked
+                            .payloads
+                            .iter()
+                            .find_map(PayloadKind::layout)
+                            .map(|p| p.body.as_slice())
+                            .unwrap_or_default()
+                            .chunks(environment::DB_BATCH_SIZE),
+                    ) {
+                        let entries = chunk.iter().map(|i| (package.id.clone(), i.clone())).collect_vec();
+                        layout_db.batch_add(entries)?;
+                    }
+
+                    // Consume the package in the metadb
+                    install_db.add(package.id.clone(), package.meta.clone())?;
+
+                    // Remove this progress bar
+                    progress_bar.finish();
+                    multi_progress.remove(&progress_bar);
+
+                    let cached_tag = is_cached
+                        .then_some(format!("{}", " (cached)".dim()))
+                        .unwrap_or_default();
+
+                    // Write installed line
+                    multi_progress
+                        .suspend(|| println!("{} {}{}", "Installed".green(), package_name.clone().bold(), cached_tag,));
+
+                    // Inc total progress by 1
+                    total_progress.inc(1);
+
+                    Ok(()) as Result<(), Error>
+                })
+                .await
             })
             .await?;
-            let is_cached = download.was_cached;
-
-            // Move rest of blocking code to threadpool
-
-            let multi_progress = multi_progress.clone();
-            let total_progress = total_progress.clone();
-            let unpacking_in_progress = unpacking_in_progress.clone();
-            let layout_db = self.layout_db.clone();
-            let install_db = self.install_db.clone();
-            let package = (*package).clone();
-
-            runtime::unblock(move || {
-                let package_name = package.meta.name.to_string();
-
-                // Set progress to unpacking
-                progress_bar.set_message(format!("{} {}", "Unpacking".yellow(), package_name.clone().bold(),));
-                progress_bar.set_length(1000);
-                progress_bar.set_position(0);
-
-                // Unpack and update progress
-                let unpacked = download.unpack(unpacking_in_progress.clone(), {
-                    let progress_bar = progress_bar.clone();
-
-                    move |progress| {
-                        progress_bar.set_position((progress.pct() * 1000.0) as u64);
-                    }
-                })?;
-
-                // Merge layoutdb
-                progress_bar.set_message(format!("{} {}", "Store layout".white(), package_name.clone().bold()));
-                // Remove old layout entries for package
-                layout_db.remove(&package.id)?;
-                // Add new entries in batches of 1k
-                for chunk in progress_bar.wrap_iter(
-                    unpacked
-                        .payloads
-                        .iter()
-                        .find_map(PayloadKind::layout)
-                        .map(|p| p.body.as_slice())
-                        .unwrap_or_default()
-                        .chunks(environment::DB_BATCH_SIZE),
-                ) {
-                    let entries = chunk.iter().map(|i| (package.id.clone(), i.clone())).collect_vec();
-                    layout_db.batch_add(entries)?;
-                }
-
-                // Consume the package in the metadb
-                install_db.add(package.id.clone(), package.meta.clone())?;
-
-                // Remove this progress bar
-                progress_bar.finish();
-                multi_progress.remove(&progress_bar);
-
-                let cached_tag = is_cached
-                    .then_some(format!("{}", " (cached)".dim()))
-                    .unwrap_or_default();
-
-                // Write installed line
-                multi_progress
-                    .suspend(|| println!("{} {}{}", "Installed".green(), package_name.clone().bold(), cached_tag,));
-
-                // Inc total progress by 1
-                total_progress.inc(1);
-
-                Ok(()) as Result<(), Error>
-            })
-            .await
-        }))
-        // Use max network concurrency since we download files here
-        .buffer_unordered(environment::MAX_NETWORK_CONCURRENCY)
-        .try_collect()
-        .await?;
 
         // Remove progress
         multi_progress.clear()?;

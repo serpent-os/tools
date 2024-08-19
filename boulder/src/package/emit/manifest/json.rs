@@ -74,7 +74,7 @@ pub fn write(
     )?;
 
     let mut serializer =
-        serde_json::Serializer::with_formatter(&mut file, serde_json::ser::PrettyFormatter::with_indent(&[b'\t']));
+        serde_json::Serializer::with_formatter(&mut file, serde_json::ser::PrettyFormatter::with_indent(b"\t"));
     content.serialize(&mut serializer)?;
 
     writeln!(&mut file)?;
