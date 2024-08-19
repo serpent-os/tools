@@ -217,13 +217,22 @@ impl Plain {
     }
 
     fn path(&self, paths: &Paths) -> PathBuf {
-        // Type safe guaranteed to be >= 5 bytes
-        let hash = &self.hash.0;
+        // Hash uri and file hash together
+        // for a unique file path that can
+        // be used for caching purposes and
+        // is busted if either uri or hash
+        // change
+        let mut hasher = Sha256::new();
+        hasher.update(self.uri.as_str());
+        hasher.update(&self.hash.0);
+
+        let hash = hex::encode(hasher.finalize());
 
         paths
             .upstreams()
             .host
             .join("fetched")
+            // Type safe guaranteed to be >= 5 bytes
             .join(&hash[..5])
             .join(&hash[hash.len() - 5..])
             .join(hash)
