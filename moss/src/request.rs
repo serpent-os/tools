@@ -22,6 +22,7 @@ static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 fn get_client() -> &'static reqwest::Client {
     CLIENT.get_or_init(|| {
         reqwest::ClientBuilder::new()
+            .referer(false)
             .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
             .build()
             .expect("build reqwest client")
