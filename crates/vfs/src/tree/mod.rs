@@ -39,10 +39,38 @@ pub trait BlitFile: Clone + Sized + Debug + From<String> {
     fn cloned_to(&self, path: String) -> Self;
 }
 
+#[derive(Debug, Clone)]
+struct File<T> {
+    // Cache these to avoid reallocation
+    id: String,
+    path: String,
+    file_name: Option<String>,
+    parent: Option<String>,
+    kind: Kind,
+    inner: T,
+}
+
+impl<T: BlitFile> File<T> {
+    pub fn new(inner: T) -> Self {
+        let path = inner.path();
+        let file_name = path::file_name(&path).map(String::from);
+        let parent = path::parent(&path).map(String::from);
+
+        Self {
+            id: inner.id(),
+            path,
+            file_name,
+            parent,
+            kind: inner.kind(),
+            inner,
+        }
+    }
+}
+
 /// Actual tree implementation, encapsulating indextree
 #[derive(Debug)]
 pub struct Tree<T: BlitFile> {
-    arena: Arena<T>,
+    arena: Arena<File<T>>,
     map: BTreeMap<String, NodeId>,
     length: u64,
 }
@@ -68,8 +96,8 @@ impl<T: BlitFile> Tree<T> {
     }
 
     /// Generate a new node, store the path mapping for it
-    fn new_node(&mut self, data: T) -> NodeId {
-        let path = data.path();
+    fn new_node(&mut self, data: File<T>) -> NodeId {
+        let path = data.path.clone();
         let node = self.arena.new_node(data);
         self.map.insert(path, node);
         self.length += 1;
@@ -89,7 +117,7 @@ impl<T: BlitFile> Tree<T> {
                 .children(&self.arena)
                 .filter_map(|n| self.arena.get(n))
                 .filter_map(|n| {
-                    if path::file_name(&n.get().path()) == path::file_name(&node.get().path()) {
+                    if n.get().file_name == node.get().file_name {
                         Some(n.get())
                     } else {
                         None
@@ -107,7 +135,11 @@ impl<T: BlitFile> Tree<T> {
                 // Report duplicate and skip for now
                 eprintln!(
                     "error: {}",
-                    Error::Duplicate(node.get().path(), node.get().id(), others.first().unwrap().id())
+                    Error::Duplicate(
+                        node.get().path.clone(),
+                        node.get().id.clone(),
+                        others.first().unwrap().id.clone()
+                    )
                 );
 
                 Ok(())
@@ -139,8 +171,8 @@ impl<T: BlitFile> Tree<T> {
 
             for i in mutations {
                 let original = self.arena.get(i).unwrap().get();
-                let relapath = path::join(target_path, original.path().strip_prefix(source_path).unwrap());
-                orphans.push(original.cloned_to(relapath));
+                let relapath = path::join(target_path, original.path.strip_prefix(source_path).unwrap());
+                orphans.push(File::new(original.inner.cloned_to(relapath)));
             }
 
             // Remove descendents
@@ -151,13 +183,13 @@ impl<T: BlitFile> Tree<T> {
         }
 
         for orphan in orphans {
-            let path = orphan.path();
+            let path = &orphan.path;
             // Do we have this node already?
-            let node = match self.resolve_node(&path) {
+            let node = match self.resolve_node(path) {
                 Some(n) => *n,
-                None => self.new_node(orphan),
+                None => self.new_node(orphan.clone()),
             };
-            if let Some(parent) = path::parent(&path) {
+            if let Some(parent) = orphan.parent.as_ref() {
                 self.add_child_to_node(node, parent)?;
             }
         }
@@ -182,42 +214,41 @@ impl<T: BlitFile> Tree<T> {
     fn structured_children(&self, start: &NodeId) -> Element<T> {
         let node = &self.arena[*start];
         let item = node.get();
-        let partial = path::file_name(&item.path()).unwrap_or_default().to_string();
+        let partial = item.file_name.as_deref().unwrap_or_default();
 
-        match item.kind() {
+        match item.kind {
             Kind::Directory => {
                 let children = start
                     .children(&self.arena)
                     .map(|c| self.structured_children(&c))
                     .collect::<Vec<_>>();
-                Element::Directory(partial, item.clone(), children)
+                Element::Directory(partial, &item.inner, children)
             }
-            _ => Element::Child(partial, item.clone()),
+            _ => Element::Child(partial, &item.inner),
         }
     }
 }
 
-pub enum Element<T: BlitFile> {
-    Directory(String, T, Vec<Element<T>>),
-    Child(String, T),
+pub enum Element<'a, T: BlitFile> {
+    Directory(&'a str, &'a T, Vec<Element<'a, T>>),
+    Child(&'a str, &'a T),
 }
 
 /// Simple DFS iterator for a Tree
 pub struct TreeIterator<'a, T: BlitFile> {
     parent: &'a Tree<T>,
-    enume: Option<Descendants<'a, T>>,
+    enume: Option<Descendants<'a, File<T>>>,
 }
 
 impl<'a, T: BlitFile> Iterator for TreeIterator<'a, T> {
-    type Item = T;
+    type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.enume {
             Some(enume) => enume
                 .next()
                 .and_then(|i| self.parent.arena.get(i))
-                .map(|n| n.get())
-                .cloned(),
+                .map(|n| &n.get().inner),
             None => None,
         }
     }

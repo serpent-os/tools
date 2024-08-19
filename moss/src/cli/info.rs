@@ -110,7 +110,7 @@ fn print_files(vfs: vfs::Tree<client::PendingFile>) {
             }
 
             let path = file.path();
-            let meta = match file.layout.entry {
+            let meta = match &file.layout.entry {
                 layout::Entry::Regular(hash, _) => Some(format!(" ({hash:2x})")),
                 layout::Entry::Symlink(source, _) => Some(format!(" -> {source}")),
                 _ => None,
