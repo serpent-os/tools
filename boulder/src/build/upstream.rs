@@ -33,7 +33,6 @@ pub fn sync(recipe: &Recipe, paths: &Paths) -> Result<(), Error> {
 
     println!();
     println!("Sharing {} upstream(s) with the build container", upstreams.len());
-    println!();
 
     let mp = MultiProgress::new();
     let tp = mp.add(
@@ -250,6 +249,7 @@ impl Plain {
 
         let name = self.name();
         let path = self.path(paths);
+        let partial_path = path.with_extension("part");
 
         if let Some(parent) = path.parent().map(Path::to_path_buf) {
             runtime::unblock(move || util::ensure_dir_exists(&parent)).await?;
@@ -266,7 +266,7 @@ impl Plain {
         let mut stream = request::get(self.uri.clone()).await?;
 
         let mut hasher = Sha256::new();
-        let mut out = fs::File::create(&path).await?;
+        let mut out = fs::File::create(&partial_path).await?;
 
         while let Some(chunk) = stream.next().await {
             let bytes = &chunk?;
@@ -280,7 +280,7 @@ impl Plain {
         let hash = hex::encode(hasher.finalize());
 
         if hash != self.hash.0 {
-            fs::remove_file(&path).await?;
+            fs::remove_file(&partial_path).await?;
 
             return Err(Error::HashMismatch {
                 name: name.to_string(),
@@ -288,6 +288,8 @@ impl Plain {
                 got: hash,
             });
         }
+
+        fs::rename(partial_path, &path).await?;
 
         Ok(Installed::Plain {
             name: name.to_string(),
