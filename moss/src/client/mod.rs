@@ -27,6 +27,7 @@ use nix::{
     sys::stat::{fchmodat, mkdirat, Mode},
     unistd::{close, linkat, mkdir, symlinkat},
 };
+use postblit::TriggerScope;
 use stone::{payload::layout, read::PayloadKind};
 use thiserror::Error;
 use tui::{MultiProgress, ProgressBar, ProgressStyle, Styled};
@@ -300,6 +301,30 @@ impl Client {
         }
     }
 
+    /// Apply all triggers with the given scope, wrapping with a progressbar.
+    fn apply_triggers(scope: postblit::TriggerScope, fstree: &vfs::Tree<PendingFile>) -> Result<(), postblit::Error> {
+        let triggers = postblit::triggers(scope, fstree)?;
+
+        let progress = ProgressBar::new(triggers.len() as u64).with_style(
+            ProgressStyle::with_template("\n|{bar:20.green/blue}| {pos}/{len} {msg}")
+                .unwrap()
+                .progress_chars("■≡=- "),
+        );
+
+        match &scope {
+            postblit::TriggerScope::Transaction(_, _) => progress.set_message("Running transaction-scope triggers"),
+            postblit::TriggerScope::System(_, _) => progress.set_message("Running system-scope triggers"),
+        };
+
+        for trigger in progress.wrap_iter(triggers.iter()) {
+            trigger.execute()?;
+        }
+
+        progress.finish_and_clear();
+
+        Ok(())
+    }
+
     pub fn apply_stateful_blit(
         &self,
         fstree: vfs::Tree<PendingFile>,
@@ -309,15 +334,9 @@ impl Client {
         record_state_id(&self.installation.staging_dir(), state.id)?;
         record_os_release(&self.installation.staging_dir(), Some(state.id))?;
 
-        // Run all of the transaction triggers
-        let triggers = postblit::triggers(
-            postblit::TriggerScope::Transaction(&self.installation, &self.scope),
-            &fstree,
-        )?;
         create_root_links(&self.installation.isolation_dir())?;
-        for trigger in triggers {
-            trigger.execute()?;
-        }
+        Self::apply_triggers(TriggerScope::Transaction(&self.installation, &self.scope), &fstree)?;
+
         // Staging is only used with [`Scope::Stateful`]
         self.promote_staging()?;
 
@@ -329,11 +348,7 @@ impl Client {
         }
 
         // At this point we're allowed to run system triggers
-        let sys_triggers =
-            postblit::triggers(postblit::TriggerScope::System(&self.installation, &self.scope), &fstree)?;
-        for trigger in sys_triggers {
-            trigger.execute()?;
-        }
+        Self::apply_triggers(TriggerScope::System(&self.installation, &self.scope), &fstree)?;
 
         // Last but not least, let us see some boot management on the current state
         let layouts = self.layout_db.query(state.selections.iter().map(|s| &s.package))?;
@@ -351,19 +366,9 @@ impl Client {
         create_dir_all(etc)?;
 
         // ephemeral tx triggers
-        let triggers = postblit::triggers(
-            postblit::TriggerScope::Transaction(&self.installation, &self.scope),
-            &fstree,
-        )?;
-        for trigger in triggers {
-            trigger.execute()?;
-        }
+        Self::apply_triggers(TriggerScope::Transaction(&self.installation, &self.scope), &fstree)?;
         // ephemeral system triggers
-        let sys_triggers =
-            postblit::triggers(postblit::TriggerScope::System(&self.installation, &self.scope), &fstree)?;
-        for trigger in sys_triggers {
-            trigger.execute()?;
-        }
+        Self::apply_triggers(TriggerScope::System(&self.installation, &self.scope), &fstree)?;
 
         Ok(())
     }
