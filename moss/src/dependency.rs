@@ -47,7 +47,7 @@ pub enum Kind {
     /// CMake module dependency
     CMake,
 
-    /// Python dependency (unused)
+    /// Python dependency
     Python,
 
     /// Executable in /usr/bin
