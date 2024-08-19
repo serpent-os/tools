@@ -648,15 +648,10 @@ impl Client {
         match element {
             Element::Directory(name, item, children) => {
                 // Construct within the parent
-                self.blit_element_item(parent, cache, &name, item)?;
+                self.blit_element_item(parent, cache, name, item)?;
 
                 // open the new dir
-                let newdir = fcntl::openat(
-                    parent,
-                    name.as_str(),
-                    OFlag::O_RDONLY | OFlag::O_DIRECTORY,
-                    Mode::empty(),
-                )?;
+                let newdir = fcntl::openat(parent, name, OFlag::O_RDONLY | OFlag::O_DIRECTORY, Mode::empty())?;
                 for child in children.into_iter() {
                     self.blit_element(newdir, cache, child, progress)?;
                 }
@@ -664,7 +659,7 @@ impl Client {
                 Ok(())
             }
             Element::Child(name, item) => {
-                self.blit_element_item(parent, cache, &name, item)?;
+                self.blit_element_item(parent, cache, name, item)?;
                 Ok(())
             }
         }
@@ -678,8 +673,8 @@ impl Client {
     /// * `cache`   - raw file descriptor for the system asset pool tree
     /// * `subpath` - the base name of the new inode
     /// * `item`    - New inode being recorded
-    fn blit_element_item(&self, parent: RawFd, cache: RawFd, subpath: &str, item: PendingFile) -> Result<(), Error> {
-        match item.layout.entry {
+    fn blit_element_item(&self, parent: RawFd, cache: RawFd, subpath: &str, item: &PendingFile) -> Result<(), Error> {
+        match &item.layout.entry {
             layout::Entry::Regular(id, _) => {
                 let hash = format!("{:02x}", id);
                 let directory = if hash.len() >= 10 {

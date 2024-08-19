@@ -8,25 +8,25 @@ use std::collections::BTreeMap;
 use crate::path;
 use crate::tree::{Kind, Tree};
 
-use super::{BlitFile, Error};
+use super::{BlitFile, Error, File};
 
 /// Builder used to generate a full tree, free of conflicts
 pub struct TreeBuilder<T: BlitFile> {
     // Explicitly requested incoming paths
-    explicit: Vec<T>,
+    explicit: Vec<File<T>>,
 
     // Implicitly created paths
-    implicit_dirs: BTreeMap<String, T>,
+    implicit_dirs: BTreeMap<String, File<T>>,
 }
 
 /// Special sort algorithm for files by directory
-fn sorted_paths<T: BlitFile>(a: &T, b: &T) -> std::cmp::Ordering {
-    let a_path_len = a.path().matches('/').count();
-    let b_path_len = b.path().matches('/').count();
+fn sorted_paths<T>(a: &File<T>, b: &File<T>) -> std::cmp::Ordering {
+    let a_path_len = a.path.matches('/').count();
+    let b_path_len = b.path.matches('/').count();
     if a_path_len != b_path_len {
         a_path_len.cmp(&b_path_len)
     } else {
-        a.path().cmp(&b.path())
+        a.path.cmp(&b.path)
     }
 }
 
@@ -46,10 +46,10 @@ impl<T: BlitFile> TreeBuilder<T> {
 
     /// Push an item to the builder - we don't care if we have duplicates yet
     pub fn push(&mut self, item: T) {
-        let path = item.path();
+        let file = File::new(item);
 
         // Find all parent paths
-        if let Some(parent) = path::parent(&path) {
+        if let Some(parent) = file.parent.as_ref() {
             let mut leading_path: Option<String> = None;
             // Build a set of parent paths skipping `/`, yielding `usr`, `usr/bin`, etc.
             for component in path::components(parent) {
@@ -58,10 +58,11 @@ impl<T: BlitFile> TreeBuilder<T> {
                     None => component.to_string(),
                 };
                 leading_path = Some(full_path.clone());
-                self.implicit_dirs.insert(full_path.clone(), full_path.into());
+                self.implicit_dirs
+                    .insert(full_path.clone(), File::new(full_path.into()));
             }
         }
-        self.explicit.push(item);
+        self.explicit.push(file);
     }
 
     /// Sort incoming entries and remove duplicates
@@ -70,7 +71,7 @@ impl<T: BlitFile> TreeBuilder<T> {
 
         // Walk again to remove accidental dupes
         for i in self.explicit.iter() {
-            self.implicit_dirs.remove(&i.path());
+            self.implicit_dirs.remove(&i.path);
         }
     }
 
@@ -80,9 +81,9 @@ impl<T: BlitFile> TreeBuilder<T> {
         let all_dirs = self
             .explicit
             .iter()
-            .filter(|f| matches!(f.kind(), Kind::Directory))
+            .filter(|f| matches!(f.kind, Kind::Directory))
             .chain(self.implicit_dirs.values())
-            .map(|d| (d.path(), d))
+            .map(|d| (&d.path, d))
             .collect::<BTreeMap<_, _>>();
 
         // build a set of redirects
@@ -90,22 +91,17 @@ impl<T: BlitFile> TreeBuilder<T> {
 
         // Resolve symlinks-to-dirs
         for link in self.explicit.iter() {
-            if let Kind::Symlink(target) = link.kind() {
-                let path = link.path();
-
+            if let Kind::Symlink(target) = &link.kind {
                 // Resolve the link.
                 let target = if target.starts_with('/') {
-                    target
+                    target.clone()
+                } else if let Some(parent) = link.parent.as_ref() {
+                    path::join(parent, target)
                 } else {
-                    let parent = path::parent(&path);
-                    if let Some(parent) = parent {
-                        path::join(parent, &target)
-                    } else {
-                        target
-                    }
+                    target.clone()
                 };
                 if all_dirs.contains_key(&target) {
-                    redirects.insert(path, target);
+                    redirects.insert(&link.path, target);
                 }
             }
         }
@@ -113,26 +109,25 @@ impl<T: BlitFile> TreeBuilder<T> {
         // Insert everything WITHOUT redirects, directory first.
         let mut full_set = all_dirs
             .into_values()
-            .chain(self.explicit.iter().filter(|m| !matches!(m.kind(), Kind::Directory)))
+            .chain(self.explicit.iter().filter(|m| !matches!(m.kind, Kind::Directory)))
             .collect::<Vec<_>>();
-        full_set.sort_by(|a, b| sorted_paths(*a, *b));
+        full_set.sort_by(|a, b| sorted_paths(a, b));
 
         let mut tree: Tree<T> = Tree::new();
 
         // Build the initial full tree now.
         for entry in full_set {
             // New node for this guy
-            let path = entry.path();
             let node = tree.new_node(entry.clone());
 
-            if let Some(parent) = path::parent(&path) {
+            if let Some(parent) = entry.parent.as_ref() {
                 tree.add_child_to_node(node, parent)?;
             }
         }
 
         // Reparent any symlink redirects.
         for (source_tree, target_tree) in redirects {
-            tree.reparent(&source_tree, &target_tree)?;
+            tree.reparent(source_tree, &target_tree)?;
         }
         Ok(tree)
     }
