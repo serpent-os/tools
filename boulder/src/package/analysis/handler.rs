@@ -129,6 +129,7 @@ pub fn python(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Response, B
         return Ok(Decision::NextHandler.into());
     }
 
+    /* Add python providers name first */
     let data = std::fs::read(&info.path)?;
     let mail = parse_mail(&data)?;
     let python_name = mail
@@ -154,6 +155,28 @@ pub fn python(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Response, B
         kind: dependency::Kind::Python,
         name: format!("{}({})", python_name, &python_version.to_string().trim_end()),
     });
+
+    /* Now parse dependencies */
+    let dist_path = info
+        .path
+        .parent()
+        .unwrap_or_else(|| panic!("Failed to get parent path for {}", info.file_name()));
+    let find_deps_script = include_str!("scripts/get-py-deps.py");
+
+    let output = Command::new("/usr/bin/python3")
+        .arg("-c")
+        .arg(find_deps_script)
+        .arg(dist_path)
+        .stdout(Stdio::piped())
+        .output()?;
+
+    let deps = String::from_utf8_lossy(&output.stdout);
+    for dep in deps.lines() {
+        bucket.dependencies.insert(Dependency {
+            kind: dependency::Kind::Python,
+            name: format!("{}({})", &dep, &python_version.to_string().trim_end()),
+        });
+    }
 
     Ok(Decision::NextHandler.into())
 }
