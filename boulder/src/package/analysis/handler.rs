@@ -1,6 +1,7 @@
 use std::{path::PathBuf, process::Command};
 
 use moss::{dependency, Dependency, Provider};
+use read_fonts::{types::NameId, FontRef, TableProvider};
 
 use crate::package::collect::PathInfo;
 
@@ -133,6 +134,33 @@ pub fn cmake(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Response, Bo
         kind: dependency::Kind::CMake,
         name: provider_name.to_string(),
     });
+
+    Ok(Decision::NextHandler.into())
+}
+
+pub fn font(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Response, BoxError> {
+    if !info.target_path.starts_with("/usr/share/font")
+        && !(info.file_name().ends_with(".ttf") || info.file_name().ends_with(".otf"))
+    {
+        return Ok(Decision::NextHandler.into());
+    }
+
+    let bytes = std::fs::read(&info.path)?;
+    let font = FontRef::new(&bytes)?;
+    let font_name_table = font.name()?;
+    if let Some(record) = font_name_table
+        .name_record()
+        .iter()
+        .find(|record| record.name_id() == NameId::FAMILY_NAME)
+    {
+        let data = record.string(font_name_table.string_data())?;
+        let family_name = data.chars().collect::<String>();
+
+        bucket.providers.insert(Provider {
+            kind: dependency::Kind::Font,
+            name: family_name,
+        });
+    }
 
     Ok(Decision::NextHandler.into())
 }
