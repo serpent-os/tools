@@ -38,7 +38,7 @@ impl Source {
 pub struct Manager {
     source: Source,
     installation: Installation,
-    repositories: BTreeMap<repository::Id, repository::Active>,
+    repositories: BTreeMap<repository::Id, repository::Cached>,
 }
 
 impl Manager {
@@ -88,7 +88,7 @@ impl Manager {
             .map(|(id, repository)| {
                 let db = open_meta_db(source.identifier(), &repository, &installation)?;
 
-                Ok((id.clone(), repository::Active { id, repository, db }))
+                Ok((id.clone(), repository::Cached { id, repository, db }))
             })
             .collect::<Result<_, Error>>()?;
 
@@ -116,7 +116,7 @@ impl Manager {
         let db = open_meta_db(self.source.identifier(), &repository, &self.installation)?;
 
         self.repositories
-            .insert(id.clone(), repository::Active { id, repository, db });
+            .insert(id.clone(), repository::Cached { id, repository, db });
 
         Ok(())
     }
@@ -124,8 +124,11 @@ impl Manager {
     /// Refresh a [`Repository`] by Id
     pub async fn refresh(&self, id: &repository::Id) -> Result<(), Error> {
         if let Some(repo) = self.repositories.get(id).cloned() {
-            let file = fetch_index(self.source.identifier(), &repo, &self.installation).await?;
-            runtime::unblock(move || update_meta_db(&repo, &file)).await?;
+            if repo.repository.active {
+                let file = fetch_index(self.source.identifier(), &repo, &self.installation).await?;
+                runtime::unblock(move || update_meta_db(&repo, &file)).await?;
+            }
+
             Ok(())
         } else {
             Err(Error::UnknownRepo(id.clone()))
@@ -139,8 +142,8 @@ impl Manager {
 
         // Fetch index files asynchronously and then
         // update to DB
-        stream::iter(self.repositories.keys())
-            .map(|id| async {
+        stream::iter(self.repositories.iter().filter(|(_, r)| r.repository.active))
+            .map(|(id, _)| async {
                 let pb = mpb.add(
                     ProgressBar::new_spinner()
                         .with_style(
@@ -172,6 +175,7 @@ impl Manager {
         let uninitialized = self
             .repositories
             .iter()
+            .filter(|(_, r)| r.repository.active)
             .filter_map(|(id, state)| {
                 let index_file =
                     cache_dir(self.source.identifier(), &state.repository, &self.installation).join("stone.index");
@@ -219,8 +223,8 @@ impl Manager {
     }
 
     /// Returns the active repositories held by this manager
-    pub(crate) fn active(&self) -> impl Iterator<Item = repository::Active> + '_ {
-        self.repositories.values().cloned()
+    pub(crate) fn active(&self) -> impl Iterator<Item = repository::Cached> + '_ {
+        self.repositories.values().filter(|c| c.repository.active).cloned()
     }
 
     /// Remove a repository, deleting any related config & cached data
@@ -255,6 +259,37 @@ impl Manager {
     pub fn list(&self) -> impl ExactSizeIterator<Item = (&repository::Id, &Repository)> {
         self.repositories.iter().map(|(id, state)| (id, &state.repository))
     }
+
+    /// Sets the repo as active or not
+    async fn set_active(&mut self, id: &repository::Id, active: bool) -> Result<(), Error> {
+        // Only allow disable for system repo manager
+        let Source::System(config) = &self.source else {
+            return Err(Error::ExplicitUnsupported);
+        };
+
+        let Some(cached) = self.repositories.get_mut(id) else {
+            return Err(Error::UnknownRepo(id.clone()));
+        };
+
+        if active != cached.repository.active {
+            cached.repository.active = active;
+
+            let map = repository::Map::with([(id.clone(), cached.repository.clone())]);
+            config.save(id, &map).map_err(Error::SaveConfig)?;
+        }
+
+        Ok(())
+    }
+
+    /// Enable the repo
+    pub async fn enable(&mut self, id: &repository::Id) -> Result<(), Error> {
+        self.set_active(id, true).await
+    }
+
+    /// Disable the repo
+    pub async fn disable(&mut self, id: &repository::Id) -> Result<(), Error> {
+        self.set_active(id, false).await
+    }
 }
 
 /// Directory for the repo cached data (db & stone index), hashed by identifier & repo URI
@@ -279,7 +314,7 @@ fn open_meta_db(identifier: &str, repo: &Repository, installation: &Installation
 /// and saves it to the repo installation path
 async fn fetch_index(
     identifier: &str,
-    state: &repository::Active,
+    state: &repository::Cached,
     installation: &Installation,
 ) -> Result<PathBuf, Error> {
     let out_dir = cache_dir(identifier, &state.repository, installation);
@@ -295,7 +330,7 @@ async fn fetch_index(
 }
 
 /// Updates a stones metadata into the meta db
-fn update_meta_db(state: &repository::Active, index_path: &Path) -> Result<(), Error> {
+fn update_meta_db(state: &repository::Cached, index_path: &Path) -> Result<(), Error> {
     // Wipe db since we're refreshing from a new index file
     state.db.wipe()?;
 

@@ -130,6 +130,8 @@ fn replace_aliases(args: env::Args) -> Vec<String> {
         ("lr", &["repo", "list"]),
         ("rr", &["repo", "remove"]),
         ("ur", &["repo", "update"]),
+        ("er", &["repo", "enable"]),
+        ("dr", &["repo", "disable"]),
         ("ix", &["index"]),
         ("it", &["install"]),
         ("rm", &["remove"]),

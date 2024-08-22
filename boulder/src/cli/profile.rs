@@ -71,6 +71,7 @@ fn parse_repository(s: &str) -> Result<(repository::Id, Repository), String> {
             description: String::default(),
             uri,
             priority: repository::Priority::new(priority),
+            active: true,
         },
     ))
 }

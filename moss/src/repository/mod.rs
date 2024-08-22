@@ -45,12 +45,18 @@ pub struct Repository {
     pub description: String,
     pub uri: Url,
     pub priority: Priority,
+    #[serde(default = "default_as_true")]
+    pub active: bool,
 }
 
-/// An active repository that has been
+fn default_as_true() -> bool {
+    true
+}
+
+/// A repository that has been
 /// fetched and cached to a meta database
 #[derive(Debug, Clone)]
-pub struct Active {
+pub struct Cached {
     pub id: Id,
     pub repository: Repository,
     pub db: meta::Database,
