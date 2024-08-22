@@ -32,6 +32,14 @@ impl Connection {
         let mut _guard = self.0.lock().expect("mutex guard");
         f(&mut _guard)
     }
+
+    fn exclusive_tx<T, E>(&self, f: impl FnOnce(&mut SqliteConnection) -> Result<T, E>) -> Result<T, E>
+    where
+        E: From<diesel::result::Error>,
+    {
+        let mut _guard = self.0.lock().expect("mutex guard");
+        _guard.exclusive_transaction(|tx| f(tx))
+    }
 }
 
 impl fmt::Debug for Connection {

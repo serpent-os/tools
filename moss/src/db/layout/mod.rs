@@ -81,7 +81,7 @@ impl Database {
     }
 
     pub fn batch_add(&self, layouts: Vec<(package::Id, payload::Layout)>) -> Result<(), Error> {
-        self.conn.exec(|conn| {
+        self.conn.exclusive_tx(|tx| {
             let values = layouts
                 .into_iter()
                 .map(|(package_id, layout)| {
@@ -100,7 +100,7 @@ impl Database {
                 })
                 .collect::<Vec<_>>();
 
-            diesel::insert_into(model::layout::table).values(values).execute(conn)?;
+            diesel::insert_into(model::layout::table).values(values).execute(tx)?;
 
             Ok(())
         })
@@ -111,10 +111,10 @@ impl Database {
     }
 
     pub fn batch_remove<'a>(&self, packages: impl IntoIterator<Item = &'a package::Id>) -> Result<(), Error> {
-        self.conn.exec(|conn| {
+        self.conn.exclusive_tx(|tx| {
             let packages = packages.into_iter().map(AsRef::<str>::as_ref).collect::<Vec<_>>();
 
-            diesel::delete(model::layout::table.filter(model::layout::package_id.eq_any(packages))).execute(conn)?;
+            diesel::delete(model::layout::table.filter(model::layout::package_id.eq_any(packages))).execute(tx)?;
 
             Ok(())
         })

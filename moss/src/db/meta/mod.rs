@@ -44,9 +44,9 @@ impl Database {
     }
 
     pub fn wipe(&self) -> Result<(), Error> {
-        self.conn.exec(|conn| {
+        self.conn.exclusive_tx(|tx| {
             // Cascading wipes other tables
-            diesel::delete(model::meta::table).execute(conn)?;
+            diesel::delete(model::meta::table).execute(tx)?;
             Ok(())
         })
     }
@@ -246,7 +246,7 @@ impl Database {
     }
 
     pub fn batch_add(&self, packages: Vec<(package::Id, Meta)>) -> Result<(), Error> {
-        self.conn.exec(|conn| {
+        self.conn.exclusive_tx(|tx| {
             let ids = packages.iter().map(|(id, _)| id.as_ref()).collect::<Vec<_>>();
             let entries = packages
                 .iter()
@@ -311,24 +311,23 @@ impl Database {
                 })
                 .collect::<Vec<_>>();
 
-            conn.transaction(|conn| {
-                batch_remove_impl(&ids, conn)?;
+            batch_remove_impl(&ids, tx)?;
 
-                diesel::insert_into(model::meta::table).values(entries).execute(conn)?;
-                diesel::insert_or_ignore_into(model::meta_licenses::table)
-                    .values(licenses)
-                    .execute(conn)?;
-                diesel::insert_or_ignore_into(model::meta_dependencies::table)
-                    .values(dependencies)
-                    .execute(conn)?;
-                diesel::insert_or_ignore_into(model::meta_providers::table)
-                    .values(providers)
-                    .execute(conn)?;
-                diesel::insert_or_ignore_into(model::meta_conflicts::table)
-                    .values(conflicts)
-                    .execute(conn)?;
-                Ok(())
-            })
+            diesel::insert_into(model::meta::table).values(entries).execute(tx)?;
+            diesel::insert_or_ignore_into(model::meta_licenses::table)
+                .values(licenses)
+                .execute(tx)?;
+            diesel::insert_or_ignore_into(model::meta_dependencies::table)
+                .values(dependencies)
+                .execute(tx)?;
+            diesel::insert_or_ignore_into(model::meta_providers::table)
+                .values(providers)
+                .execute(tx)?;
+            diesel::insert_or_ignore_into(model::meta_conflicts::table)
+                .values(conflicts)
+                .execute(tx)?;
+
+            Ok(())
         })
     }
 
@@ -337,12 +336,12 @@ impl Database {
     }
 
     pub fn batch_remove<'a>(&self, packages: impl IntoIterator<Item = &'a package::Id>) -> Result<(), Error> {
-        self.conn.exec(|conn| {
+        self.conn.exclusive_tx(|tx| {
             let packages = packages
                 .into_iter()
                 .map(<package::Id as AsRef<str>>::as_ref)
                 .collect::<Vec<_>>();
-            batch_remove_impl(&packages, conn)?;
+            batch_remove_impl(&packages, tx)?;
             Ok(())
         })
     }
