@@ -1,4 +1,7 @@
-use std::{path::PathBuf, process::Command};
+use std::{
+    path::PathBuf,
+    process::{Command, Stdio},
+};
 
 use moss::{dependency, Dependency, Provider};
 
@@ -133,9 +136,23 @@ pub fn python(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Response, B
         .get_first_value("Name")
         .unwrap_or_else(|| panic!("Failed to parse {}", info.file_name()));
 
+    /* Insert generic provider */
     bucket.providers.insert(Provider {
         kind: dependency::Kind::Python,
         name: python_name.to_string(),
+    });
+
+    let output = Command::new("/usr/bin/python3")
+        .arg("-c")
+        .arg("import platform; print(f'{platform.python_version_tuple()[0]}.{platform.python_version_tuple()[1]}')")
+        .stdout(Stdio::piped())
+        .output()?;
+    let python_version = String::from_utf8_lossy(&output.stdout);
+
+    /* Insert versioned provider for auto deps */
+    bucket.providers.insert(Provider {
+        kind: dependency::Kind::Python,
+        name: format!("{}({})", python_name, &python_version.to_string().trim_end()),
     });
 
     Ok(Decision::NextHandler.into())
