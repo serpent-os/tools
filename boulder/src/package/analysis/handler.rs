@@ -1,3 +1,5 @@
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::{path::PathBuf, process::Command};
 
 use moss::{dependency, Dependency, Provider};
@@ -112,6 +114,40 @@ pub fn pkg_config(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Respons
             kind,
             name: dep.to_string(),
         });
+    }
+
+    Ok(Decision::NextHandler.into())
+}
+
+pub fn perl(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Response, BoxError> {
+    let file_path = info.path.clone().into_os_string().into_string().unwrap_or_default();
+    let is_pm_file = file_path.contains("perl") && info.file_name().ends_with(".pm");
+
+    if !is_pm_file {
+        return Ok(Decision::NextHandler.into());
+    }
+
+    let reader = BufReader::new(File::open(&info.path)?);
+
+    for line in reader.lines() {
+        match line {
+            Ok(line) => {
+                if line.starts_with("package") {
+                    let perl_module = line
+                        .strip_prefix("package")
+                        .unwrap()
+                        .trim_start()
+                        .strip_suffix(";")
+                        .unwrap_or_default();
+                    bucket.providers.insert(Provider {
+                        kind: dependency::Kind::Perl,
+                        name: perl_module.to_string(),
+                    });
+                    break;
+                }
+            }
+            Err(e) => println!("ERROR: {}", e),
+        }
     }
 
     Ok(Decision::NextHandler.into())
