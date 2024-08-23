@@ -19,7 +19,6 @@ use std::{
 };
 
 use futures::{stream, StreamExt, TryStreamExt};
-use itertools::Itertools;
 use nix::{
     errno::Errno,
     fcntl::{self, OFlag},
@@ -458,10 +457,8 @@ impl Client {
         let unpacking_in_progress = cache::UnpackingInProgress::default();
 
         // Download and unpack each package
-        stream::iter(packages)
-            .map(Ok)
-            // Use max network concurrency since we download files here
-            .try_for_each_concurrent(environment::MAX_NETWORK_CONCURRENCY, |package| async {
+        let cached = stream::iter(packages)
+            .map(|package| async {
                 let package: &Package = package.borrow();
 
                 // Setup the progress bar and set as downloading
@@ -495,8 +492,6 @@ impl Client {
                 let multi_progress = multi_progress.clone();
                 let total_progress = total_progress.clone();
                 let unpacking_in_progress = unpacking_in_progress.clone();
-                let layout_db = self.layout_db.clone();
-                let install_db = self.install_db.clone();
                 let package = (*package).clone();
 
                 runtime::unblock(move || {
@@ -516,27 +511,6 @@ impl Client {
                         }
                     })?;
 
-                    // Merge layoutdb
-                    progress_bar.set_message(format!("{} {}", "Store layout".white(), package_name.clone().bold()));
-                    // Remove old layout entries for package
-                    layout_db.remove(&package.id)?;
-                    // Add new entries in batches of 1k
-                    for chunk in progress_bar.wrap_iter(
-                        unpacked
-                            .payloads
-                            .iter()
-                            .find_map(PayloadKind::layout)
-                            .map(|p| p.body.as_slice())
-                            .unwrap_or_default()
-                            .chunks(environment::DB_BATCH_SIZE),
-                    ) {
-                        let entries = chunk.iter().map(|i| (package.id.clone(), i.clone())).collect_vec();
-                        layout_db.batch_add(entries)?;
-                    }
-
-                    // Consume the package in the metadb
-                    install_db.add(package.id.clone(), package.meta.clone())?;
-
                     // Remove this progress bar
                     progress_bar.finish();
                     multi_progress.remove(&progress_bar);
@@ -552,11 +526,46 @@ impl Client {
                     // Inc total progress by 1
                     total_progress.inc(1);
 
-                    Ok(()) as Result<(), Error>
+                    Ok((package, unpacked)) as Result<(Package, cache::UnpackedAsset), Error>
                 })
                 .await
             })
+            // Use max network concurrency since we download files here
+            .buffer_unordered(environment::MAX_NETWORK_CONCURRENCY)
+            .try_collect::<Vec<_>>()
             .await?;
+
+        // Add layouts & packages to DBs
+        runtime::unblock({
+            let layout_db = self.layout_db.clone();
+            let install_db = self.install_db.clone();
+            move || {
+                total_progress.set_position(0);
+                total_progress.set_length(2);
+                total_progress.set_message("Storing DB layouts");
+                total_progress.tick();
+
+                // Add layouts
+                layout_db.batch_add(cached.iter().flat_map(|(p, u)| {
+                    u.payloads
+                        .iter()
+                        .flat_map(PayloadKind::layout)
+                        .flat_map(|p| p.body.as_slice())
+                        .map(|layout| (&p.id, layout))
+                }))?;
+
+                total_progress.inc(1);
+                total_progress.set_message("Storing DB packages");
+
+                // Add packages
+                install_db.batch_add(cached.into_iter().map(|(p, _)| (p.id, p.meta)).collect())?;
+
+                total_progress.inc(1);
+
+                Ok(()) as Result<_, Error>
+            }
+        })
+        .await?;
 
         // Remove progress
         multi_progress.clear()?;

@@ -11,5 +11,3 @@ pub const MAX_NETWORK_CONCURRENCY: usize = 8;
 pub const FILE_READ_BUFFER_SIZE: usize = 4 * 1024 * 1024;
 /// Threshold to begin chunking file during read, 16 KiB
 pub const FILE_READ_CHUNK_THRESHOLD: usize = 16 * 1024;
-/// DB batch size
-pub const DB_BATCH_SIZE: usize = 1000;

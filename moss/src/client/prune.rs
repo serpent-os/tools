@@ -22,7 +22,7 @@ use tui::{
     pretty::autoprint_columns,
 };
 
-use crate::{client::cache, db, environment, package, state, Installation, State};
+use crate::{client::cache, db, package, state, Installation, State};
 
 /// The prune strategy for removing old states
 #[derive(Debug, Clone, Copy)]
@@ -208,18 +208,12 @@ fn prune_databases(
     install_db: &db::meta::Database,
     layout_db: &db::layout::Database,
 ) -> Result<(), Error> {
-    for chunk in &states.iter().map(|state| &state.id).chunks(environment::DB_BATCH_SIZE) {
-        // Remove db states
-        state_db.batch_remove(chunk)?;
-    }
-    for chunk in &packages.iter().chunks(environment::DB_BATCH_SIZE) {
-        // Remove db metadata
-        install_db.batch_remove(chunk)?;
-    }
-    for chunk in &packages.iter().chunks(environment::DB_BATCH_SIZE) {
-        // Remove db layouts
-        layout_db.batch_remove(chunk)?;
-    }
+    // Remove db states
+    state_db.batch_remove(states.iter().map(|s| &s.id))?;
+    // Remove db metadata
+    install_db.batch_remove(packages)?;
+    // Remove db layouts
+    layout_db.batch_remove(packages)?;
 
     Ok(())
 }

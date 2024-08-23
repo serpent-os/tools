@@ -313,19 +313,29 @@ impl Database {
 
             batch_remove_impl(&ids, tx)?;
 
-            diesel::insert_into(model::meta::table).values(entries).execute(tx)?;
-            diesel::insert_or_ignore_into(model::meta_licenses::table)
-                .values(licenses)
-                .execute(tx)?;
-            diesel::insert_or_ignore_into(model::meta_dependencies::table)
-                .values(dependencies)
-                .execute(tx)?;
-            diesel::insert_or_ignore_into(model::meta_providers::table)
-                .values(providers)
-                .execute(tx)?;
-            diesel::insert_or_ignore_into(model::meta_conflicts::table)
-                .values(conflicts)
-                .execute(tx)?;
+            for chunk in entries.chunks(MAX_VARIABLE_NUMBER / 13) {
+                diesel::insert_into(model::meta::table).values(chunk).execute(tx)?;
+            }
+            for chunk in licenses.chunks(MAX_VARIABLE_NUMBER / 2) {
+                diesel::insert_or_ignore_into(model::meta_licenses::table)
+                    .values(chunk)
+                    .execute(tx)?;
+            }
+            for chunk in dependencies.chunks(MAX_VARIABLE_NUMBER / 2) {
+                diesel::insert_or_ignore_into(model::meta_dependencies::table)
+                    .values(chunk)
+                    .execute(tx)?;
+            }
+            for chunk in providers.chunks(MAX_VARIABLE_NUMBER / 2) {
+                diesel::insert_or_ignore_into(model::meta_providers::table)
+                    .values(chunk)
+                    .execute(tx)?;
+            }
+            for chunk in conflicts.chunks(MAX_VARIABLE_NUMBER / 2) {
+                diesel::insert_or_ignore_into(model::meta_conflicts::table)
+                    .values(chunk)
+                    .execute(tx)?;
+            }
 
             Ok(())
         })
@@ -347,8 +357,10 @@ impl Database {
     }
 }
 
-fn batch_remove_impl(packages: &[&str], conn: &mut SqliteConnection) -> Result<(), Error> {
-    diesel::delete(model::meta::table.filter(model::meta::package.eq_any(packages))).execute(conn)?;
+fn batch_remove_impl(packages: &[&str], tx: &mut SqliteConnection) -> Result<(), Error> {
+    for chunk in packages.chunks(MAX_VARIABLE_NUMBER) {
+        diesel::delete(model::meta::table.filter(model::meta::package.eq_any(chunk))).execute(tx)?;
+    }
     Ok(())
 }
 
@@ -494,7 +506,7 @@ mod test {
         assert!(result.is_err());
 
         // Test wipe
-        db.add(id.clone(), meta.clone()).unwrap();
+        db.add(id.clone(), meta).unwrap();
         db.wipe().unwrap();
         let result = db.get(&id);
         assert!(result.is_err());

@@ -8,7 +8,7 @@ use diesel::{Connection as _, SqliteConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use itertools::Itertools;
 
-use super::{Connection, Error};
+use super::{Connection, Error, MAX_VARIABLE_NUMBER};
 use crate::state::{self, Id, Selection};
 use crate::State;
 
@@ -143,9 +143,11 @@ impl Database {
                     })
                     .collect::<Vec<_>>();
 
-                diesel::insert_into(model::state_selections::table)
-                    .values(selections)
-                    .execute(tx)?;
+                for chunk in selections.chunks(MAX_VARIABLE_NUMBER / 4) {
+                    diesel::insert_into(model::state_selections::table)
+                        .values(chunk)
+                        .execute(tx)?;
+                }
 
                 Ok(id.into())
             })
@@ -160,8 +162,10 @@ impl Database {
         self.conn.exclusive_tx(|tx| {
             let states = states.into_iter().map(|id| i32::from(*id)).collect::<Vec<_>>();
 
-            // Cascading wipes other tables
-            diesel::delete(model::state::table.filter(model::state::id.eq_any(&states))).execute(tx)?;
+            for chunk in states.chunks(MAX_VARIABLE_NUMBER) {
+                // Cascading wipes other tables
+                diesel::delete(model::state::table.filter(model::state::id.eq_any(chunk))).execute(tx)?;
+            }
 
             Ok(())
         })
