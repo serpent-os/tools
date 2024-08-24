@@ -70,8 +70,6 @@ pub enum Error {
     Client(#[from] client::Error),
 }
 
-const COLUMN_SPACING: usize = 4;
-
 struct Output {
     name: Name,
     summary: String,
@@ -79,19 +77,16 @@ struct Output {
 
 impl ColumnDisplay for Output {
     fn get_display_width(&self) -> usize {
-        // TODO: calculate the number of graphemes, not bytes.
-        // Now we are assuming name and summary are ASCII.
-        self.name.as_ref().len() + self.summary.len() + COLUMN_SPACING
+        self.name.as_ref().chars().count()
     }
 
     fn display_column(&self, writer: &mut impl std::io::prelude::Write, _col: tui::pretty::Column, width: usize) {
         let _ = write!(
             writer,
-            "{}{}{:width$}{}",
+            "{}{:width$}  {}",
             self.name.to_string().bold(),
-            " ".repeat(COLUMN_SPACING),
-            " ",
-            self.summary,
+            " ".repeat(width),
+            self.summary
         );
     }
 }

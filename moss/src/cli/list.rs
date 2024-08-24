@@ -127,7 +127,7 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
     set.dedup_by_key(|s| s.name.clone());
 
     // Grab maximum length
-    let max_length = set.iter().map(Format::size).max().unwrap_or_default();
+    let max_length = set.iter().map(Format::size).max().unwrap_or_default() + 2;
 
     // render
     for item in set {
