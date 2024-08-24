@@ -44,9 +44,9 @@ impl Database {
     }
 
     pub fn wipe(&self) -> Result<(), Error> {
-        self.conn.exec(|conn| {
+        self.conn.exclusive_tx(|tx| {
             // Cascading wipes other tables
-            diesel::delete(model::meta::table).execute(conn)?;
+            diesel::delete(model::meta::table).execute(tx)?;
             Ok(())
         })
     }
@@ -246,7 +246,7 @@ impl Database {
     }
 
     pub fn batch_add(&self, packages: Vec<(package::Id, Meta)>) -> Result<(), Error> {
-        self.conn.exec(|conn| {
+        self.conn.exclusive_tx(|tx| {
             let ids = packages.iter().map(|(id, _)| id.as_ref()).collect::<Vec<_>>();
             let entries = packages
                 .iter()
@@ -311,24 +311,33 @@ impl Database {
                 })
                 .collect::<Vec<_>>();
 
-            conn.transaction(|conn| {
-                batch_remove_impl(&ids, conn)?;
+            batch_remove_impl(&ids, tx)?;
 
-                diesel::insert_into(model::meta::table).values(entries).execute(conn)?;
+            for chunk in entries.chunks(MAX_VARIABLE_NUMBER / 13) {
+                diesel::insert_into(model::meta::table).values(chunk).execute(tx)?;
+            }
+            for chunk in licenses.chunks(MAX_VARIABLE_NUMBER / 2) {
                 diesel::insert_or_ignore_into(model::meta_licenses::table)
-                    .values(licenses)
-                    .execute(conn)?;
+                    .values(chunk)
+                    .execute(tx)?;
+            }
+            for chunk in dependencies.chunks(MAX_VARIABLE_NUMBER / 2) {
                 diesel::insert_or_ignore_into(model::meta_dependencies::table)
-                    .values(dependencies)
-                    .execute(conn)?;
+                    .values(chunk)
+                    .execute(tx)?;
+            }
+            for chunk in providers.chunks(MAX_VARIABLE_NUMBER / 2) {
                 diesel::insert_or_ignore_into(model::meta_providers::table)
-                    .values(providers)
-                    .execute(conn)?;
+                    .values(chunk)
+                    .execute(tx)?;
+            }
+            for chunk in conflicts.chunks(MAX_VARIABLE_NUMBER / 2) {
                 diesel::insert_or_ignore_into(model::meta_conflicts::table)
-                    .values(conflicts)
-                    .execute(conn)?;
-                Ok(())
-            })
+                    .values(chunk)
+                    .execute(tx)?;
+            }
+
+            Ok(())
         })
     }
 
@@ -337,19 +346,21 @@ impl Database {
     }
 
     pub fn batch_remove<'a>(&self, packages: impl IntoIterator<Item = &'a package::Id>) -> Result<(), Error> {
-        self.conn.exec(|conn| {
+        self.conn.exclusive_tx(|tx| {
             let packages = packages
                 .into_iter()
                 .map(<package::Id as AsRef<str>>::as_ref)
                 .collect::<Vec<_>>();
-            batch_remove_impl(&packages, conn)?;
+            batch_remove_impl(&packages, tx)?;
             Ok(())
         })
     }
 }
 
-fn batch_remove_impl(packages: &[&str], conn: &mut SqliteConnection) -> Result<(), Error> {
-    diesel::delete(model::meta::table.filter(model::meta::package.eq_any(packages))).execute(conn)?;
+fn batch_remove_impl(packages: &[&str], tx: &mut SqliteConnection) -> Result<(), Error> {
+    for chunk in packages.chunks(MAX_VARIABLE_NUMBER) {
+        diesel::delete(model::meta::table.filter(model::meta::package.eq_any(chunk))).execute(tx)?;
+    }
     Ok(())
 }
 
@@ -495,7 +506,7 @@ mod test {
         assert!(result.is_err());
 
         // Test wipe
-        db.add(id.clone(), meta.clone()).unwrap();
+        db.add(id.clone(), meta).unwrap();
         db.wipe().unwrap();
         let result = db.get(&id);
         assert!(result.is_err());

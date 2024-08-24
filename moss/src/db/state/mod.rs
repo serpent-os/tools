@@ -8,7 +8,7 @@ use diesel::{Connection as _, SqliteConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use itertools::Itertools;
 
-use super::{Connection, Error};
+use super::{Connection, Error, MAX_VARIABLE_NUMBER};
 use crate::state::{self, Id, Selection};
 use crate::State;
 
@@ -121,34 +121,35 @@ impl Database {
         description: Option<&str>,
     ) -> Result<State, Error> {
         self.conn
-            .exec(|conn| {
-                conn.transaction(|conn| {
-                    let state = model::NewState {
-                        summary,
-                        description,
-                        kind: state::Kind::Transaction.to_string(),
-                    };
+            .exclusive_tx(|tx| {
+                let state = model::NewState {
+                    summary,
+                    description,
+                    kind: state::Kind::Transaction.to_string(),
+                };
 
-                    let id = diesel::insert_into(model::state::table)
-                        .values(state)
-                        .returning(model::state::id)
-                        .get_result::<i32>(conn)?;
+                let id = diesel::insert_into(model::state::table)
+                    .values(state)
+                    .returning(model::state::id)
+                    .get_result::<i32>(tx)?;
 
-                    let selections = selections
-                        .iter()
-                        .map(|selection| model::NewSelection {
-                            state_id: id,
-                            package_id: selection.package.as_ref(),
-                            explicit: selection.explicit,
-                            reason: selection.reason.as_deref(),
-                        })
-                        .collect::<Vec<_>>();
+                let selections = selections
+                    .iter()
+                    .map(|selection| model::NewSelection {
+                        state_id: id,
+                        package_id: selection.package.as_ref(),
+                        explicit: selection.explicit,
+                        reason: selection.reason.as_deref(),
+                    })
+                    .collect::<Vec<_>>();
 
+                for chunk in selections.chunks(MAX_VARIABLE_NUMBER / 4) {
                     diesel::insert_into(model::state_selections::table)
-                        .values(selections)
-                        .execute(conn)?;
-                    Ok(id.into())
-                })
+                        .values(chunk)
+                        .execute(tx)?;
+                }
+
+                Ok(id.into())
             })
             .and_then(|id| self.get(id))
     }
@@ -158,14 +159,15 @@ impl Database {
     }
 
     pub fn batch_remove<'a>(&self, states: impl IntoIterator<Item = &'a state::Id>) -> Result<(), Error> {
-        self.conn.exec(|conn| {
+        self.conn.exclusive_tx(|tx| {
             let states = states.into_iter().map(|id| i32::from(*id)).collect::<Vec<_>>();
 
-            conn.transaction(|conn| {
+            for chunk in states.chunks(MAX_VARIABLE_NUMBER) {
                 // Cascading wipes other tables
-                diesel::delete(model::state::table.filter(model::state::id.eq_any(&states))).execute(conn)?;
-                Ok(())
-            })
+                diesel::delete(model::state::table.filter(model::state::id.eq_any(chunk))).execute(tx)?;
+            }
+
+            Ok(())
         })
     }
 }

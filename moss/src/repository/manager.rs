@@ -9,7 +9,6 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use futures::{stream, StreamExt, TryStreamExt};
-use itertools::Itertools;
 use thiserror::Error;
 use xxhash_rust::xxh3::xxh3_64;
 
@@ -302,50 +301,35 @@ fn update_meta_db(state: &repository::Active, index_path: &Path) -> Result<(), E
     // Get a stream of payloads
     let mut file = File::open(index_path).map_err(Error::OpenIndex)?;
     let mut reader = stone::read(&mut file)?;
-    let payloads = reader.payloads()?;
 
-    // Update each payload into the meta db
-    payloads
-        // Batch up to `DB_BATCH_SIZE` payloads
-        .chunks(environment::DB_BATCH_SIZE)
+    let payloads = reader.payloads()?.collect::<Result<Vec<_>, _>>()?;
+
+    // Construct Meta for each payload
+    let packages = payloads
         .into_iter()
-        // Transpose error for early bail
-        .map(|chunk| chunk.into_iter().collect::<Result<Vec<_>, _>>())
-        .try_for_each(|result| {
-            let chunk = result?;
+        .filter_map(|payload| {
+            if let stone::read::PayloadKind::Meta(meta) = payload {
+                Some(meta)
+            } else {
+                None
+            }
+        })
+        .map(|payload| {
+            let meta = package::Meta::from_stone_payload(&payload.body)?;
 
-            // Construct Meta for each payload
-            let packages = chunk
-                .into_iter()
-                .filter_map(|payload| {
-                    if let stone::read::PayloadKind::Meta(meta) = payload {
-                        Some(meta)
-                    } else {
-                        None
-                    }
-                })
-                .map(|payload| {
-                    let meta = package::Meta::from_stone_payload(&payload.body)?;
+            // Create id from hash of meta
+            let hash = meta
+                .hash
+                .clone()
+                .ok_or(Error::MissingMetaField(stone::payload::meta::Tag::PackageHash))?;
+            let id = package::Id::from(hash);
 
-                    // Create id from hash of meta
-                    let hash = meta
-                        .hash
-                        .clone()
-                        .ok_or(Error::MissingMetaField(stone::payload::meta::Tag::PackageHash))?;
-                    let id = package::Id::from(hash);
+            Ok((id, meta))
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
 
-                    Ok((id, meta))
-                })
-                .collect::<Result<Vec<_>, Error>>()?;
-
-            // Batch add to db
-            //
-            // Sqlite supports up to 32k parametized query binds. Adding a
-            // package has 13 binds x 1k batch size = 17k. This leaves us
-            // overhead to add more binds in the future, otherwise we can
-            // lower the `DB_BATCH_SIZE`.
-            state.db.batch_add(packages).map_err(Error::Database)
-        })?;
+    // Batch add to db
+    state.db.batch_add(packages)?;
 
     Ok(())
 }

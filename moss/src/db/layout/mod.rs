@@ -11,8 +11,8 @@ use stone::payload;
 
 use crate::package;
 
-use super::Connection;
 pub use super::Error;
+use super::{Connection, MAX_VARIABLE_NUMBER};
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("src/db/layout/migrations");
 
@@ -42,12 +42,20 @@ impl Database {
         self.conn.exec(|conn| {
             let packages = packages.into_iter().map(AsRef::<str>::as_ref).collect::<Vec<_>>();
 
-            model::layout::table
-                .select(model::Layout::as_select())
-                .filter(model::layout::package_id.eq_any(packages))
-                .load_iter(conn)?
-                .map(map_layout)
-                .collect()
+            let mut output = vec![];
+
+            for chunk in packages.chunks(MAX_VARIABLE_NUMBER) {
+                output.extend(
+                    model::layout::table
+                        .select(model::Layout::as_select())
+                        .filter(model::layout::package_id.eq_any(chunk))
+                        .load_iter(conn)?
+                        .map(map_layout)
+                        .collect::<Result<Vec<_>, _>>()?,
+                )
+            }
+
+            Ok(output)
         })
     }
 
@@ -76,19 +84,26 @@ impl Database {
         })
     }
 
-    pub fn add(&self, package: package::Id, layout: payload::Layout) -> Result<(), Error> {
+    pub fn add(&self, package: &package::Id, layout: &payload::Layout) -> Result<(), Error> {
         self.batch_add(vec![(package, layout)])
     }
 
-    pub fn batch_add(&self, layouts: Vec<(package::Id, payload::Layout)>) -> Result<(), Error> {
-        self.conn.exec(|conn| {
+    pub fn batch_add<'a>(
+        &self,
+        layouts: impl IntoIterator<Item = (&'a package::Id, &'a payload::Layout)>,
+    ) -> Result<(), Error> {
+        self.conn.exclusive_tx(|tx| {
+            let mut ids = vec![];
+
             let values = layouts
                 .into_iter()
                 .map(|(package_id, layout)| {
-                    let (entry_type, entry_value1, entry_value2) = encode_entry(layout.entry);
+                    ids.push(package_id.as_ref());
+
+                    let (entry_type, entry_value1, entry_value2) = encode_entry(layout.entry.clone());
 
                     model::NewLayout {
-                        package_id: package_id.into(),
+                        package_id: package_id.to_string(),
                         uid: layout.uid as i32,
                         gid: layout.gid as i32,
                         mode: layout.mode as i32,
@@ -100,7 +115,13 @@ impl Database {
                 })
                 .collect::<Vec<_>>();
 
-            diesel::insert_into(model::layout::table).values(values).execute(conn)?;
+            ids.sort();
+            ids.dedup();
+            batch_remove_impl(&ids, tx)?;
+
+            for chunk in values.chunks(MAX_VARIABLE_NUMBER / 8) {
+                diesel::insert_into(model::layout::table).values(chunk).execute(tx)?;
+            }
 
             Ok(())
         })
@@ -111,14 +132,21 @@ impl Database {
     }
 
     pub fn batch_remove<'a>(&self, packages: impl IntoIterator<Item = &'a package::Id>) -> Result<(), Error> {
-        self.conn.exec(|conn| {
+        self.conn.exclusive_tx(|tx| {
             let packages = packages.into_iter().map(AsRef::<str>::as_ref).collect::<Vec<_>>();
 
-            diesel::delete(model::layout::table.filter(model::layout::package_id.eq_any(packages))).execute(conn)?;
+            batch_remove_impl(&packages, tx)?;
 
             Ok(())
         })
     }
+}
+
+fn batch_remove_impl(packages: &[&str], tx: &mut SqliteConnection) -> Result<(), Error> {
+    for chunk in packages.chunks(MAX_VARIABLE_NUMBER) {
+        diesel::delete(model::layout::table.filter(model::layout::package_id.eq_any(chunk))).execute(tx)?;
+    }
+    Ok(())
 }
 
 fn map_layout(result: diesel::QueryResult<model::Layout>) -> Result<(package::Id, payload::Layout), Error> {
@@ -230,13 +258,12 @@ mod test {
             .iter()
             .filter_map(PayloadKind::layout)
             .flat_map(|p| &p.body)
-            .cloned()
             .map(|layout| (package::Id::from("test".to_string()), layout))
             .collect::<Vec<_>>();
 
         let count = layouts.len();
 
-        database.batch_add(layouts).unwrap();
+        database.batch_add(layouts.iter().map(|(p, l)| (p, *l))).unwrap();
 
         let all = database.all().unwrap();
 
