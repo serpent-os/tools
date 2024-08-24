@@ -86,6 +86,7 @@ actions              :
             PATH="%(path)"; export PATH
             CCACHE_DIR="%(ccachedir)"; export CCACHE_DIR;
             test -z "$CCACHE_DIR" && unset CCACHE_DIR;
+            %cargo_set_environment
             RUSTC_WRAPPER="%(rustc_wrapper)"; export RUSTC_WRAPPER;
             test -z "$RUSTC_WRAPPER" && unset RUSTC_WRAPPER;
             SCCACHE_DIR="%(sccachedir)"; export SCCACHE_DIR;

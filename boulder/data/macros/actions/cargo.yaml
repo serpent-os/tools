@@ -1,4 +1,14 @@
 actions:
+    - cargo_set_environment:
+        description: Set environmental variables for Cargo build
+        command: |
+            CARGO_BUILD_DEP_INFO_BASEDIR="%(workdir)"; export CARGO_BUILD_DEP_INFO_BASEDIR;
+            CARGO_NET_RETRY=5; export CARGO_NET_RETRY;
+            CARGO_PROFILE_RELEASE_DEBUG="full"; export CARGO_PROFILE_RELEASE_DEBUG;
+            CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO="off"; export CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO;
+            CARGO_PROFILE_RELEASE_LTO="off"; export CARGO_PROFILE_RELEASE_LTO;
+            CARGO_PROFILE_RELEASE_STRIP="none"; export CARGO_PROFILE_RELEASE_STRIP;
+
     - cargo_fetch:
         description: Fetch dependencies
         command: |
@@ -9,7 +19,7 @@ actions:
     - cargo_build:
         description: Build the rust project
         command: |
-            cargo build -v -j "%(jobs)" --frozen --target %(target_triple)
+            cargo build %(options_cargo_release)
         dependencies:
             - rust
 
@@ -19,10 +29,10 @@ actions:
             cargo_install(){
                 if [ $# -gt 0 ]; then
                     for binary in "$@"; do
-                       %install_bin target/%(target_triple)/debug/"$binary"
+                       %install_bin %(cargo_target_dir)/"$binary"
                     done
                 else
-                    %install_bin target/%(target_triple)/debug/%(name)
+                    %install_bin %(cargo_target_dir)/%(name)
                 fi
             }
             cargo_install
@@ -35,3 +45,14 @@ actions:
             cargo test -v -j "%(jobs)" --frozen --target %(target_triple) --workspace
         dependencies:
             - rust
+
+definitions:
+    # The default cargo build profile
+    - cargo_profile: "release"
+    # Location of generated artifacts, relative to the working dir
+    - cargo_target_dir: "target/%(target_triple)/%(cargo_profile)"
+
+    - options_cargo: |
+        -v -j "%(jobs)" --frozen --target %(target_triple)
+    - options_cargo_release: |
+        %(options_cargo) --release
