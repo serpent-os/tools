@@ -107,8 +107,26 @@ fn packages(builder: &Builder) -> Vec<&str> {
         packages.extend(CCACHE_PACKAGES);
     }
 
-    packages.extend(builder.recipe.parsed.build.build_deps.iter().map(String::as_str));
-    packages.extend(builder.recipe.parsed.build.check_deps.iter().map(String::as_str));
+    packages.extend(
+        builder.recipe.parsed.build.build_deps.iter().map(String::as_str).chain(
+            builder
+                .recipe
+                .parsed
+                .profiles
+                .iter()
+                .flat_map(|kv| kv.value.build_deps.iter().map(String::as_str)),
+        ),
+    );
+    packages.extend(
+        builder.recipe.parsed.build.check_deps.iter().map(String::as_str).chain(
+            builder
+                .recipe
+                .parsed
+                .profiles
+                .iter()
+                .flat_map(|kv| kv.value.check_deps.iter().map(String::as_str)),
+        ),
+    );
 
     for upstream in &builder.recipe.parsed.upstreams {
         if let Upstream::Plain { uri, .. } = upstream {

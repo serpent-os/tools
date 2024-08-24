@@ -75,15 +75,16 @@ impl Phase {
         macros: &Macros,
         ccache: bool,
     ) -> Result<Option<Script>, Error> {
-        let build = recipe.build_target_definition(target);
+        let root_build = &recipe.parsed.build;
+        let target_build = recipe.build_target_definition(target);
 
         let Some(content) = (match self {
             Phase::Prepare => Some(prepare_script(&recipe.parsed.upstreams)),
-            Phase::Setup => build.setup.clone(),
-            Phase::Build => build.build.clone(),
-            Phase::Check => build.check.clone(),
-            Phase::Install => build.install.clone(),
-            Phase::Workload => match build.workload.clone() {
+            Phase::Setup => target_build.setup.as_ref().or(root_build.setup.as_ref()).cloned(),
+            Phase::Build => target_build.build.as_ref().or(root_build.build.as_ref()).cloned(),
+            Phase::Check => target_build.check.as_ref().or(root_build.check.as_ref()).cloned(),
+            Phase::Install => target_build.install.as_ref().or(root_build.install.as_ref()).cloned(),
+            Phase::Workload => match target_build.workload.as_ref().or(root_build.workload.as_ref()).cloned() {
                 Some(mut content) => {
                     if matches!(recipe.parsed.options.toolchain, Toolchain::Llvm) {
                         if matches!(pgo_stage, Some(pgo::Stage::One)) {
@@ -105,9 +106,10 @@ impl Phase {
             return Ok(None);
         }
 
-        let mut env = build
+        let mut env = target_build
             .environment
             .as_deref()
+            .or(root_build.environment.as_deref())
             .filter(|env| *env != "(null)" && !env.is_empty() && !matches!(self, Phase::Prepare))
             .unwrap_or_default()
             .to_string();

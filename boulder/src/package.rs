@@ -134,11 +134,15 @@ fn resolve_packages(
 
         package.summary = package
             .summary
-            .map(|summary| parser.parse_content(&summary))
+            .as_ref()
+            .or(recipe.parsed.package.summary.as_ref())
+            .map(|summary| parser.parse_content(summary))
             .transpose()?;
         package.description = package
             .description
-            .map(|description| parser.parse_content(&description))
+            .as_ref()
+            .or(recipe.parsed.package.description.as_ref())
+            .map(|description| parser.parse_content(description))
             .transpose()?;
         package.run_deps = package
             .run_deps
