@@ -225,6 +225,12 @@ pub fn verify(client: &Client, yes: bool, verbose: bool) -> Result<(), client::E
     println!("Reblitting affected states");
 
     let _guard = signal::ignore([Signal::SIGINT])?;
+    let _fd = signal::inhibit(
+        vec!["shutdown", "sleep", "idle", "handle-lid-switch"],
+        "moss".into(),
+        "Verifying states".into(),
+        "block".into(),
+    );
 
     // Reblit each state
     for id in issue_states {
