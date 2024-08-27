@@ -14,6 +14,7 @@ actions:
             python3 setup.py install --root="%(installroot)"
         dependencies:
             - python
+            - python-packaging # auto deps handler
 
     - pyproject_build:
         description: Build a wheel for python PEP517 projects
