@@ -42,7 +42,7 @@ actions:
     - cargo_test:
         description: Run tests
         command: |
-            cargo test -v -j "%(jobs)" --frozen --target %(target_triple) --workspace
+            cargo test %(options_cargo_release) --workspace
         dependencies:
             - rust
 
