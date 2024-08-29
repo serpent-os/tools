@@ -12,11 +12,11 @@ use crate::{
 
 #[derive(Debug)]
 pub struct Repository {
-    active: repository::Active,
+    active: repository::Cached,
 }
 
 impl Repository {
-    pub fn new(active: repository::Active) -> Self {
+    pub fn new(active: repository::Cached) -> Self {
         Self { active }
     }
 

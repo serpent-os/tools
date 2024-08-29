@@ -11,6 +11,7 @@ use moss::{
     runtime, Installation, Repository,
 };
 use thiserror::Error;
+use tui::Styled;
 use url::Url;
 
 /// Control flow for the subcommands
@@ -23,6 +24,8 @@ enum Action {
     Remove(String),
     // Root, Id
     Update(Option<String>),
+    Enable(String),
+    Disable(String),
 }
 
 /// Return a command for handling `repo` subcommands
@@ -72,6 +75,18 @@ pub fn command() -> Command {
                 .long_about("If no repository is named, update them all")
                 .arg(arg!([NAME] "repo name").value_parser(clap::value_parser!(String))),
         )
+        .subcommand(
+            Command::new("enable")
+                .visible_alias("er")
+                .about("Enable the system repositories")
+                .arg(arg!([NAME] "repo name").value_parser(clap::value_parser!(String))),
+        )
+        .subcommand(
+            Command::new("disable")
+                .visible_alias("dr")
+                .about("Disable the system repositories")
+                .arg(arg!([NAME] "repo name").value_parser(clap::value_parser!(String))),
+        )
 }
 
 /// Handle subcommands to `repo`
@@ -88,6 +103,8 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
         Some(("list", _)) => Action::List,
         Some(("remove", cmd_args)) => Action::Remove(cmd_args.get_one::<String>("NAME").cloned().unwrap()),
         Some(("update", cmd_args)) => Action::Update(cmd_args.get_one::<String>("NAME").cloned()),
+        Some(("enable", cmd_args)) => Action::Enable(cmd_args.get_one::<String>("NAME").cloned().unwrap()),
+        Some(("disable", cmd_args)) => Action::Disable(cmd_args.get_one::<String>("NAME").cloned().unwrap()),
         _ => unreachable!(),
     };
 
@@ -97,6 +114,8 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
         Action::Add(name, uri, comment, priority) => add(installation, config, name, uri, comment, priority),
         Action::Remove(name) => remove(installation, config, name),
         Action::Update(name) => update(installation, config, name),
+        Action::Enable(name) => enable(installation, config, name),
+        Action::Disable(name) => disable(installation, config, name),
     }
 }
 
@@ -119,6 +138,7 @@ fn add(
             description: comment,
             uri,
             priority,
+            active: true,
         },
     )?;
 
@@ -140,7 +160,13 @@ fn list(installation: Installation, config: config::Manager) -> Result<(), Error
     }
 
     for (id, repo) in configured_repos.sorted_by(|(_, a), (_, b)| a.priority.cmp(&b.priority).reverse()) {
-        println!(" - {} = {} [{}]", id, repo.uri, repo.priority);
+        let disabled = if !repo.active {
+            " (disabled)".dim().to_string()
+        } else {
+            String::new()
+        };
+
+        println!(" - {} = {} [{}]{}", id, repo.uri, repo.priority, disabled);
     }
 
     Ok(())
@@ -181,6 +207,28 @@ fn remove(installation: Installation, config: config::Manager, repo: String) -> 
             println!("{id} removed");
         }
     }
+
+    Ok(())
+}
+
+fn enable(installation: Installation, config: config::Manager, repo: String) -> Result<(), Error> {
+    let id = repository::Id::new(repo);
+    let mut manager = repository::Manager::system(config, installation)?;
+
+    runtime::block_on(manager.enable(&id))?;
+
+    println!("{id} enabled");
+
+    Ok(())
+}
+
+fn disable(installation: Installation, config: config::Manager, repo: String) -> Result<(), Error> {
+    let id = repository::Id::new(repo);
+    let mut manager = repository::Manager::system(config, installation)?;
+
+    runtime::block_on(manager.disable(&id))?;
+
+    println!("{id} disabled");
 
     Ok(())
 }
