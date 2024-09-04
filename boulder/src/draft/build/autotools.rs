@@ -1,6 +1,6 @@
-use std::fs;
 use std::path::Path;
 
+use fs_err as fs;
 use moss::{dependency, Dependency};
 use regex::Regex;
 

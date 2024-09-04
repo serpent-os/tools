@@ -4,13 +4,13 @@
 
 use std::{
     fmt,
-    fs::{self, File},
     io::{self},
     os::fd::AsRawFd,
     path::PathBuf,
     sync::Arc,
 };
 
+use fs_err::{self as fs, File};
 use nix::fcntl::{flock, FlockArg};
 use thiserror::Error;
 

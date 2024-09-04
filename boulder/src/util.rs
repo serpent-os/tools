@@ -3,13 +3,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
-    fs, io,
+    io,
     num::NonZeroUsize,
     os::unix::fs::symlink,
     path::{Path, PathBuf},
     thread,
 };
 
+use fs_err as fs;
 use nix::unistd::{linkat, LinkatFlags};
 use url::Url;
 

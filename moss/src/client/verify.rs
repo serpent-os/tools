@@ -2,10 +2,11 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{collections::BTreeSet, fmt, fs, io, path::PathBuf};
+use std::{collections::BTreeSet, fmt, io, path::PathBuf};
 
 use itertools::Itertools;
 
+use fs_err as fs;
 use stone::{payload::layout, write::digest};
 use tui::{
     dialoguer::{theme::ColorfulTheme, Confirm},

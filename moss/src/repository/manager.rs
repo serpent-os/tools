@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::collections::BTreeMap;
-use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use fs_err::{self as fs, File};
 use futures::{stream, StreamExt, TryStreamExt};
 use thiserror::Error;
 use xxhash_rust::xxh3::xxh3_64;

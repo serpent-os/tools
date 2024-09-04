@@ -3,12 +3,13 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
-    env, fs, io,
+    env, io,
     path::{Path, PathBuf},
     process::Command,
 };
 
 use chrono::{DateTime, Utc};
+use fs_err as fs;
 use thiserror::Error;
 
 use crate::architecture::{self, BuildTarget};

@@ -10,14 +10,13 @@
 
 use std::{
     borrow::Borrow,
-    fmt,
-    fs::{self, create_dir_all},
-    io,
+    fmt, io,
     os::{fd::RawFd, unix::fs::symlink},
     path::{Path, PathBuf},
     time::Duration,
 };
 
+use fs_err::{self as fs, create_dir_all};
 use futures::{stream, StreamExt, TryStreamExt};
 use nix::{
     errno::Errno,

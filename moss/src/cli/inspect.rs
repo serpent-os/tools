@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use clap::{arg, ArgMatches, Command};
-use std::fs::File;
+use fs_err::File;
 use std::path::PathBuf;
 use stone::payload::layout;
 use stone::payload::meta;

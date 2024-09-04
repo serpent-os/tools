@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::collections::BTreeSet;
-use std::{fs, io};
+use std::io;
 
-use thiserror::Error;
-
+use fs_err as fs;
 use moss::{repository, runtime, Installation};
 use stone_recipe::{tuning::Toolchain, Upstream};
+use thiserror::Error;
 
 use crate::build::Builder;
 use crate::{container, timing, util, Timing};

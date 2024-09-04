@@ -3,13 +3,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
-    fs::{create_dir_all, hard_link, remove_dir_all, remove_file, File},
+    fs,
     io::{copy, Read, Seek, SeekFrom},
     os::unix::fs::symlink,
     path::PathBuf,
 };
 
 use clap::{arg, ArgMatches, Command};
+use fs_err::{create_dir_all, hard_link, remove_dir_all, remove_file, File};
 use moss::package::{self, MissingMetaFieldError};
 use stone::{payload::layout, read::PayloadKind};
 use thiserror::{self, Error};
@@ -56,7 +57,7 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
         }
 
         if let Some(content) = content {
-            let content_file = File::options()
+            let content_file = fs::OpenOptions::new()
                 .read(true)
                 .write(true)
                 .create(true)

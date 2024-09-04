@@ -2,8 +2,9 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 use std::collections::{btree_map, BTreeMap};
-use std::{fs, io, num::NonZeroU64};
+use std::{io, num::NonZeroU64};
 
+use fs_err as fs;
 use itertools::Itertools;
 use thiserror::Error;
 

@@ -5,13 +5,14 @@
 //! Boot management integration in moss
 
 use std::{
-    fs, io,
+    io,
     path::{Path, PathBuf},
     str::FromStr,
 };
 
 use blsforme::os_release::{self, OsRelease};
 use fnmatch::Pattern;
+use fs_err as fs;
 use stone::payload::{layout, Layout};
 use thiserror::{self, Error};
 

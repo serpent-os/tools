@@ -2,8 +2,9 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{fs, process::Command};
+use std::process::Command;
 
+use fs_err as fs;
 use nix::unistd::{getgid, getuid, Pid, User};
 use thiserror::Error;
 

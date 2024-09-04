@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::collections::BTreeMap;
-use std::fs::File;
 use std::io;
 use std::path::PathBuf;
 
+use fs_err::File;
 use thiserror::Error;
 
 use stone::read::PayloadKind;

@@ -3,12 +3,13 @@
 // SPDX-License-Identifier: MPL-2.0
 use std::{
     collections::{btree_map, BTreeMap},
-    fs, io,
+    io,
     path::{Path, PathBuf, StripPrefixError},
     time::Duration,
 };
 
 use clap::{arg, value_parser, ArgMatches, Command};
+use fs_err as fs;
 use moss::{
     client,
     package::{self, Meta, MissingMetaFieldError},

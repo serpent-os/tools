@@ -1,6 +1,5 @@
 use std::{
     ffi::CStr,
-    fs::File,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -12,6 +11,7 @@ use elf::{
     note::Note,
     to_str,
 };
+use fs_err::File;
 
 use moss::{dependency, Dependency, Provider};
 use stone_recipe::tuning::Toolchain;

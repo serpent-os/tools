@@ -2,13 +2,14 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{fs, io, path::PathBuf, process};
+use std::{io, path::PathBuf, process};
 
 use boulder::{
     architecture::{self, BuildTarget},
     build, container, macros, recipe, Env, Macros, Paths, Recipe,
 };
 use clap::Parser;
+use fs_err as fs;
 use thiserror::Error;
 
 #[derive(Debug, Parser)]

@@ -3,8 +3,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::path::Path;
-use std::{fs, io, path::PathBuf};
+use std::{io, path::PathBuf};
 
+use fs_err as fs;
 use itertools::Itertools;
 use moss::Dependency;
 use thiserror::Error;
@@ -70,7 +71,7 @@ impl Drafter {
 # SPDX-FileCopyrightText: © 2020-2024 Serpent OS Developers
 #
 # SPDX-License-Identifier: MPL-2.0
-#                
+#
 name        : {}
 version     : {}
 release     : 1
