@@ -10,6 +10,7 @@ definitions:
     - cpp            : "%(compiler_cpp)"
     - march          : x86-64-v3
     - mtune          : znver1
+    - target_triple  : "x86_64-unknown-linux-gnu"
 
 flags:
 
