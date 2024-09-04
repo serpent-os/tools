@@ -48,6 +48,8 @@ pub struct Recipe {
     pub tuning: Vec<KeyValue<Tuning>>,
     #[serde(default, deserialize_with = "stringy_bool")]
     pub emul32: bool,
+    #[serde(default, deserialize_with = "stringy_bool")]
+    pub x86_64_v3x: bool,
 }
 
 #[derive(Debug, Clone)]
