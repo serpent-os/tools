@@ -50,6 +50,10 @@ impl Recipe {
                 targets.push(BuildTarget::Emul32(host));
             }
 
+            if self.parsed.x86_64_v3x {
+                targets.push(BuildTarget::X86_64_v3x(host));
+            }
+
             targets.push(BuildTarget::Native(host));
 
             targets
@@ -59,10 +63,19 @@ impl Recipe {
             let emul32 = BuildTarget::Emul32(host);
             let emul32_string = emul32.to_string();
 
+            let x86_64_v3x = BuildTarget::X86_64_v3x(host);
+            let x86_64_v3x_string = x86_64_v3x.to_string();
+
             if self.parsed.architectures.contains(&emul32_string)
                 || self.parsed.architectures.contains(&"emul32".into())
             {
                 targets.push(emul32);
+            }
+
+            if self.parsed.architectures.contains(&x86_64_v3x_string)
+                || self.parsed.architectures.contains(&"x86_64_v3x".into())
+            {
+                targets.push(x86_64_v3x);
             }
 
             if self.parsed.architectures.contains(&host_string) || self.parsed.architectures.contains(&"native".into())
@@ -81,6 +94,8 @@ impl Recipe {
             Some(target_string)
         } else if target.emul32() && self.parsed.profiles.iter().any(|kv| &kv.key == "emul32") {
             Some("emul32".to_string())
+        } else if target.x86_64_v3x() && self.parsed.profiles.iter().any(|kv| &kv.key == "x86_64_v3x") {
+            Some("x86_64_v3x".to_string())
         } else {
             None
         }
