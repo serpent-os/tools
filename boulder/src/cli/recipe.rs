@@ -69,6 +69,7 @@ pub enum Subcommand {
         #[arg(long = "ver", required = true, help = "Update version")]
         version: String,
         #[arg(
+            short = 'u',
             long = "upstream",
             required = true,
             value_parser = parse_upstream,
