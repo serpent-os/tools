@@ -4,11 +4,11 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fs::File,
     io::Write,
     path::Path,
 };
 
+use fs_err::File;
 use itertools::Itertools;
 use serde::Serialize;
 

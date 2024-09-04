@@ -3,16 +3,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::PathBuf;
 
 use derive_more::{Display, From, Into};
+use fs_err::tokio::File;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::{
-    fs::File,
-    io::{self, AsyncWriteExt},
-};
+use tokio::io::{self, AsyncWriteExt};
 use url::Url;
 
 use config::Config;
@@ -125,7 +123,7 @@ impl Config for Map {
     }
 }
 
-async fn fetch_index(url: Url, out_path: impl AsRef<Path>) -> Result<(), FetchError> {
+async fn fetch_index(url: Url, out_path: impl Into<PathBuf>) -> Result<(), FetchError> {
     let mut stream = request::get(url).await?;
 
     let mut out = File::create(out_path).await?;

@@ -2,12 +2,12 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 use std::{
-    fs::{self, File},
     io::{self, Write},
     num::NonZeroU64,
     time::Duration,
 };
 
+use fs_err::{self as fs, File};
 use itertools::Itertools;
 use moss::{package::Meta, Dependency, Provider};
 use thiserror::Error;
@@ -191,7 +191,7 @@ fn emit_package(paths: &Paths, package: &Package) -> Result<(), Error> {
     if !sorted_files.is_empty() {
         // Temp file for building content payload
         let temp_content_path = format!("/tmp/{}.tmp", &filename);
-        let mut temp_content = File::options()
+        let mut temp_content = fs::OpenOptions::new()
             .read(true)
             .append(true)
             .create(true)

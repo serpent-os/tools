@@ -3,6 +3,7 @@ use std::{
     process::{Command, Stdio},
 };
 
+use fs_err as fs;
 use moss::{dependency, Dependency, Provider};
 
 use crate::package::collect::PathInfo;
@@ -129,7 +130,7 @@ pub fn python(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Response, B
         return Ok(Decision::NextHandler.into());
     }
 
-    let data = std::fs::read(&info.path)?;
+    let data = fs::read(&info.path)?;
     let mail = parse_mail(&data)?;
     let python_name = mail
         .get_headers()

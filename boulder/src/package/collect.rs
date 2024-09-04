@@ -3,12 +3,13 @@
 // SPDX-License-Identifier: MPL-2.0
 use std::{
     ffi::OsStr,
-    fs::{self, Metadata},
+    fs::Metadata,
     io,
     os::unix::fs::{FileTypeExt, MetadataExt},
     path::{Path, PathBuf},
 };
 
+use fs_err as fs;
 use glob::Pattern;
 use nix::libc::{S_IFDIR, S_IRGRP, S_IROTH, S_IRWXU, S_IXGRP, S_IXOTH};
 use stone::payload::{layout, Layout};

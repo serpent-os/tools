@@ -1,14 +1,11 @@
 use std::{io, path::Path, process::ExitStatus, time::Duration};
 
+use fs_err::tokio::{self as fs, File};
 use futures::{stream, StreamExt, TryStreamExt};
 use moss::{environment, request, runtime};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
-use tokio::{
-    fs::{self, File},
-    io::AsyncWriteExt,
-    process::Command,
-};
+use tokio::{io::AsyncWriteExt, process::Command};
 use tui::{MultiProgress, ProgressBar, ProgressStyle, Styled};
 use url::Url;
 

@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 use std::{
-    fs,
     io::{self, Read},
     path::PathBuf,
     time::Duration,
@@ -14,6 +13,7 @@ use boulder::{
     macros, recipe, Env, Macros,
 };
 use clap::Parser;
+use fs_err as fs;
 use futures::StreamExt;
 use itertools::Itertools;
 use moss::{request, runtime};

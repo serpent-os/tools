@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 use std::env::set_current_dir;
-use std::fs::{self, copy, create_dir_all, remove_dir};
 use std::io;
 use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
@@ -10,6 +9,7 @@ use std::process::Command;
 use std::ptr::addr_of_mut;
 use std::sync::atomic::{AtomicI32, Ordering};
 
+use fs_err::{self as fs, copy, create_dir_all, remove_dir};
 use nix::libc::SIGCHLD;
 use nix::mount::{mount, umount2, MntFlags, MsFlags};
 use nix::sched::{clone, CloneFlags};

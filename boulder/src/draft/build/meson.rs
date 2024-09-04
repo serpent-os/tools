@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: Copyright © 2020-2024 Serpent OS Developers
 //
 // SPDX-License-Identifier: MPL-2.0
-use std::{fs, path::Path};
+use std::path::Path;
 
+use fs_err as fs;
 use moss::{dependency, Dependency};
 use regex::Regex;
 

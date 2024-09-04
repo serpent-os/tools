@@ -4,11 +4,9 @@
 
 //! Encapsulation of a target installation filesystem
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
+use fs_err as fs;
 use log::{trace, warn};
 use nix::unistd::{access, AccessFlags, Uid};
 use thiserror::Error;

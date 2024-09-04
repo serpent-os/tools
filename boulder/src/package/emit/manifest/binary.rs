@@ -2,8 +2,9 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::{collections::BTreeSet, fs::File, path::Path};
+use std::{collections::BTreeSet, path::Path};
 
+use fs_err::File;
 use moss::Dependency;
 use stone::{
     header::v1::FileType,

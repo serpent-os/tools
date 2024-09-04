@@ -11,12 +11,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use fs_err::tokio::{self as fs, File};
 use futures::StreamExt;
 use thiserror::Error;
-use tokio::{
-    fs::{self, File},
-    io::AsyncWriteExt,
-};
+use tokio::io::AsyncWriteExt;
 use url::Url;
 
 use stone::{payload, read::PayloadKind};
@@ -75,7 +73,7 @@ pub async fn fetch(
         fs::create_dir_all(parent).await?;
     }
 
-    if fs::try_exists(&destination_path).await? {
+    if tokio::fs::try_exists(&destination_path).await? {
         return Ok(Download {
             id: meta.id().into(),
             path: destination_path,

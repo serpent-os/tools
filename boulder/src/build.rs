@@ -10,6 +10,7 @@ use std::{
     time::Duration,
 };
 
+use fs_err as fs;
 use itertools::Itertools;
 use moss::runtime;
 use nix::{
@@ -203,7 +204,7 @@ impl Builder {
                                 );
 
                                 // Write env to $HOME/.profile
-                                std::fs::write(build_dir.join(".profile"), format_profile(script))?;
+                                fs::write(build_dir.join(".profile"), format_profile(script))?;
 
                                 let mut command = process::Command::new("/bin/bash")
                                     .arg("--login")
@@ -226,7 +227,7 @@ impl Builder {
                             script::Command::Content(content) => {
                                 // TODO: Proper temp file
                                 let script_path = "/tmp/script";
-                                std::fs::write(script_path, content).unwrap();
+                                fs::write(script_path, content).unwrap();
 
                                 let result = logged(*phase, is_pgo, "/bin/sh", |command| {
                                     command

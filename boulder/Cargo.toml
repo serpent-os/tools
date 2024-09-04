@@ -30,6 +30,7 @@ derive_more.workspace = true
 dirs.workspace = true
 elf.workspace = true
 glob.workspace = true
+fs-err.workspace = true
 futures.workspace = true
 hex.workspace = true
 itertools.workspace = true

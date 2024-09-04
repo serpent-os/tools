@@ -5,12 +5,13 @@
 use std::{io, path::PathBuf, sync::OnceLock};
 
 use bytes::Bytes;
+use fs_err::tokio::File;
 use futures::{
     stream::{self, BoxStream},
     Stream, StreamExt,
 };
 use thiserror::Error;
-use tokio::{fs::File, io::AsyncReadExt};
+use tokio::io::AsyncReadExt;
 use tokio_util::io::ReaderStream;
 use url::Url;
 

@@ -3,10 +3,11 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::{
-    fmt, fs, io,
+    fmt, io,
     path::{Path, PathBuf},
 };
 
+use fs_err as fs;
 use serde::{de::DeserializeOwned, Serialize};
 use thiserror::Error;
 

@@ -10,10 +10,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::{
-    fs, io,
+    io,
     path::{Path, PathBuf},
 };
 
+use fs_err as fs;
 use itertools::Itertools;
 use thiserror::Error;
 
@@ -284,7 +285,7 @@ fn enumerate_files(root: impl AsRef<Path>) -> Result<Vec<PathBuf>, io::Error> {
             return Ok(vec![]);
         }
 
-        let contents = fs::read_dir(dir)?;
+        let contents = fs::read_dir(dir.as_ref())?;
 
         for entry in contents {
             let entry = entry?;
