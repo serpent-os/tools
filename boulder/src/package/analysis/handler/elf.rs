@@ -17,6 +17,7 @@ use moss::{dependency, Dependency, Provider};
 use stone_recipe::tuning::Toolchain;
 
 use crate::{
+    architecture::{host, BuildTarget},
     package::{
         analysis::{BoxError, BucketMut, Decision, Response},
         collect::PathInfo,
@@ -57,7 +58,7 @@ pub fn elf(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Response, BoxE
     let mut generated_paths = vec![];
 
     if let Some(build_id) = build_id {
-        match split_debug(bucket, info, bit_size, &build_id) {
+        /*match split_debug(bucket, info, bit_size, &build_id) {
             Ok(Some(debug_path)) => {
                 // Add new split file to be analyzed
                 generated_paths.push(debug_path);
@@ -67,7 +68,7 @@ pub fn elf(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Response, BoxE
             Err(err) => {
                 eprintln!("error splitting debug info from {}: {err}", info.path.display());
             }
-        }
+        }*/
 
         if let Err(err) = strip(bucket, info) {
             // TODO: Error logging
@@ -262,6 +263,7 @@ fn split_debug(
     } else {
         Path::new("usr/lib32/debug/.build-id")
     };
+
     let debug_info_relative_dir = debug_dir.join(&build_id[..2]);
     let debug_info_dir = bucket.paths.install().guest.join(debug_info_relative_dir);
     let debug_info_path = debug_info_dir.join(format!("{}.debug", &build_id[2..]));
