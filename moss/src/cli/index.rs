@@ -59,13 +59,20 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
                 entry.insert(meta);
             }
             btree_map::Entry::Occupied(mut entry) => {
-                match (entry.get().source_release, meta.source_release) {
+                match (
+                    entry.get().source_release,
+                    meta.source_release,
+                    &entry.get().architecture,
+                    &meta.architecture,
+                ) {
                     // Error if dupe is same version
-                    (prev, curr) if prev == curr => {
+                    (prev_rel, curr_rel, prev_arch, curr_arch)
+                        if (prev_rel == curr_rel) && (prev_arch == curr_arch) =>
+                    {
                         return Err(Error::DuplicateRelease(meta.name.clone(), meta.source_release));
                     }
                     // Update if dupe is newer version
-                    (prev, curr) if prev < curr => {
+                    (prev, curr, _, _) if prev < curr => {
                         entry.insert(meta);
                     }
                     // Otherwise prev is more recent, don't replace
