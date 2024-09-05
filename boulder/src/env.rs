@@ -7,6 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use nix::NixPath;
 use thiserror::Error;
 
 use crate::util;
@@ -36,7 +37,7 @@ impl Env {
         };
 
         let cache_dir = resolve_cache_dir(is_root, cache_dir)?;
-        let data_dir = resolve_data_dir(data_dir);
+        let data_dir = resolve_data_dir(is_root, data_dir)?;
         let moss_dir = resolve_moss_root(is_root, moss_root)?;
 
         util::ensure_dir_exists(&cache_dir)?;
@@ -62,8 +63,20 @@ fn resolve_cache_dir(is_root: bool, custom: Option<PathBuf>) -> Result<PathBuf, 
     }
 }
 
-fn resolve_data_dir(custom: Option<PathBuf>) -> PathBuf {
-    custom.unwrap_or_else(|| "/usr/share/boulder".into())
+fn resolve_data_dir(is_root: bool, custom: Option<PathBuf>) -> Result<PathBuf, Error> {
+    let root_dir = PathBuf::from("/usr/share/boulder");
+    if let Some(dir) = custom {
+        Ok(dir)
+    } else if is_root {
+        Ok(root_dir)
+    } else {
+        let user_datadir = dirs::data_dir().ok_or(Error::UserData)?.join("boulder");
+        if user_datadir.exists() && !user_datadir.is_empty() {
+            Ok(user_datadir)
+        } else {
+            Ok(root_dir)
+        }
+    }
 }
 
 fn resolve_moss_root(is_root: bool, custom: Option<PathBuf>) -> Result<PathBuf, Error> {
@@ -86,6 +99,8 @@ pub enum Error {
     UserCache,
     #[error("cannot find config dir, $XDG_CONFIG_HOME or $HOME env not set")]
     UserConfig,
+    #[error("cannot find data dir, $XDG_DATA_HOME or $HOME env not set")]
+    UserData,
     #[error("boulder cannot use a moss system root")]
     MossSystemRoot,
     #[error("io")]
