@@ -16,6 +16,8 @@ use stone::payload::{layout, Layout};
 use stone::write::digest;
 use thiserror::Error;
 
+use crate::architecture::{host, BuildTarget};
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Rule {
     pub pattern: String,
@@ -61,9 +63,9 @@ impl Collector {
     }
 
     /// Produce a [`PathInfo`] from the provided [`Path`]
-    pub fn path(&self, path: &Path, hasher: &mut digest::Hasher) -> Result<PathInfo, Error> {
+    pub fn path(&self, path: &Path, hasher: &mut digest::Hasher, target: BuildTarget) -> Result<PathInfo, Error> {
         let metadata = fs::metadata(path)?;
-        self.path_with_metadata(path.to_path_buf(), &metadata, hasher)
+        self.path_with_metadata(path.to_path_buf(), &metadata, hasher, target)
     }
 
     fn path_with_metadata(
@@ -71,8 +73,12 @@ impl Collector {
         path: PathBuf,
         metadata: &Metadata,
         hasher: &mut digest::Hasher,
+        target: BuildTarget,
     ) -> Result<PathInfo, Error> {
-        let target_path = Path::new("/").join(path.strip_prefix(&self.root).expect("path is ancestor of root"));
+        let target_path = Path::new("/").join(
+            path.strip_prefix(&self.root.join(target.to_string()))
+                .expect("path is ancestor of root"),
+        );
 
         let package = self
             .matching_package(target_path.to_str().unwrap_or_default())
@@ -86,6 +92,7 @@ impl Collector {
         &self,
         subdir: Option<(PathBuf, Metadata)>,
         hasher: &mut digest::Hasher,
+        target: BuildTarget,
     ) -> Result<Vec<PathInfo>, Error> {
         let mut paths = vec![];
 
@@ -99,9 +106,9 @@ impl Collector {
             let host_path = entry.path();
 
             if metadata.is_dir() {
-                paths.extend(self.enumerate_paths(Some((host_path, metadata)), hasher)?);
+                paths.extend(self.enumerate_paths(Some((host_path, metadata)), hasher, target)?);
             } else {
-                paths.push(self.path_with_metadata(host_path, &metadata, hasher)?);
+                paths.push(self.path_with_metadata(host_path, &metadata, hasher, target)?);
             }
         }
 
@@ -115,7 +122,7 @@ impl Collector {
             let is_special = meta.mode() != REGULAR_DIR_MODE;
 
             if meta.is_dir() && (paths.is_empty() || is_special) {
-                paths.push(self.path_with_metadata(dir, &meta, hasher)?);
+                paths.push(self.path_with_metadata(dir, &meta, hasher, target)?);
             }
         }
 

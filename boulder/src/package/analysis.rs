@@ -12,6 +12,7 @@ use moss::{Dependency, Provider};
 use stone::write::digest;
 use tui::{ProgressBar, ProgressStyle, Styled};
 
+use crate::architecture::BuildTarget;
 use crate::{Paths, Recipe};
 
 use super::collect::{Collector, PathInfo};
@@ -50,7 +51,7 @@ impl<'a> Chain<'a> {
         }
     }
 
-    pub fn process(&mut self, paths: impl IntoIterator<Item = PathInfo>) -> Result<(), BoxError> {
+    pub fn process(&mut self, paths: impl IntoIterator<Item = PathInfo>, target: BuildTarget) -> Result<(), BoxError> {
         println!("│Analyzing artefacts (» = Include, × = Ignore)");
 
         let mut queue = paths.into_iter().collect::<VecDeque<_>>();
@@ -83,7 +84,7 @@ impl<'a> Chain<'a> {
                 let response = handler.handle(&mut bucket_mut, &mut path)?;
 
                 response.generated_paths.into_iter().try_for_each(|path| {
-                    let info = self.collector.path(&path, self.hasher)?;
+                    let info = self.collector.path(&path, self.hasher, target)?;
 
                     queue.push_back(info);
 

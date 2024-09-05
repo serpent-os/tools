@@ -146,7 +146,7 @@ impl Phase {
         parser.add_definition("jobs", num_jobs);
         parser.add_definition("pkgdir", paths.recipe().guest.join("pkg").display());
         parser.add_definition("sourcedir", paths.upstreams().guest.display());
-        parser.add_definition("installroot", paths.install().guest.display());
+        parser.add_definition("installroot", paths.install().guest.join(build_target).display());
         parser.add_definition("buildroot", build_dir.display());
         parser.add_definition("workdir", work_dir.display());
 

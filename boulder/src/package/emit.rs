@@ -23,7 +23,7 @@ mod manifest;
 pub struct Package<'a> {
     pub name: &'a str,
     pub build_release: NonZeroU64,
-    pub architecture: Architecture,
+    pub arch: &'a str,
     pub source: &'a stone_recipe::Source,
     pub definition: &'a stone_recipe::Package,
     pub analysis: analysis::Bucket,
@@ -32,6 +32,7 @@ pub struct Package<'a> {
 impl<'a> Package<'a> {
     pub fn new(
         name: &'a str,
+        arch: &'a str,
         source: &'a stone_recipe::Source,
         template: &'a stone_recipe::Package,
         analysis: analysis::Bucket,
@@ -39,7 +40,7 @@ impl<'a> Package<'a> {
     ) -> Self {
         Self {
             name,
-            architecture: architecture::host(),
+            arch,
             source,
             definition: template,
             analysis,
@@ -54,7 +55,7 @@ impl<'a> Package<'a> {
     pub fn filename(&self) -> String {
         format!(
             "{}-{}-{}-{}-{}.stone",
-            self.name, self.source.version, self.source.release, self.build_release, self.architecture
+            self.name, self.source.version, self.source.release, self.build_release, self.arch
         )
     }
 
@@ -64,7 +65,7 @@ impl<'a> Package<'a> {
             version_identifier: self.source.version.clone(),
             source_release: self.source.release,
             build_release: self.build_release.get(),
-            architecture: self.architecture.to_string(),
+            architecture: self.arch.to_string(),
             summary: self.definition.summary.clone().unwrap_or_default(),
             description: self.definition.description.clone().unwrap_or_default(),
             source_id: self.source.name.clone(),

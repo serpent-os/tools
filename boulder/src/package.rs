@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 use std::collections::{btree_map, BTreeMap};
+use std::path::PathBuf;
 use std::{io, num::NonZeroU64};
 
 use fs_err as fs;
@@ -62,49 +63,62 @@ impl<'a> Packager<'a> {
         // Hasher used for calculating file digests
         let mut hasher = digest::Hasher::new();
 
-        let timer = timing.begin(timing::Kind::Analyze);
+        for target in self.recipe.build_targets() {
+            let timer = timing.begin(timing::Kind::Analyze);
 
-        // Collect all paths under install root
-        let paths = self
-            .collector
-            .enumerate_paths(None, &mut hasher)
-            .map_err(Error::CollectPaths)?;
+            // Collect all paths under install root
 
-        // Process all paths with the analysis chain
-        // This will determine which files get included
-        // and what deps / provides they produce
-        let mut analysis = analysis::Chain::new(self.paths, self.recipe, &self.collector, &mut hasher);
-        analysis.process(paths).map_err(Error::Analysis)?;
+            let target_root = self.paths.install().guest.join(target.to_string());
+            let metadata = std::fs::metadata(target_root).unwrap();
 
-        timing.finish(timer);
+            let paths = self
+                .collector
+                .enumerate_paths(
+                    Some((self.paths.install().guest.join(target.to_string()), metadata)),
+                    &mut hasher,
+                    target,
+                )
+                .map_err(Error::CollectPaths)?;
 
-        let timer = timing.begin(timing::Kind::Emit);
+            // Process all paths with the analysis chain
+            // This will determine which files get included
+            // and what deps / provides they produce
+            let mut analysis = analysis::Chain::new(self.paths, self.recipe, &self.collector, &mut hasher);
+            analysis.process(paths, target).map_err(Error::Analysis)?;
 
-        // Combine the package definition with the analysis results
-        // for that package. We will use this to emit the package stones & manifests.
-        //
-        // If no bucket exists, that means no paths matched this package so we can
-        // safely filter it out
-        let packages = self
-            .packages
-            .iter()
-            .filter_map(|(name, package)| {
-                let bucket = analysis.buckets.remove(name)?;
+            timing.finish(timer);
 
-                Some(emit::Package::new(
-                    name,
-                    &self.recipe.parsed.source,
-                    package,
-                    bucket,
-                    self.build_release,
-                ))
-            })
-            .collect::<Vec<_>>();
+            let arch = &target.to_string();
 
-        // Emit package stones and manifest files to artefact directory
-        emit(self.paths, self.recipe, &packages).map_err(Error::Emit)?;
+            let timer = timing.begin(timing::Kind::Emit);
 
-        timing.finish(timer);
+            // Combine the package definition with the analysis results
+            // for that package. We will use this to emit the package stones & manifests.
+            //
+            // If no bucket exists, that means no paths matched this package so we can
+            // safely filter it out
+            let packages = self
+                .packages
+                .iter()
+                .filter_map(|(name, package)| {
+                    let bucket = analysis.buckets.remove(name)?;
+
+                    Some(emit::Package::new(
+                        name,
+                        arch,
+                        &self.recipe.parsed.source,
+                        package,
+                        bucket,
+                        self.build_release,
+                    ))
+                })
+                .collect::<Vec<_>>();
+
+            // Emit package stones and manifest files to artefact directory
+            emit(self.paths, self.recipe, &packages).map_err(Error::Emit)?;
+
+            timing.finish(timer);
+        }
 
         Ok(())
     }
