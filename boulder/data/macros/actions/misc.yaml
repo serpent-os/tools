@@ -2,11 +2,15 @@ actions:
 
     - install_bin:
         description: Install files to %(bindir)
+        example: |
+            %install_bin nano
         command: |
             install -Dm00755 -t %(installroot)/%(bindir)
 
     - install_dir:
-        description: Macro to create an empty directory
+        description: Create a new empty directory with the default permissions
+        example: |
+            %install_dir %(installroot)%(datadir)/pkgname/docs
         command: |
             install -dm00755
 
@@ -17,11 +21,13 @@ actions:
 
     - install_file:
         description: Macro to install a file without executable permissions
+        example: |
+            %install_file %(pkgdir)/helper.file %(installroot)%(datadir)/pkgname/pkgfile
         command: |
             install -Dm00644
 
     - patch:
-        description: Patch sources from file
+        description: Patch the upstream sources using an input patch file.
         example: |
             %patch %(pkgdir)/${file}
 
