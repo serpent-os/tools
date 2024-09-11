@@ -54,14 +54,18 @@ pub fn process() -> Result<(), Error> {
     let args = replace_aliases(std::env::args());
     let Command { global, subcommand } = Command::parse_from(args);
 
+    let env = Env::new(global.cache_dir, global.config_dir, global.data_dir, global.moss_root)?;
+
     if global.verbose {
         match subcommand {
             Subcommand::Version(_) => (),
             _ => version::print(),
         }
+        println!("{:?}", env.config);
+        println!("cache directory: {:?}", env.cache_dir);
+        println!("data directory: {:?}", env.data_dir);
+        println!("moss directory: {:?}", env.moss_dir);
     }
-
-    let env = Env::new(global.cache_dir, global.config_dir, global.data_dir, global.moss_root)?;
 
     match subcommand {
         Subcommand::Build(command) => build::handle(command, env)?,
