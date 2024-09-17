@@ -12,6 +12,7 @@ use boulder::{container, package, profile, timing, Env, Timing};
 use chrono::Local;
 use clap::Parser;
 use thiserror::Error;
+use thread_priority::{thread_native_id, NormalThreadSchedulePolicy, ThreadPriority, ThreadSchedulePolicy};
 
 #[derive(Debug, Parser)]
 #[command(about = "Build ... TODO")]
@@ -22,16 +23,22 @@ pub struct Command {
         short,
         long = "compiler-cache",
         help = "Enable compiler caching",
-        default_value = "false"
+        default_value_t = false
     )]
     ccache: bool,
     #[arg(
         short,
         long,
-        default_value = "false",
+        default_value_t = false,
         help = "Update profile repositories before building"
     )]
     update: bool,
+    #[arg(
+        long = "normal-priority",
+        help = "Run the build without lowering the process priority",
+        default_value_t = false
+    )]
+    normal_priority: bool,
     #[arg(short, long, default_value = ".", help = "Directory to store build results")]
     output: PathBuf,
     #[arg(default_value = "./stone.yaml", help = "Path to recipe file")]
@@ -52,6 +59,7 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
         recipe: recipe_path,
         ccache,
         update,
+        normal_priority,
         build_release,
         ..
     } = command;
@@ -68,6 +76,15 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
 
     let paths = &builder.paths;
     let networking = builder.recipe.parsed.options.networking;
+
+    // Set the current thread priority to SCHED_BATCH so that it's inherited by all child processes
+    if !normal_priority {
+        thread_priority::set_thread_priority_and_policy(
+            thread_native_id(),
+            ThreadPriority::Min,
+            ThreadSchedulePolicy::Normal(NormalThreadSchedulePolicy::Batch),
+        )?;
+    }
 
     // Build & package from within container
     container::exec::<Error>(paths, networking, || {
@@ -110,4 +127,6 @@ pub enum Error {
     SyncArtefacts(#[source] io::Error),
     #[error("container")]
     Container(#[from] container::Error),
+    #[error("setting thread priority")]
+    Priority(#[from] thread_priority::Error),
 }
