@@ -173,7 +173,7 @@ impl Phase {
             parser.add_definition("compiler_cxx", "clang++");
             parser.add_definition("compiler_objc", "clang");
             parser.add_definition("compiler_objcxx", "clang++");
-            parser.add_definition("compiler_cpp", "clang -E -");
+            parser.add_definition("compiler_cpp", "clang-cpp");
             parser.add_definition("compiler_objcpp", "clang -E -");
             parser.add_definition("compiler_objcxxcpp", "clang++ -E");
             parser.add_definition("compiler_d", "ldc2");
