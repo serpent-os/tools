@@ -8,9 +8,10 @@ use super::{DecodeError, EncodeError, Record};
 use crate::{ReadExt, WriteExt};
 
 /// An IndexEntry (a series of sequential entries within the IndexPayload)
-/// record offsets to unique files within the ContentPayload when decompressed
+/// record offsets to unique files within the ContentPayload when decompressed.
+///
 /// This is used to split the file into the content store on disk before promoting
-/// to a transaction
+/// to a transaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Index {
     /// Start pf the entry within the ContentPayload

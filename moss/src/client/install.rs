@@ -21,7 +21,8 @@ use crate::{
     Package, Provider,
 };
 
-/// Install a set of packages
+/// Install a set of packages.
+///
 /// If this call is successful a new State is recorded into the [`super::db::state::Database`].
 /// Upon completion the `/usr` tree is "hot swapped" with the staging tree through `renameat2` call.
 pub fn install(client: &mut Client, pkgs: &[&str], yes: bool) -> Result<Timing, Error> {

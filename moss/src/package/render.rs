@@ -34,23 +34,21 @@ impl<'a> ColumnDisplay for &'a Package {
     }
 
     fn display_column(&self, writer: &mut impl Write, col: Column, width: usize) {
-        let _ = match col {
-            Column::Last => write!(
-                writer,
-                "{} {:width$}{}-{}",
-                self.meta.name.to_string().bold(),
-                " ",
-                self.meta.version_identifier.clone().magenta(),
-                self.meta.source_release.to_string().dim(),
-            ),
-            _ => write!(
-                writer,
-                "{} {:width$}{}-{}   ",
-                self.meta.name.to_string().bold(),
-                " ",
-                self.meta.version_identifier.clone().magenta(),
-                self.meta.source_release.to_string().dim(),
-            ),
-        };
+        _ = write!(
+            writer,
+            "{} {:width$}{}-{}",
+            self.meta.name.to_string().bold(),
+            " ",
+            self.meta.version_identifier.clone().magenta(),
+            self.meta.source_release.to_string().dim(),
+        );
+
+        if self.meta.build_release > 1 {
+            _ = write!(writer, "-{}", self.meta.source_release.to_string().dim());
+        }
+
+        if col != Column::Last {
+            _ = write!(writer, "   ");
+        }
     }
 }

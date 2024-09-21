@@ -13,6 +13,7 @@ use crate::TermSize;
 
 /// Simplistic handling of renderable display columns
 /// allowing implementations to handle first, n and last specific alignment
+#[derive(PartialEq)]
 pub enum Column {
     First,
     Nth(usize),
@@ -34,6 +35,7 @@ pub fn print_columns<T: ColumnDisplay>(items: &[T], colnum: usize) {
 }
 
 /// Prints a vec of items that implement the ColumnDisplay trait.
+///
 /// These will be printed in individual columns assuming that the input order is
 /// alphabetically sorted, to give each column an ascending alpha sort.
 pub fn autoprint_columns<T: ColumnDisplay>(items: &[T]) {
