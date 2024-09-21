@@ -13,6 +13,7 @@ use crate::TermSize;
 
 /// Simplistic handling of renderable display columns
 /// allowing implementations to handle first, n and last specific alignment
+#[derive(PartialEq)]
 pub enum Column {
     First,
     Nth(usize),
