@@ -31,8 +31,8 @@ Current Milestone target: [oxide-prealpha1](https://github.com/serpent-os/moss/m
 # clone the serpent-os moss repo somewhere reasonable
 mkdir -pv ~/repos/serpent-os/
 cd ~/repos/serpent-os/
-git clone https://github.com/serpent-os/moss.git
-cd moss/
+git clone https://github.com/serpent-os/tools.git
+cd tools/
 
 # from inside the moss clone, this will build boulder and moss
 # and install them to ${HOME}/.local/bin/ by default
