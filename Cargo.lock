@@ -220,7 +220,7 @@ dependencies = [
 
 [[package]]
 name = "boulder"
-version = "0.1.0"
+version = "0.24.1"
 dependencies = [
  "chrono",
  "clap",
@@ -415,7 +415,7 @@ checksum = "0b6a852b24ab71dffc585bcb46eaf7959d175cb865a7152e35b348d1b2960422"
 
 [[package]]
 name = "config"
-version = "0.1.0"
+version = "0.24.1"
 dependencies = [
  "dirs",
  "fs-err",
@@ -445,7 +445,7 @@ checksum = "f7144d30dcf0fafbce74250a3963025d8d52177934239851c917d29f1df280c2"
 
 [[package]]
 name = "container"
-version = "0.1.0"
+version = "0.24.1"
 dependencies = [
  "fs-err",
  "nix 0.27.1",
@@ -602,7 +602,7 @@ dependencies = [
 
 [[package]]
 name = "dag"
-version = "0.1.0"
+version = "0.24.1"
 dependencies = [
  "petgraph",
 ]
@@ -839,7 +839,7 @@ dependencies = [
 
 [[package]]
 name = "fnmatch"
-version = "0.1.0"
+version = "0.24.1"
 dependencies = [
  "regex",
  "serde",
@@ -1435,7 +1435,7 @@ dependencies = [
 
 [[package]]
 name = "moss"
-version = "0.1.0"
+version = "0.24.1"
 dependencies = [
  "blsforme",
  "bytes",
@@ -2093,7 +2093,7 @@ dependencies = [
 
 [[package]]
 name = "serpent_buildinfo"
-version = "0.1.0"
+version = "0.24.1"
 dependencies = [
  "chrono",
  "thiserror",
@@ -2179,7 +2179,7 @@ checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 
 [[package]]
 name = "stone"
-version = "0.1.0"
+version = "0.24.1"
 dependencies = [
  "criterion",
  "strum",
@@ -2190,7 +2190,7 @@ dependencies = [
 
 [[package]]
 name = "stone_recipe"
-version = "0.1.0"
+version = "0.24.1"
 dependencies = [
  "nom",
  "serde",
@@ -2523,7 +2523,7 @@ dependencies = [
 
 [[package]]
 name = "triggers"
-version = "0.1.0"
+version = "0.24.1"
 dependencies = [
  "dag",
  "fnmatch",
@@ -2540,7 +2540,7 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "tui"
-version = "0.1.0"
+version = "0.24.1"
 dependencies = [
  "crossterm",
  "dialoguer",
