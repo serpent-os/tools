@@ -6,6 +6,7 @@
 
 use nix::sys::signal::{sigaction, SaFlags, SigAction, SigHandler, SigSet};
 use thiserror::Error;
+use zbus::message::{self};
 
 pub use nix::sys::signal::Signal;
 
@@ -25,6 +26,20 @@ pub fn ignore(signals: impl IntoIterator<Item = Signal>) -> Result<Guard, Error>
             })
             .collect::<Result<_, Error>>()?,
     ))
+}
+
+// https://www.freedesktop.org/wiki/Software/systemd/inhibit/
+pub fn inhibit(what: Vec<&str>, who: String, why: String, mode: String) -> Result<message::Body, Error> {
+    let conn = zbus::blocking::ConnectionBuilder::system()?.build()?;
+    let msg = conn.call_method(
+        Some("org.freedesktop.login1"),
+        "/org/freedesktop/login1",
+        Some("org.freedesktop.login1.Manager"),
+        "Inhibit",
+        &(what.join(":"), who, why, mode),
+    )?;
+    let fd = msg.body();
+    Ok(fd)
 }
 
 /// A guard which restores the previous signal
@@ -50,4 +65,6 @@ struct PrevHandler {
 pub enum Error {
     #[error("ignore signal")]
     Ignore(#[source] nix::Error),
+    #[error("failed to connect to dbus")]
+    Zbus(#[from] zbus::Error),
 }

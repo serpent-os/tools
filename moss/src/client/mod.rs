@@ -277,6 +277,12 @@ impl Client {
     /// Returns `None` if the client is ephemeral
     pub fn new_state(&self, selections: &[Selection], summary: impl ToString) -> Result<Option<State>, Error> {
         let _guard = signal::ignore([Signal::SIGINT])?;
+        let _fd = signal::inhibit(
+            vec!["shutdown", "sleep", "idle", "handle-lid-switch"],
+            "moss".into(),
+            "Applying new state".into(),
+            "block".into(),
+        );
 
         let old_state = self.installation.active_state;
 

@@ -11,6 +11,7 @@ use boulder::package::Packager;
 use boulder::{container, package, profile, timing, Env, Timing};
 use chrono::Local;
 use clap::Parser;
+use moss::signal::inhibit;
 use thiserror::Error;
 use thread_priority::{thread_native_id, NormalThreadSchedulePolicy, ThreadPriority, ThreadSchedulePolicy};
 
@@ -86,6 +87,19 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
         )?;
     }
 
+    let pkg_name = format!(
+        "{}-{}-{}",
+        builder.recipe.parsed.source.name, builder.recipe.parsed.source.version, builder.recipe.parsed.source.release
+    );
+
+    // hold a fd
+    let _fd = inhibit(
+        vec!["shutdown", "sleep", "idle", "handle-lid-switch"],
+        "boulder".into(),
+        format!("Build in-progress: {}", pkg_name),
+        "block".into(),
+    )?;
+
     // Build & package from within container
     container::exec::<Error>(paths, networking, || {
         builder.build(&mut timing)?;
@@ -129,4 +143,6 @@ pub enum Error {
     Container(#[from] container::Error),
     #[error("setting thread priority")]
     Priority(#[from] thread_priority::Error),
+    #[error("failed to connect to dbus")]
+    Zbus(#[from] moss::signal::Error),
 }
