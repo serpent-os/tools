@@ -29,10 +29,6 @@ pub enum Error {
     #[error("os_release: {0}")]
     OsRelease(#[from] os_release::Error),
 
-    /// fnmatch pattern compilation for boot, etc.
-    #[error("fnmatch pattern: {0}")]
-    Pattern(#[from] fnmatch::Error),
-
     #[error("incomplete kernel tree: {0}")]
     IncompleteKernel(String),
 }
@@ -63,7 +59,7 @@ fn kernel_files_from_state<'a>(
     for (_, path) in layouts.iter() {
         match &path.entry {
             layout::Entry::Regular(_, target) => {
-                if pattern.match_path(target).is_some() {
+                if pattern.matches(target).is_some() {
                     kernel_entries.push(KernelCandidate {
                         path: install.root.join("usr").join(target),
                         _layout: path,
@@ -71,7 +67,7 @@ fn kernel_files_from_state<'a>(
                 }
             }
             layout::Entry::Symlink(_, target) => {
-                if pattern.match_path(target).is_some() {
+                if pattern.matches(target).is_some() {
                     kernel_entries.push(KernelCandidate {
                         path: install.root.join("usr").join(target),
                         _layout: path,
@@ -95,7 +91,7 @@ fn boot_files_from_state<'a>(
 
     for (_, path) in layouts.iter() {
         if let layout::Entry::Regular(_, target) = &path.entry {
-            if pattern.match_path(target).is_some() {
+            if pattern.matches(target).is_some() {
                 rets.push(install.root.join("usr").join(target));
             }
         }
@@ -117,8 +113,8 @@ pub fn synchronize(install: &Installation, layouts: &[(Id, Layout)]) -> Result<(
         vfs: "/".into(),
     };
 
-    let pattern = fnmatch::Pattern::from_str("lib/kernel/(version:*)/*")?;
-    let systemd = fnmatch::Pattern::from_str("lib*/systemd/boot/efi/*.efi")?;
+    let pattern = fnmatch::Pattern::from_str("lib/kernel/(version:*)/*").unwrap(); // TODO: Do not return Infallible?
+    let systemd = fnmatch::Pattern::from_str("lib*/systemd/boot/efi/*.efi").unwrap(); // TODO: Do not return Infallible?
     let booty_bits = boot_files_from_state(install, layouts, &systemd);
 
     // No kernels? No bother.
