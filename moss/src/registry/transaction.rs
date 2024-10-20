@@ -60,7 +60,7 @@ pub(super) fn new_with_installed(registry: &Registry, incoming: Vec<package::Id>
     Ok(tx)
 }
 
-impl<'a> Transaction<'a> {
+impl Transaction<'_> {
     /// Add a package to this transaction
     pub fn add(&mut self, incoming: Vec<package::Id>) -> Result<(), Error> {
         self.update(incoming, Lookup::Global)

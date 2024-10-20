@@ -376,7 +376,7 @@ struct PrintMacro<'a> {
     example: Option<&'a str>,
 }
 
-impl<'a> ColumnDisplay for PrintMacro<'a> {
+impl ColumnDisplay for PrintMacro<'_> {
     fn get_display_width(&self) -> usize {
         self.name.len()
     }

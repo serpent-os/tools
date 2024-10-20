@@ -203,7 +203,7 @@ enum InnerPayload<'a> {
     Index(&'a [Index]),
 }
 
-impl<'a> InnerPayload<'a> {
+impl InnerPayload<'_> {
     fn pledged_size(&self) -> usize {
         match self {
             InnerPayload::Meta(records) => payload::records_total_size(records),

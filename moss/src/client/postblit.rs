@@ -54,7 +54,7 @@ pub(super) enum TriggerScope<'a> {
     System(&'a Installation, &'a super::Scope),
 }
 
-impl<'a> TriggerScope<'a> {
+impl TriggerScope<'_> {
     // Determine the correct root directory
     fn root_dir(&self) -> PathBuf {
         match self {
@@ -142,7 +142,7 @@ pub(super) fn triggers<'a>(
     Ok(computed_commands)
 }
 
-impl<'a> TriggerRunner<'a> {
+impl TriggerRunner<'_> {
     /// Execute a trigger, taking care to account for the transaction scope and client scope
     ///
     /// All transaction triggers are run via sandboxing ([`container::Container`]) to limit their

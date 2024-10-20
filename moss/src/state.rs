@@ -97,7 +97,7 @@ impl Selection {
 /// Columnar display encapsulation for a [`State`]
 pub struct ColumnDisplay<'a>(pub &'a State);
 
-impl<'a> pretty::ColumnDisplay for ColumnDisplay<'a> {
+impl pretty::ColumnDisplay for ColumnDisplay<'_> {
     fn get_display_width(&self) -> usize {
         "State ".len() + self.0.id.to_string().len()
     }

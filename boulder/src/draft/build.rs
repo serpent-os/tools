@@ -104,7 +104,7 @@ struct State<'a> {
     confidence: u64,
 }
 
-impl<'a> State<'a> {
+impl State<'_> {
     /// Increase the confidence that this project uses the current build [`System`]
     pub fn increment_confidence(&mut self, amount: u64) {
         self.confidence += amount;

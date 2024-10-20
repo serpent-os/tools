@@ -27,7 +27,7 @@ where
     }
 }
 
-impl<'a, W> Write for Writer<'a, W>
+impl<W> Write for Writer<'_, W>
 where
     W: Write,
 {
