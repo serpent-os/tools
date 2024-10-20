@@ -290,7 +290,7 @@ enum Resolve<'a> {
     Custom(&'a Path),
 }
 
-impl<'a> Resolve<'a> {
+impl Resolve<'_> {
     fn config_dir(&self) -> PathBuf {
         match self {
             Resolve::System { root, base, program } => root.join(base.path()).join(program),

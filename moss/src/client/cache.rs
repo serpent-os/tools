@@ -155,7 +155,7 @@ impl Download {
             }
         }
 
-        impl<'a, W: Write> Write for ProgressWriter<'a, W> {
+        impl<W: Write> Write for ProgressWriter<'_, W> {
             fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
                 let bytes = self.writer.write(buf)?;
 

@@ -25,7 +25,7 @@ impl ColumnDisplay for Package {
     }
 }
 
-impl<'a> ColumnDisplay for &'a Package {
+impl ColumnDisplay for &Package {
     fn get_display_width(&self) -> usize {
         self.meta.name.to_string().len()
             + self.meta.version_identifier.len()

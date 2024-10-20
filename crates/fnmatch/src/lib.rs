@@ -52,7 +52,7 @@ struct StringWalker<'a> {
     length: usize,
 }
 
-impl<'a> Iterator for StringWalker<'a> {
+impl Iterator for StringWalker<'_> {
     type Item = char;
 
     fn next(&mut self) -> Option<Self::Item> {

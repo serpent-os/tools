@@ -44,7 +44,7 @@ struct KernelCandidate<'a> {
     _layout: &'a Layout,
 }
 
-impl<'a> AsRef<Path> for KernelCandidate<'a> {
+impl AsRef<Path> for KernelCandidate<'_> {
     fn as_ref(&self) -> &Path {
         self.path.as_path()
     }

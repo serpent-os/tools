@@ -95,21 +95,21 @@ impl<'a> Package<'a> {
     }
 }
 
-impl<'a> PartialEq for Package<'a> {
+impl PartialEq for Package<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.name.eq(other.name)
     }
 }
 
-impl<'a> Eq for Package<'a> {}
+impl Eq for Package<'_> {}
 
-impl<'a> PartialOrd for Package<'a> {
+impl PartialOrd for Package<'_> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<'a> Ord for Package<'a> {
+impl Ord for Package<'_> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.name.cmp(other.name)
     }

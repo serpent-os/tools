@@ -22,7 +22,7 @@ where
     }
 }
 
-impl<'a, R> Read for Reader<'a, R>
+impl<R> Read for Reader<'_, R>
 where
     R: Read,
 {

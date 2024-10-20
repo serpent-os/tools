@@ -36,7 +36,7 @@ impl<'a, W: Write> Writer<'a, W> {
     }
 }
 
-impl<'a, W: Write> Write for Writer<'a, W> {
+impl<W: Write> Write for Writer<'_, W> {
     /// Handle transparent encoding, record offsets
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
         self.plain_bytes += buf.len();

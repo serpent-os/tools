@@ -187,8 +187,9 @@ impl Client {
         verify(self, yes, verbose)?;
         Ok(())
     }
-    /// Prune states with the provided [`prune::Strategy`]
 
+    /// Prune states with the provided [`prune::Strategy`].
+    ///
     /// This allows automatic removal of unused states (and their associated assets)
     /// from the disk, acting as a garbage collection facility.
     pub fn prune(&self, strategy: prune::Strategy, yes: bool) -> Result<(), Error> {
@@ -208,8 +209,9 @@ impl Client {
     }
 
     /// Resolves the provided id's with the underlying registry, returning
-    /// the first [`Package`] for each id. Packages are sorted by name
-    /// and deduped before returning.
+    /// the first [`Package`] for each id.
+    ///
+    /// Packages are sorted by name and deduped before returning.
     pub fn resolve_packages<'a>(
         &self,
         packages: impl IntoIterator<Item = &'a package::Id>,
@@ -223,10 +225,10 @@ impl Client {
         Ok(metadata)
     }
 
-    /// Activates the provided state and runs system triggers
-    /// once applied. The current state gets archived.
+    /// Activates the provided state and runs system triggers once applied.
     ///
-    /// Returns the old state that was archived
+    /// The current state gets archived.\
+    /// Returns the old state that was archived.
     pub fn activate_state(&self, id: state::Id) -> Result<state::Id, Error> {
         // Fetch the new state
         let new = self.state_db.get(id).map_err(|_| Error::StateDoesntExist(id))?;

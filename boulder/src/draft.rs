@@ -109,7 +109,7 @@ pub struct File<'a> {
     pub extract_root: &'a Path,
 }
 
-impl<'a> File<'a> {
+impl File<'_> {
     // The depth of a file relative to it's extracted archive
     pub fn depth(&self) -> usize {
         let relative = self.path.strip_prefix(self.extract_root).unwrap_or(&self.path);
