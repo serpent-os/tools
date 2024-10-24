@@ -13,7 +13,7 @@ use std::{
 use blsforme::os_release::{self, OsRelease};
 use fnmatch::Pattern;
 use fs_err as fs;
-use stone::payload::{layout, Layout};
+use stone::{StonePayloadLayoutBody, StonePayloadLayoutEntry};
 use thiserror::{self, Error};
 
 use crate::{package::Id, Installation};
@@ -41,7 +41,7 @@ pub enum Error {
 #[derive(Debug)]
 struct KernelCandidate<'a> {
     path: PathBuf,
-    _layout: &'a Layout,
+    _layout: &'a StonePayloadLayoutBody,
 }
 
 impl AsRef<Path> for KernelCandidate<'_> {
@@ -55,14 +55,14 @@ impl AsRef<Path> for KernelCandidate<'_> {
 /// sync old kernels!
 fn kernel_files_from_state<'a>(
     install: &Installation,
-    layouts: &'a [(Id, Layout)],
+    layouts: &'a [(Id, StonePayloadLayoutBody)],
     pattern: &'a Pattern,
 ) -> Vec<KernelCandidate<'a>> {
     let mut kernel_entries = vec![];
 
     for (_, path) in layouts.iter() {
         match &path.entry {
-            layout::Entry::Regular(_, target) => {
+            StonePayloadLayoutEntry::Regular(_, target) => {
                 if pattern.match_path(target).is_some() {
                     kernel_entries.push(KernelCandidate {
                         path: install.root.join("usr").join(target),
@@ -70,7 +70,7 @@ fn kernel_files_from_state<'a>(
                     });
                 }
             }
-            layout::Entry::Symlink(_, target) => {
+            StonePayloadLayoutEntry::Symlink(_, target) => {
                 if pattern.match_path(target).is_some() {
                     kernel_entries.push(KernelCandidate {
                         path: install.root.join("usr").join(target),
@@ -88,13 +88,13 @@ fn kernel_files_from_state<'a>(
 /// Find bootloader assets
 fn boot_files_from_state<'a>(
     install: &Installation,
-    layouts: &'a [(Id, Layout)],
+    layouts: &'a [(Id, StonePayloadLayoutBody)],
     pattern: &'a Pattern,
 ) -> Vec<PathBuf> {
     let mut rets = vec![];
 
     for (_, path) in layouts.iter() {
-        if let layout::Entry::Regular(_, target) = &path.entry {
+        if let StonePayloadLayoutEntry::Regular(_, target) = &path.entry {
             if pattern.match_path(target).is_some() {
                 rets.push(install.root.join("usr").join(target));
             }
@@ -104,7 +104,7 @@ fn boot_files_from_state<'a>(
     rets
 }
 
-pub fn synchronize(install: &Installation, layouts: &[(Id, Layout)]) -> Result<(), Error> {
+pub fn synchronize(install: &Installation, layouts: &[(Id, StonePayloadLayoutBody)]) -> Result<(), Error> {
     let root = install.root.clone();
     let is_native = root.to_string_lossy() == "/";
     // Create an appropriate configuration

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 mod attribute;
+mod content;
 mod index;
 pub mod layout;
 pub mod meta;
@@ -11,15 +12,18 @@ use std::io::{self, Read, Write};
 
 use thiserror::Error;
 
-pub use self::attribute::Attribute;
-pub use self::index::Index;
-pub use self::layout::Layout;
-pub use self::meta::Meta;
-use crate::{ReadExt, WriteExt};
+use crate::ext::{ReadExt, WriteExt};
 
+pub use self::attribute::StonePayloadAttributeBody;
+pub use self::content::StonePayloadContentBody;
+pub use self::index::StonePayloadIndexBody;
+pub use self::layout::{StonePayloadLayoutBody, StonePayloadLayoutEntry, StonePayloadLayoutFileType};
+pub use self::meta::{StonePayloadMetaBody, StonePayloadMetaDependency, StonePayloadMetaKind, StonePayloadMetaTag};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display)]
+#[strum(serialize_all = "kebab-case")]
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Kind {
+pub enum StonePayloadKind {
     // The Metadata store
     Meta = 1,
     // File store, i.e. hash indexed
@@ -34,9 +38,10 @@ pub enum Kind {
     Dumb = 6,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display)]
+#[strum(serialize_all = "kebab-case")]
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Compression {
+pub enum StonePayloadCompression {
     // Payload has no compression
     None = 1,
     // Payload uses ZSTD compression
@@ -44,21 +49,19 @@ pub enum Compression {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Header {
+#[repr(C)]
+pub struct StonePayloadHeader {
     pub stored_size: u64,
     pub plain_size: u64,
     pub checksum: [u8; 8],
     pub num_records: usize,
     pub version: u16,
-    pub kind: Kind,
-    pub compression: Compression,
+    pub kind: StonePayloadKind,
+    pub compression: StonePayloadCompression,
 }
 
-impl Header {
-    /// Size of the encoded payload header in bytes
-    pub const SIZE: usize = 8 + 8 + 8 + 4 + 2 + 1 + 1;
-
-    pub fn decode<R: Read>(mut reader: R) -> Result<Self, DecodeError> {
+impl StonePayloadHeader {
+    pub fn decode<R: Read>(mut reader: R) -> Result<Self, StonePayloadDecodeError> {
         let stored_size = reader.read_u64()?;
         let plain_size = reader.read_u64()?;
         let checksum = reader.read_array()?;
@@ -66,19 +69,19 @@ impl Header {
         let version = reader.read_u16()?;
 
         let kind = match reader.read_u8()? {
-            1 => Kind::Meta,
-            2 => Kind::Content,
-            3 => Kind::Layout,
-            4 => Kind::Index,
-            5 => Kind::Attributes,
-            6 => Kind::Dumb,
-            k => return Err(DecodeError::UnknownKind(k)),
+            1 => StonePayloadKind::Meta,
+            2 => StonePayloadKind::Content,
+            3 => StonePayloadKind::Layout,
+            4 => StonePayloadKind::Index,
+            5 => StonePayloadKind::Attributes,
+            6 => StonePayloadKind::Dumb,
+            k => return Err(StonePayloadDecodeError::UnknownKind(k)),
         };
 
         let compression = match reader.read_u8()? {
-            1 => Compression::None,
-            2 => Compression::Zstd,
-            d => return Err(DecodeError::UnknownCompression(d)),
+            1 => StonePayloadCompression::None,
+            2 => StonePayloadCompression::Zstd,
+            d => return Err(StonePayloadDecodeError::UnknownCompression(d)),
         };
 
         Ok(Self {
@@ -92,7 +95,7 @@ impl Header {
         })
     }
 
-    pub fn encode<W: Write>(&self, writer: &mut W) -> Result<(), EncodeError> {
+    pub fn encode<W: Write>(&self, writer: &mut W) -> Result<(), StonePayloadEncodeError> {
         writer.write_u64(self.stored_size)?;
         writer.write_u64(self.plain_size)?;
         writer.write_array(self.checksum)?;
@@ -105,13 +108,16 @@ impl Header {
     }
 }
 
-pub trait Record: Sized {
-    fn decode<R: Read>(reader: R) -> Result<Self, DecodeError>;
-    fn encode<W: Write>(&self, writer: &mut W) -> Result<(), EncodeError>;
+pub(crate) trait Record: Sized {
+    fn decode<R: Read>(reader: R) -> Result<Self, StonePayloadDecodeError>;
+    fn encode<W: Write>(&self, writer: &mut W) -> Result<(), StonePayloadEncodeError>;
     fn size(&self) -> usize;
 }
 
-pub fn decode_records<T: Record, R: Read>(mut reader: R, num_records: usize) -> Result<Vec<T>, DecodeError> {
+pub(crate) fn decode_records<T: Record, R: Read>(
+    mut reader: R,
+    num_records: usize,
+) -> Result<Vec<T>, StonePayloadDecodeError> {
     let mut records = Vec::with_capacity(num_records);
 
     for _ in 0..num_records {
@@ -121,25 +127,28 @@ pub fn decode_records<T: Record, R: Read>(mut reader: R, num_records: usize) -> 
     Ok(records)
 }
 
-pub fn encode_records<T: Record, W: Write>(writer: &mut W, records: &[T]) -> Result<(), EncodeError> {
+pub(crate) fn encode_records<T: Record, W: Write>(
+    writer: &mut W,
+    records: &[T],
+) -> Result<(), StonePayloadEncodeError> {
     for record in records {
         record.encode(writer)?;
     }
     Ok(())
 }
 
-pub fn records_total_size<T: Record>(records: &[T]) -> usize {
+pub(crate) fn records_total_size<T: Record>(records: &[T]) -> usize {
     records.iter().map(T::size).sum()
 }
 
 #[derive(Debug, Clone)]
-pub struct Payload<T> {
-    pub header: Header,
+pub struct StonePayload<T> {
+    pub header: StonePayloadHeader,
     pub body: T,
 }
 
 #[derive(Debug, Error)]
-pub enum DecodeError {
+pub enum StonePayloadDecodeError {
     #[error("Unknown header type: {0}")]
     UnknownKind(u8),
     #[error("Unknown header compression: {0}")]
@@ -157,7 +166,7 @@ pub enum DecodeError {
 }
 
 #[derive(Debug, Error)]
-pub enum EncodeError {
+pub enum StonePayloadEncodeError {
     #[error("io")]
     Io(#[from] io::Error),
 }
