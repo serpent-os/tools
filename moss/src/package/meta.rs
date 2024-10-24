@@ -5,7 +5,7 @@
 use std::collections::BTreeSet;
 
 use derive_more::{AsRef, Display, From, Into};
-use stone::payload;
+use stone::{StonePayloadMetaBody, StonePayloadMetaKind, StonePayloadMetaTag};
 use thiserror::Error;
 
 use crate::{dependency, Dependency, Provider};
@@ -62,23 +62,23 @@ pub struct Meta {
 }
 
 impl Meta {
-    pub fn from_stone_payload(payload: &[payload::Meta]) -> Result<Self, MissingMetaFieldError> {
-        let name = find_meta_string(payload, payload::meta::Tag::Name)?;
-        let version_identifier = find_meta_string(payload, payload::meta::Tag::Version)?;
-        let source_release = find_meta_u64(payload, payload::meta::Tag::Release)?;
-        let build_release = find_meta_u64(payload, payload::meta::Tag::BuildRelease)?;
-        let architecture = find_meta_string(payload, payload::meta::Tag::Architecture)?;
-        let summary = find_meta_string(payload, payload::meta::Tag::Summary)?;
-        let description = find_meta_string(payload, payload::meta::Tag::Description)?;
-        let source_id = find_meta_string(payload, payload::meta::Tag::SourceID)?;
-        let homepage = find_meta_string(payload, payload::meta::Tag::Homepage)?;
-        let uri = find_meta_string(payload, payload::meta::Tag::PackageURI).ok();
-        let hash = find_meta_string(payload, payload::meta::Tag::PackageHash).ok();
-        let download_size = find_meta_u64(payload, payload::meta::Tag::PackageSize).ok();
+    pub fn from_stone_payload(payload: &[StonePayloadMetaBody]) -> Result<Self, MissingMetaFieldError> {
+        let name = find_meta_string(payload, StonePayloadMetaTag::Name)?;
+        let version_identifier = find_meta_string(payload, StonePayloadMetaTag::Version)?;
+        let source_release = find_meta_u64(payload, StonePayloadMetaTag::Release)?;
+        let build_release = find_meta_u64(payload, StonePayloadMetaTag::BuildRelease)?;
+        let architecture = find_meta_string(payload, StonePayloadMetaTag::Architecture)?;
+        let summary = find_meta_string(payload, StonePayloadMetaTag::Summary)?;
+        let description = find_meta_string(payload, StonePayloadMetaTag::Description)?;
+        let source_id = find_meta_string(payload, StonePayloadMetaTag::SourceID)?;
+        let homepage = find_meta_string(payload, StonePayloadMetaTag::Homepage)?;
+        let uri = find_meta_string(payload, StonePayloadMetaTag::PackageURI).ok();
+        let hash = find_meta_string(payload, StonePayloadMetaTag::PackageHash).ok();
+        let download_size = find_meta_u64(payload, StonePayloadMetaTag::PackageSize).ok();
 
         let licenses = payload
             .iter()
-            .filter_map(|meta| meta_string(meta, payload::meta::Tag::License))
+            .filter_map(|meta| meta_string(meta, StonePayloadMetaTag::License))
             .collect();
         let dependencies = payload.iter().filter_map(meta_dependency).collect();
         let providers = payload
@@ -112,48 +112,90 @@ impl Meta {
         })
     }
 
-    pub fn to_stone_payload(self) -> Vec<payload::Meta> {
-        use payload::meta::{Kind, Tag};
-
+    pub fn to_stone_payload(self) -> Vec<StonePayloadMetaBody> {
         vec![
-            (Tag::Name, Kind::String(self.name.to_string())),
-            (Tag::Version, Kind::String(self.version_identifier)),
-            (Tag::Release, Kind::Uint64(self.source_release)),
-            (Tag::BuildRelease, Kind::Uint64(self.build_release)),
-            (Tag::Architecture, Kind::String(self.architecture)),
-            (Tag::Summary, Kind::String(self.summary)),
-            (Tag::Description, Kind::String(self.description)),
-            (Tag::SourceID, Kind::String(self.source_id)),
-            (Tag::Homepage, Kind::String(self.homepage)),
+            (
+                StonePayloadMetaTag::Name,
+                StonePayloadMetaKind::String(self.name.to_string()),
+            ),
+            (
+                StonePayloadMetaTag::Version,
+                StonePayloadMetaKind::String(self.version_identifier),
+            ),
+            (
+                StonePayloadMetaTag::Release,
+                StonePayloadMetaKind::Uint64(self.source_release),
+            ),
+            (
+                StonePayloadMetaTag::BuildRelease,
+                StonePayloadMetaKind::Uint64(self.build_release),
+            ),
+            (
+                StonePayloadMetaTag::Architecture,
+                StonePayloadMetaKind::String(self.architecture),
+            ),
+            (StonePayloadMetaTag::Summary, StonePayloadMetaKind::String(self.summary)),
+            (
+                StonePayloadMetaTag::Description,
+                StonePayloadMetaKind::String(self.description),
+            ),
+            (
+                StonePayloadMetaTag::SourceID,
+                StonePayloadMetaKind::String(self.source_id),
+            ),
+            (
+                StonePayloadMetaTag::Homepage,
+                StonePayloadMetaKind::String(self.homepage),
+            ),
         ]
         .into_iter()
-        .chain(self.uri.map(|uri| (Tag::PackageURI, Kind::String(uri))))
-        .chain(self.hash.map(|hash| (Tag::PackageHash, Kind::String(hash))))
-        .chain(self.download_size.map(|size| (Tag::PackageSize, Kind::Uint64(size))))
+        .chain(
+            self.uri
+                .map(|uri| (StonePayloadMetaTag::PackageURI, StonePayloadMetaKind::String(uri))),
+        )
+        .chain(
+            self.hash
+                .map(|hash| (StonePayloadMetaTag::PackageHash, StonePayloadMetaKind::String(hash))),
+        )
+        .chain(
+            self.download_size
+                .map(|size| (StonePayloadMetaTag::PackageSize, StonePayloadMetaKind::Uint64(size))),
+        )
         .chain(
             self.licenses
                 .into_iter()
-                .map(|license| (Tag::License, Kind::String(license))),
+                .map(|license| (StonePayloadMetaTag::License, StonePayloadMetaKind::String(license))),
         )
-        .chain(
-            self.dependencies
-                .into_iter()
-                .map(|dep| (Tag::Depends, Kind::Dependency(dep.kind.into(), dep.name))),
-        )
+        .chain(self.dependencies.into_iter().map(|dep| {
+            (
+                StonePayloadMetaTag::Depends,
+                StonePayloadMetaKind::Dependency(dep.kind.into(), dep.name),
+            )
+        }))
         .chain(
             self.providers
                 .into_iter()
                 // We re-add this on ingestion / it's implied
                 .filter(|provider| provider.kind != dependency::Kind::PackageName)
-                .map(|provider| (Tag::Provides, Kind::Provider(provider.kind.into(), provider.name))),
+                .map(|provider| {
+                    (
+                        StonePayloadMetaTag::Provides,
+                        StonePayloadMetaKind::Provider(provider.kind.into(), provider.name),
+                    )
+                }),
         )
         .chain(
             self.conflicts
                 .into_iter()
                 // We re-add this on ingestion / it's implied
-                .map(|conflict| (Tag::Conflicts, Kind::Provider(conflict.kind.into(), conflict.name))),
+                .map(|conflict| {
+                    (
+                        StonePayloadMetaTag::Conflicts,
+                        StonePayloadMetaKind::Provider(conflict.kind.into(), conflict.name),
+                    )
+                }),
         )
-        .map(|(tag, kind)| payload::Meta { tag, kind })
+        .map(|(tag, kind)| StonePayloadMetaBody { tag, kind })
         .collect()
     }
 
@@ -166,29 +208,29 @@ impl Meta {
     }
 }
 
-fn find_meta_string(meta: &[payload::Meta], tag: payload::meta::Tag) -> Result<String, MissingMetaFieldError> {
+fn find_meta_string(meta: &[StonePayloadMetaBody], tag: StonePayloadMetaTag) -> Result<String, MissingMetaFieldError> {
     meta.iter()
         .find_map(|meta| meta_string(meta, tag))
         .ok_or(MissingMetaFieldError(tag))
 }
 
-fn find_meta_u64(meta: &[payload::Meta], tag: payload::meta::Tag) -> Result<u64, MissingMetaFieldError> {
+fn find_meta_u64(meta: &[StonePayloadMetaBody], tag: StonePayloadMetaTag) -> Result<u64, MissingMetaFieldError> {
     meta.iter()
         .find_map(|meta| meta_u64(meta, tag))
         .ok_or(MissingMetaFieldError(tag))
 }
 
-fn meta_u64(meta: &payload::Meta, tag: payload::meta::Tag) -> Option<u64> {
+fn meta_u64(meta: &StonePayloadMetaBody, tag: StonePayloadMetaTag) -> Option<u64> {
     if meta.tag == tag {
         Some(match meta.kind {
-            payload::meta::Kind::Int8(i) => i as _,
-            payload::meta::Kind::Uint8(i) => i as _,
-            payload::meta::Kind::Int16(i) => i as _,
-            payload::meta::Kind::Uint16(i) => i as _,
-            payload::meta::Kind::Int32(i) => i as _,
-            payload::meta::Kind::Uint32(i) => i as _,
-            payload::meta::Kind::Int64(i) => i as _,
-            payload::meta::Kind::Uint64(i) => i,
+            StonePayloadMetaKind::Int8(i) => i as _,
+            StonePayloadMetaKind::Uint8(i) => i as _,
+            StonePayloadMetaKind::Int16(i) => i as _,
+            StonePayloadMetaKind::Uint16(i) => i as _,
+            StonePayloadMetaKind::Int32(i) => i as _,
+            StonePayloadMetaKind::Uint32(i) => i as _,
+            StonePayloadMetaKind::Int64(i) => i as _,
+            StonePayloadMetaKind::Uint64(i) => i,
             _ => return None,
         })
     } else {
@@ -196,15 +238,15 @@ fn meta_u64(meta: &payload::Meta, tag: payload::meta::Tag) -> Option<u64> {
     }
 }
 
-fn meta_string(meta: &payload::Meta, tag: payload::meta::Tag) -> Option<String> {
+fn meta_string(meta: &StonePayloadMetaBody, tag: StonePayloadMetaTag) -> Option<String> {
     match (meta.tag, &meta.kind) {
-        (meta_tag, payload::meta::Kind::String(value)) if meta_tag == tag => Some(value.clone()),
+        (meta_tag, StonePayloadMetaKind::String(value)) if meta_tag == tag => Some(value.clone()),
         _ => None,
     }
 }
 
-fn meta_dependency(meta: &payload::Meta) -> Option<Dependency> {
-    if let payload::meta::Kind::Dependency(kind, name) = meta.kind.clone() {
+fn meta_dependency(meta: &StonePayloadMetaBody) -> Option<Dependency> {
+    if let StonePayloadMetaKind::Dependency(kind, name) = meta.kind.clone() {
         Some(Dependency {
             kind: dependency::Kind::from(kind),
             name,
@@ -214,9 +256,9 @@ fn meta_dependency(meta: &payload::Meta) -> Option<Dependency> {
     }
 }
 
-fn meta_provider(meta: &payload::Meta) -> Option<Provider> {
+fn meta_provider(meta: &StonePayloadMetaBody) -> Option<Provider> {
     match (meta.tag, meta.kind.clone()) {
-        (payload::meta::Tag::Provides, payload::meta::Kind::Provider(kind, name)) => Some(Provider {
+        (StonePayloadMetaTag::Provides, StonePayloadMetaKind::Provider(kind, name)) => Some(Provider {
             kind: dependency::Kind::from(kind),
             name: name.clone(),
         }),
@@ -224,9 +266,9 @@ fn meta_provider(meta: &payload::Meta) -> Option<Provider> {
     }
 }
 
-fn meta_conflict(meta: &payload::Meta) -> Option<Provider> {
+fn meta_conflict(meta: &StonePayloadMetaBody) -> Option<Provider> {
     match (meta.tag, meta.kind.clone()) {
-        (payload::meta::Tag::Conflicts, payload::meta::Kind::Provider(kind, name)) => Some(Provider {
+        (StonePayloadMetaTag::Conflicts, StonePayloadMetaKind::Provider(kind, name)) => Some(Provider {
             kind: dependency::Kind::from(kind),
             name: name.clone(),
         }),
@@ -236,4 +278,4 @@ fn meta_conflict(meta: &payload::Meta) -> Option<Provider> {
 
 #[derive(Debug, Error)]
 #[error("Missing metadata field: {0:?}")]
-pub struct MissingMetaFieldError(pub payload::meta::Tag);
+pub struct MissingMetaFieldError(pub StonePayloadMetaTag);

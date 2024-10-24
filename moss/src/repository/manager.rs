@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use fs_err::{self as fs, File};
 use futures_util::{stream, StreamExt, TryStreamExt};
+use stone::{StoneDecodedPayload, StonePayloadMetaTag, StoneReadError};
 use thiserror::Error;
 use xxhash_rust::xxh3::xxh3_64;
 
@@ -343,7 +344,7 @@ fn update_meta_db(state: &repository::Cached, index_path: &Path) -> Result<(), E
     let packages = payloads
         .into_iter()
         .filter_map(|payload| {
-            if let stone::read::PayloadKind::Meta(meta) = payload {
+            if let StoneDecodedPayload::Meta(meta) = payload {
                 Some(meta)
             } else {
                 None
@@ -356,7 +357,7 @@ fn update_meta_db(state: &repository::Cached, index_path: &Path) -> Result<(), E
             let hash = meta
                 .hash
                 .clone()
-                .ok_or(Error::MissingMetaField(stone::payload::meta::Tag::PackageHash))?;
+                .ok_or(Error::MissingMetaField(StonePayloadMetaTag::PackageHash))?;
             let id = package::Id::from(hash);
 
             Ok((id, meta))
@@ -374,7 +375,7 @@ pub enum Error {
     #[error("Can't modify repos when using explicit configs")]
     ExplicitUnsupported,
     #[error("Missing metadata field: {0:?}")]
-    MissingMetaField(stone::payload::meta::Tag),
+    MissingMetaField(StonePayloadMetaTag),
     #[error("create directory")]
     CreateDir(#[source] io::Error),
     #[error("remove directory")]
@@ -384,7 +385,7 @@ pub enum Error {
     #[error("open index file")]
     OpenIndex(#[source] io::Error),
     #[error("read index file")]
-    ReadStone(#[from] stone::read::Error),
+    ReadStone(#[from] StoneReadError),
     #[error("meta db")]
     Database(#[from] meta::Error),
     #[error("save config")]

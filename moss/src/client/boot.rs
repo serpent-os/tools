@@ -18,7 +18,7 @@ use blsforme::{
 use fnmatch::Pattern;
 use fs_err as fs;
 use itertools::Itertools;
-use stone::payload::layout::{self, Layout};
+use stone::{StonePayloadLayoutBody, StonePayloadLayoutEntry};
 use thiserror::{self, Error};
 
 use crate::{db, package::Id, Installation, State};
@@ -51,7 +51,7 @@ pub enum Error {
 #[derive(Debug)]
 struct KernelCandidate {
     path: PathBuf,
-    _layout: Layout,
+    _layout: StonePayloadLayoutBody,
 }
 
 impl AsRef<Path> for KernelCandidate {
@@ -61,13 +61,17 @@ impl AsRef<Path> for KernelCandidate {
 }
 
 /// From a given set of input paths, produce a set of match pairs
-/// This is applied against the given system root
-fn kernel_files_from_state<'a>(layouts: &'a [(Id, Layout)], pattern: &'a Pattern) -> Vec<KernelCandidate> {
+/// NOTE: This only works for a *new* blit and doesn't retroactively
+/// sync old kernels!
+fn kernel_files_from_state<'a>(
+    layouts: &'a [(Id, StonePayloadLayoutBody)],
+    pattern: &'a Pattern,
+) -> Vec<KernelCandidate> {
     let mut kernel_entries = vec![];
 
     for (_, path) in layouts.iter() {
         match &path.entry {
-            layout::Entry::Regular(_, target) => {
+            StonePayloadLayoutEntry::Regular(_, target) => {
                 if pattern.match_path(target).is_some() {
                     kernel_entries.push(KernelCandidate {
                         path: PathBuf::from("usr").join(target),
@@ -75,7 +79,7 @@ fn kernel_files_from_state<'a>(layouts: &'a [(Id, Layout)], pattern: &'a Pattern
                     });
                 }
             }
-            layout::Entry::Symlink(_, target) => {
+            StonePayloadLayoutEntry::Symlink(_, target) => {
                 if pattern.match_path(target).is_some() {
                     kernel_entries.push(KernelCandidate {
                         path: PathBuf::from("usr").join(target),
@@ -93,13 +97,13 @@ fn kernel_files_from_state<'a>(layouts: &'a [(Id, Layout)], pattern: &'a Pattern
 /// Find bootloader assets in the new state
 fn boot_files_from_new_state<'a>(
     install: &Installation,
-    layouts: &'a [(Id, Layout)],
+    layouts: &'a [(Id, StonePayloadLayoutBody)],
     pattern: &'a Pattern,
 ) -> Vec<PathBuf> {
     let mut rets = vec![];
 
     for (_, path) in layouts.iter() {
-        if let layout::Entry::Regular(_, target) = &path.entry {
+        if let StonePayloadLayoutEntry::Regular(_, target) = &path.entry {
             if pattern.match_path(target).is_some() {
                 rets.push(install.root.join("usr").join(target));
             }
@@ -110,7 +114,7 @@ fn boot_files_from_new_state<'a>(
 }
 
 /// Grab all layouts for the provided state, mapped to package id
-fn layouts_for_state(client: &Client, state: &State) -> Result<Vec<(Id, Layout)>, db::Error> {
+fn layouts_for_state(client: &Client, state: &State) -> Result<Vec<(Id, StonePayloadLayoutBody)>, db::Error> {
     client.layout_db.query(state.selections.iter().map(|s| &s.package))
 }
 

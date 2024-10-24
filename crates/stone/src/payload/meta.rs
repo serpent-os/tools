@@ -4,23 +4,23 @@
 
 use std::io::{Read, Write};
 
-use super::{DecodeError, EncodeError, Record};
-use crate::{ReadExt, WriteExt};
+use super::{Record, StonePayloadDecodeError, StonePayloadEncodeError};
+use crate::ext::{ReadExt, WriteExt};
 
 /// The Meta payload contains a series of sequential records with
 /// strong types and context tags, i.e. their use such as Name.
 /// These record all metadata for every .stone packages and provide
 /// no content
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Meta {
-    pub tag: Tag,
-    pub kind: Kind,
+pub struct StonePayloadMetaBody {
+    pub tag: StonePayloadMetaTag,
+    pub kind: StonePayloadMetaKind,
 }
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display)]
 #[strum(serialize_all = "lowercase")]
-pub enum Dependency {
+pub enum StonePayloadMetaDependency {
     /// Just the plain name of a package
     #[strum(serialize = "name")]
     PackageName = 0,
@@ -54,7 +54,7 @@ pub enum Dependency {
 
 #[repr(u8)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Kind {
+pub enum StonePayloadMetaKind {
     Int8(i8),
     Uint8(u8),
     Int16(i16),
@@ -64,34 +64,34 @@ pub enum Kind {
     Int64(i64),
     Uint64(u64),
     String(String),
-    Dependency(Dependency, String),
-    Provider(Dependency, String),
+    Dependency(StonePayloadMetaDependency, String),
+    Provider(StonePayloadMetaDependency, String),
 }
 
-impl Kind {
+impl StonePayloadMetaKind {
     fn size(&self) -> usize {
         match self {
-            Kind::Int8(_) => size_of::<i8>(),
-            Kind::Uint8(_) => size_of::<u8>(),
-            Kind::Int16(_) => size_of::<i16>(),
-            Kind::Uint16(_) => size_of::<u16>(),
-            Kind::Int32(_) => size_of::<i32>(),
-            Kind::Uint32(_) => size_of::<u32>(),
-            Kind::Int64(_) => size_of::<i64>(),
-            Kind::Uint64(_) => size_of::<u64>(),
+            StonePayloadMetaKind::Int8(_) => size_of::<i8>(),
+            StonePayloadMetaKind::Uint8(_) => size_of::<u8>(),
+            StonePayloadMetaKind::Int16(_) => size_of::<i16>(),
+            StonePayloadMetaKind::Uint16(_) => size_of::<u16>(),
+            StonePayloadMetaKind::Int32(_) => size_of::<i32>(),
+            StonePayloadMetaKind::Uint32(_) => size_of::<u32>(),
+            StonePayloadMetaKind::Int64(_) => size_of::<i64>(),
+            StonePayloadMetaKind::Uint64(_) => size_of::<u64>(),
             // nul terminator
-            Kind::String(s) => s.len() + 1,
+            StonePayloadMetaKind::String(s) => s.len() + 1,
             // Plus dep size & nul terminator
-            Kind::Dependency(_, s) => s.len() + 2,
+            StonePayloadMetaKind::Dependency(_, s) => s.len() + 2,
             // Plus dep size & nul terminator
-            Kind::Provider(_, s) => s.len() + 2,
+            StonePayloadMetaKind::Provider(_, s) => s.len() + 2,
         }
     }
 }
 
 #[repr(u16)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Tag {
+pub enum StonePayloadMetaTag {
     // Name of the package
     Name = 1,
     // Architecture of the package
@@ -135,48 +135,48 @@ pub enum Tag {
 }
 
 /// Helper to decode a dependency's encoded kind
-fn decode_dependency(i: u8) -> Result<Dependency, DecodeError> {
+fn decode_dependency(i: u8) -> Result<StonePayloadMetaDependency, StonePayloadDecodeError> {
     let result = match i {
-        0 => Dependency::PackageName,
-        1 => Dependency::SharedLibrary,
-        2 => Dependency::PkgConfig,
-        3 => Dependency::Interpreter,
-        4 => Dependency::CMake,
-        5 => Dependency::Python,
-        6 => Dependency::Binary,
-        7 => Dependency::SystemBinary,
-        8 => Dependency::PkgConfig32,
-        _ => return Err(DecodeError::UnknownDependency(i)),
+        0 => StonePayloadMetaDependency::PackageName,
+        1 => StonePayloadMetaDependency::SharedLibrary,
+        2 => StonePayloadMetaDependency::PkgConfig,
+        3 => StonePayloadMetaDependency::Interpreter,
+        4 => StonePayloadMetaDependency::CMake,
+        5 => StonePayloadMetaDependency::Python,
+        6 => StonePayloadMetaDependency::Binary,
+        7 => StonePayloadMetaDependency::SystemBinary,
+        8 => StonePayloadMetaDependency::PkgConfig32,
+        _ => return Err(StonePayloadDecodeError::UnknownDependency(i)),
     };
     Ok(result)
 }
 
-impl Record for Meta {
-    fn decode<R: Read>(mut reader: R) -> Result<Self, DecodeError> {
+impl Record for StonePayloadMetaBody {
+    fn decode<R: Read>(mut reader: R) -> Result<Self, StonePayloadDecodeError> {
         let length = reader.read_u32()?;
 
         let tag = match reader.read_u16()? {
-            1 => Tag::Name,
-            2 => Tag::Architecture,
-            3 => Tag::Version,
-            4 => Tag::Summary,
-            5 => Tag::Description,
-            6 => Tag::Homepage,
-            7 => Tag::SourceID,
-            8 => Tag::Depends,
-            9 => Tag::Provides,
-            10 => Tag::Conflicts,
-            11 => Tag::Release,
-            12 => Tag::License,
-            13 => Tag::BuildRelease,
-            14 => Tag::PackageURI,
-            15 => Tag::PackageHash,
-            16 => Tag::PackageSize,
-            17 => Tag::BuildDepends,
-            18 => Tag::SourceURI,
-            19 => Tag::SourcePath,
-            20 => Tag::SourceRef,
-            t => return Err(DecodeError::UnknownMetaTag(t)),
+            1 => StonePayloadMetaTag::Name,
+            2 => StonePayloadMetaTag::Architecture,
+            3 => StonePayloadMetaTag::Version,
+            4 => StonePayloadMetaTag::Summary,
+            5 => StonePayloadMetaTag::Description,
+            6 => StonePayloadMetaTag::Homepage,
+            7 => StonePayloadMetaTag::SourceID,
+            8 => StonePayloadMetaTag::Depends,
+            9 => StonePayloadMetaTag::Provides,
+            10 => StonePayloadMetaTag::Conflicts,
+            11 => StonePayloadMetaTag::Release,
+            12 => StonePayloadMetaTag::License,
+            13 => StonePayloadMetaTag::BuildRelease,
+            14 => StonePayloadMetaTag::PackageURI,
+            15 => StonePayloadMetaTag::PackageHash,
+            16 => StonePayloadMetaTag::PackageSize,
+            17 => StonePayloadMetaTag::BuildDepends,
+            18 => StonePayloadMetaTag::SourceURI,
+            19 => StonePayloadMetaTag::SourcePath,
+            20 => StonePayloadMetaTag::SourceRef,
+            t => return Err(StonePayloadDecodeError::UnknownMetaTag(t)),
         };
 
         let kind = reader.read_u8()?;
@@ -186,44 +186,44 @@ impl Record for Meta {
         let sanitize = |s: String| s.trim_end_matches('\0').to_owned();
 
         let kind = match kind {
-            1 => Kind::Int8(reader.read_u8()? as i8),
-            2 => Kind::Uint8(reader.read_u8()?),
-            3 => Kind::Int16(reader.read_u16()? as i16),
-            4 => Kind::Uint16(reader.read_u16()?),
-            5 => Kind::Int32(reader.read_u32()? as i32),
-            6 => Kind::Uint32(reader.read_u32()?),
-            7 => Kind::Int64(reader.read_u64()? as i64),
-            8 => Kind::Uint64(reader.read_u64()?),
-            9 => Kind::String(sanitize(reader.read_string(length as u64)?)),
-            10 => Kind::Dependency(
+            1 => StonePayloadMetaKind::Int8(reader.read_u8()? as i8),
+            2 => StonePayloadMetaKind::Uint8(reader.read_u8()?),
+            3 => StonePayloadMetaKind::Int16(reader.read_u16()? as i16),
+            4 => StonePayloadMetaKind::Uint16(reader.read_u16()?),
+            5 => StonePayloadMetaKind::Int32(reader.read_u32()? as i32),
+            6 => StonePayloadMetaKind::Uint32(reader.read_u32()?),
+            7 => StonePayloadMetaKind::Int64(reader.read_u64()? as i64),
+            8 => StonePayloadMetaKind::Uint64(reader.read_u64()?),
+            9 => StonePayloadMetaKind::String(sanitize(reader.read_string(length as u64)?)),
+            10 => StonePayloadMetaKind::Dependency(
                 // DependencyKind u8 subtracted from length
                 decode_dependency(reader.read_u8()?)?,
                 sanitize(reader.read_string(length as u64 - 1)?),
             ),
-            11 => Kind::Provider(
+            11 => StonePayloadMetaKind::Provider(
                 // DependencyKind u8 subtracted from length
                 decode_dependency(reader.read_u8()?)?,
                 sanitize(reader.read_string(length as u64 - 1)?),
             ),
-            k => return Err(DecodeError::UnknownMetaKind(k)),
+            k => return Err(StonePayloadDecodeError::UnknownMetaKind(k)),
         };
 
         Ok(Self { tag, kind })
     }
 
-    fn encode<W: Write>(&self, writer: &mut W) -> Result<(), EncodeError> {
+    fn encode<W: Write>(&self, writer: &mut W) -> Result<(), StonePayloadEncodeError> {
         let kind = match self.kind {
-            Kind::Int8(_) => 1,
-            Kind::Uint8(_) => 2,
-            Kind::Int16(_) => 3,
-            Kind::Uint16(_) => 4,
-            Kind::Int32(_) => 5,
-            Kind::Uint32(_) => 6,
-            Kind::Int64(_) => 7,
-            Kind::Uint64(_) => 8,
-            Kind::String(_) => 9,
-            Kind::Dependency(_, _) => 10,
-            Kind::Provider(_, _) => 11,
+            StonePayloadMetaKind::Int8(_) => 1,
+            StonePayloadMetaKind::Uint8(_) => 2,
+            StonePayloadMetaKind::Int16(_) => 3,
+            StonePayloadMetaKind::Uint16(_) => 4,
+            StonePayloadMetaKind::Int32(_) => 5,
+            StonePayloadMetaKind::Uint32(_) => 6,
+            StonePayloadMetaKind::Int64(_) => 7,
+            StonePayloadMetaKind::Uint64(_) => 8,
+            StonePayloadMetaKind::String(_) => 9,
+            StonePayloadMetaKind::Dependency(_, _) => 10,
+            StonePayloadMetaKind::Provider(_, _) => 11,
         };
 
         writer.write_u32(self.kind.size() as u32)?;
@@ -233,19 +233,19 @@ impl Record for Meta {
         writer.write_array::<1>([0])?;
 
         match &self.kind {
-            Kind::Int8(i) => writer.write_u8(*i as u8)?,
-            Kind::Uint8(i) => writer.write_u8(*i)?,
-            Kind::Int16(i) => writer.write_u16(*i as u16)?,
-            Kind::Uint16(i) => writer.write_u16(*i)?,
-            Kind::Int32(i) => writer.write_u32(*i as u32)?,
-            Kind::Uint32(i) => writer.write_u32(*i)?,
-            Kind::Int64(i) => writer.write_u64(*i as u64)?,
-            Kind::Uint64(i) => writer.write_u64(*i)?,
-            Kind::String(s) => {
+            StonePayloadMetaKind::Int8(i) => writer.write_u8(*i as u8)?,
+            StonePayloadMetaKind::Uint8(i) => writer.write_u8(*i)?,
+            StonePayloadMetaKind::Int16(i) => writer.write_u16(*i as u16)?,
+            StonePayloadMetaKind::Uint16(i) => writer.write_u16(*i)?,
+            StonePayloadMetaKind::Int32(i) => writer.write_u32(*i as u32)?,
+            StonePayloadMetaKind::Uint32(i) => writer.write_u32(*i)?,
+            StonePayloadMetaKind::Int64(i) => writer.write_u64(*i as u64)?,
+            StonePayloadMetaKind::Uint64(i) => writer.write_u64(*i)?,
+            StonePayloadMetaKind::String(s) => {
                 writer.write_all(s.as_bytes())?;
                 writer.write_u8(b'\0')?;
             }
-            Kind::Dependency(dep, s) | Kind::Provider(dep, s) => {
+            StonePayloadMetaKind::Dependency(dep, s) | StonePayloadMetaKind::Provider(dep, s) => {
                 writer.write_u8(*dep as u8)?;
                 writer.write_all(s.as_bytes())?;
                 writer.write_u8(b'\0')?;

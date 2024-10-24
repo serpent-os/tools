@@ -6,8 +6,7 @@ use diesel::prelude::*;
 use diesel::{Connection as _, SqliteConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use std::collections::BTreeSet;
-
-use stone::payload;
+use stone::{StonePayloadLayoutBody, StonePayloadLayoutEntry};
 
 use crate::package;
 
@@ -38,7 +37,7 @@ impl Database {
     pub fn query<'a>(
         &self,
         packages: impl IntoIterator<Item = &'a package::Id>,
-    ) -> Result<Vec<(package::Id, payload::Layout)>, Error> {
+    ) -> Result<Vec<(package::Id, StonePayloadLayoutBody)>, Error> {
         self.conn.exec(|conn| {
             let packages = packages.into_iter().map(AsRef::<str>::as_ref).collect::<Vec<_>>();
 
@@ -59,7 +58,7 @@ impl Database {
         })
     }
 
-    pub fn all(&self) -> Result<Vec<(package::Id, payload::Layout)>, Error> {
+    pub fn all(&self) -> Result<Vec<(package::Id, StonePayloadLayoutBody)>, Error> {
         self.conn.exec(|conn| {
             model::layout::table
                 .select(model::Layout::as_select())
@@ -84,13 +83,13 @@ impl Database {
         })
     }
 
-    pub fn add(&self, package: &package::Id, layout: &payload::Layout) -> Result<(), Error> {
+    pub fn add(&self, package: &package::Id, layout: &StonePayloadLayoutBody) -> Result<(), Error> {
         self.batch_add(vec![(package, layout)])
     }
 
     pub fn batch_add<'a>(
         &self,
-        layouts: impl IntoIterator<Item = (&'a package::Id, &'a payload::Layout)>,
+        layouts: impl IntoIterator<Item = (&'a package::Id, &'a StonePayloadLayoutBody)>,
     ) -> Result<(), Error> {
         self.conn.exclusive_tx(|tx| {
             let mut ids = vec![];
@@ -149,12 +148,12 @@ fn batch_remove_impl(packages: &[&str], tx: &mut SqliteConnection) -> Result<(),
     Ok(())
 }
 
-fn map_layout(result: QueryResult<model::Layout>) -> Result<(package::Id, payload::Layout), Error> {
+fn map_layout(result: QueryResult<model::Layout>) -> Result<(package::Id, StonePayloadLayoutBody), Error> {
     let row = result?;
 
     let entry = decode_entry(row.entry_type, row.entry_value1, row.entry_value2).ok_or(Error::LayoutEntryDecode)?;
 
-    let layout = payload::Layout {
+    let layout = StonePayloadLayoutBody {
         uid: row.uid as u32,
         gid: row.gid as u32,
         mode: row.mode as u32,
@@ -169,37 +168,33 @@ fn decode_entry(
     entry_type: String,
     entry_value1: Option<String>,
     entry_value2: Option<String>,
-) -> Option<payload::layout::Entry> {
-    use payload::layout::Entry;
-
+) -> Option<StonePayloadLayoutEntry> {
     match entry_type.as_str() {
         "regular" => {
             let hash = entry_value1?.parse::<u128>().ok()?;
             let name = entry_value2?;
 
-            Some(Entry::Regular(hash, name))
+            Some(StonePayloadLayoutEntry::Regular(hash, name))
         }
-        "symlink" => Some(Entry::Symlink(entry_value1?, entry_value2?)),
-        "directory" => Some(Entry::Directory(entry_value1?)),
-        "character-device" => Some(Entry::CharacterDevice(entry_value1?)),
-        "block-device" => Some(Entry::BlockDevice(entry_value1?)),
-        "fifo" => Some(Entry::Fifo(entry_value1?)),
-        "socket" => Some(Entry::Socket(entry_value1?)),
+        "symlink" => Some(StonePayloadLayoutEntry::Symlink(entry_value1?, entry_value2?)),
+        "directory" => Some(StonePayloadLayoutEntry::Directory(entry_value1?)),
+        "character-device" => Some(StonePayloadLayoutEntry::CharacterDevice(entry_value1?)),
+        "block-device" => Some(StonePayloadLayoutEntry::BlockDevice(entry_value1?)),
+        "fifo" => Some(StonePayloadLayoutEntry::Fifo(entry_value1?)),
+        "socket" => Some(StonePayloadLayoutEntry::Socket(entry_value1?)),
         _ => None,
     }
 }
 
-fn encode_entry(entry: payload::layout::Entry) -> (&'static str, Option<String>, Option<String>) {
-    use payload::layout::Entry;
-
+fn encode_entry(entry: StonePayloadLayoutEntry) -> (&'static str, Option<String>, Option<String>) {
     match entry {
-        Entry::Regular(hash, name) => ("regular", Some(hash.to_string()), Some(name)),
-        Entry::Symlink(a, b) => ("symlink", Some(a), Some(b)),
-        Entry::Directory(name) => ("directory", Some(name), None),
-        Entry::CharacterDevice(name) => ("character-device", Some(name), None),
-        Entry::BlockDevice(name) => ("block-device", Some(name), None),
-        Entry::Fifo(name) => ("fifo", Some(name), None),
-        Entry::Socket(name) => ("socket", Some(name), None),
+        StonePayloadLayoutEntry::Regular(hash, name) => ("regular", Some(hash.to_string()), Some(name)),
+        StonePayloadLayoutEntry::Symlink(a, b) => ("symlink", Some(a), Some(b)),
+        StonePayloadLayoutEntry::Directory(name) => ("directory", Some(name), None),
+        StonePayloadLayoutEntry::CharacterDevice(name) => ("character-device", Some(name), None),
+        StonePayloadLayoutEntry::BlockDevice(name) => ("block-device", Some(name), None),
+        StonePayloadLayoutEntry::Fifo(name) => ("fifo", Some(name), None),
+        StonePayloadLayoutEntry::Socket(name) => ("socket", Some(name), None),
     }
 }
 
@@ -241,7 +236,7 @@ mod model {
 
 #[cfg(test)]
 mod test {
-    use stone::read::PayloadKind;
+    use stone::StoneDecodedPayload;
 
     use super::*;
 
@@ -256,7 +251,7 @@ mod test {
         let payloads = stone.payloads().unwrap().collect::<Result<Vec<_>, _>>().unwrap();
         let layouts = payloads
             .iter()
-            .filter_map(PayloadKind::layout)
+            .filter_map(StoneDecodedPayload::layout)
             .flat_map(|p| &p.body)
             .map(|layout| (package::Id::from("test".to_owned()), layout))
             .collect::<Vec<_>>();

@@ -467,7 +467,7 @@ mod model {
 
 #[cfg(test)]
 mod test {
-    use stone::read::PayloadKind;
+    use stone::StoneDecodedPayload;
 
     use crate::dependency::Kind;
 
@@ -482,7 +482,7 @@ mod test {
         let mut stone = stone::read_bytes(bash_completion).unwrap();
 
         let payloads = stone.payloads().unwrap().collect::<Result<Vec<_>, _>>().unwrap();
-        let meta_payload = payloads.iter().find_map(PayloadKind::meta).unwrap();
+        let meta_payload = payloads.iter().find_map(StoneDecodedPayload::meta).unwrap();
         let meta = Meta::from_stone_payload(&meta_payload.body).unwrap();
 
         let id = package::Id::from("test".to_owned());
@@ -527,7 +527,7 @@ mod test {
         let mut stone = stone::read_bytes(italian_pizza).unwrap();
 
         let payloads = stone.payloads().unwrap().collect::<Result<Vec<_>, _>>().unwrap();
-        let meta_payload = payloads.iter().find_map(PayloadKind::meta).unwrap();
+        let meta_payload = payloads.iter().find_map(StoneDecodedPayload::meta).unwrap();
         let meta = Meta::from_stone_payload(&meta_payload.body).unwrap();
         db.add(package::Id::from(meta.id()), meta.clone()).unwrap();
 
