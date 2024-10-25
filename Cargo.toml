@@ -1,12 +1,6 @@
 [workspace]
-members = [
-    "boulder",
-    "moss",
-    "crates/*",
-]
-default-members = [
-    "moss"
-]
+members = ["boulder", "moss", "crates/*"]
+default-members = ["moss"]
 resolver = "2"
 
 [workspace.package]
@@ -23,9 +17,17 @@ clap_complete = "4.5.37"
 clap_mangen = "0.2.24"
 criterion = { version = "0.5.1", features = ["html_reports"] }
 crossterm = "0.28.1"
-derive_more = { version = "1.0.0", features = ["as_ref", "display", "from", "into"] }
+derive_more = { version = "1.0.0", features = [
+    "as_ref",
+    "display",
+    "from",
+    "into",
+] }
 dialoguer = "0.11.0"
-diesel = { version = "2.2.1", features = ["sqlite", "returning_clauses_for_sqlite_3_35"] }
+diesel = { version = "2.2.1", features = [
+    "sqlite",
+    "returning_clauses_for_sqlite_3_35",
+] }
 diesel_migrations = "2.2.0"
 dirs = "5.0.1"
 elf = "0.7.4"
@@ -39,11 +41,29 @@ indextree = "4.6.1"
 libsqlite3-sys = { version = "0.30.1", features = ["bundled"] }
 log = "0.4.22"
 nom = "7.1.3"
-nix = { version = "0.27.1", features = ["user", "fs", "sched", "process", "mount", "hostname", "signal", "term"] }
+nix = { version = "0.27.1", features = [
+    "user",
+    "fs",
+    "sched",
+    "process",
+    "mount",
+    "hostname",
+    "signal",
+    "term",
+] }
 petgraph = "0.6.5"
 rayon = "1.10.0"
 regex = "1.10.5"
-reqwest = { version = "0.12.5", default-features = false, features = ["brotli", "charset", "deflate", "gzip", "http2", "rustls-tls", "stream", "zstd"] }
+reqwest = { version = "0.12.5", default-features = false, features = [
+    "brotli",
+    "charset",
+    "deflate",
+    "gzip",
+    "http2",
+    "rustls-tls",
+    "stream",
+    "zstd",
+] }
 serde = { version = "1.0.204", features = ["derive"] }
 serde_json = "1.0.120"
 serde_yaml = "0.9.34"
@@ -59,6 +79,8 @@ xxhash-rust = { version = "0.8.11", features = ["xxh3"] }
 zstd = { version = "0.13.2", features = ["zstdmt"] }
 mailparse = "0.15.0"
 zbus = "5.1.1"
+libc = "0.2.62"
+cbindgen = "0.26"
 
 [workspace.lints.rust]
 rust_2018_idioms = { level = "warn", priority = -1 }

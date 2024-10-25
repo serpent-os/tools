@@ -11,7 +11,8 @@ const INTEGRITY_CHECK: [u8; 21] = [0, 0, 1, 0, 0, 2, 0, 0, 3, 0, 0, 4, 0, 0, 5, 
 ///
 /// Some types are now legacy as we're going to use Ion to define them.
 ///
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display)]
+#[strum(serialize_all = "kebab-case")]
 #[repr(u8)]
 pub enum StoneHeaderV1FileType {
     /// Binary package

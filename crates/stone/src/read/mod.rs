@@ -7,9 +7,9 @@ use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 use thiserror::Error;
 
 use crate::{
-    payload, StoneHeader, StoneHeaderDecodeError, StonePayload, StonePayloadAttributeBody, StonePayloadCompression,
-    StonePayloadContentBody, StonePayloadDecodeError, StonePayloadHeader, StonePayloadIndexBody, StonePayloadKind,
-    StonePayloadLayoutBody, StonePayloadMetaBody,
+    payload, StoneHeader, StoneHeaderDecodeError, StonePayload, StonePayloadAttribute, StonePayloadCompression,
+    StonePayloadContent, StonePayloadDecodeError, StonePayloadHeader, StonePayloadIndex, StonePayloadKind,
+    StonePayloadLayout, StonePayloadMeta,
 };
 
 use self::zstd::Zstd;
@@ -63,56 +63,43 @@ impl<R: Read + Seek> StoneReader<R> {
 
     pub fn unpack_content<W>(
         &mut self,
-        content: &StonePayload<StonePayloadContentBody>,
+        content: &StonePayload<StonePayloadContent>,
         writer: &mut W,
     ) -> Result<(), StoneReadError>
     where
         W: Write,
     {
         self.reader.seek(SeekFrom::Start(content.body.offset))?;
+        self.hasher.reset();
 
-        unpack_payload(self, writer, &content.header)
+        let mut hashed = digest::Reader::new(&mut self.reader, &mut self.hasher);
+        let mut framed = (&mut hashed).take(content.header.stored_size);
+
+        io::copy(
+            &mut PayloadReader::new(&mut framed, content.header.compression)?,
+            writer,
+        )?;
+
+        // Validate checksum
+        validate_checksum(&self.hasher, &content.header)?;
+
+        Ok(())
     }
 }
 
 #[cfg(feature = "ffi")]
 impl<R: Read + Seek> StoneReader<R> {
-    pub fn next_payload_header(&mut self) -> Result<Option<StonePayloadHeader>, StoneReadError> {
+    pub fn next_payload(&mut self) -> Result<Option<StoneDecodedPayload>, StoneReadError> {
         if self.next_payload < self.header.num_payloads() {
-            let header = StonePayloadHeader::decode(&mut self.reader)?;
+            let payload = StoneDecodedPayload::decode(&mut self.reader, &mut self.hasher)?;
 
             self.next_payload += 1;
 
-            Ok(Some(header))
+            Ok(payload)
         } else {
             Ok(None)
         }
     }
-
-    pub fn unpack_payload<W>(&mut self, header: &StonePayloadHeader, writer: &mut W) -> Result<(), StoneReadError>
-    where
-        W: Write,
-    {
-        unpack_payload(self, writer, header)
-    }
-}
-
-fn unpack_payload<R: Read + Seek, W: Write>(
-    reader: &mut StoneReader<R>,
-    writer: &mut W,
-    header: &StonePayloadHeader,
-) -> Result<(), StoneReadError> {
-    reader.hasher.reset();
-
-    let mut hashed = digest::Reader::new(&mut reader.reader, &mut reader.hasher);
-    let mut framed = (&mut hashed).take(header.stored_size);
-
-    io::copy(&mut PayloadReader::new(&mut framed, header.compression)?, writer)?;
-
-    // Validate checksum
-    validate_checksum(&reader.hasher, header)?;
-
-    Ok(())
 }
 
 enum PayloadReader<R: Read> {
@@ -140,14 +127,24 @@ impl<R: Read> Read for PayloadReader<R> {
 
 #[derive(Debug)]
 pub enum StoneDecodedPayload {
-    Meta(StonePayload<Vec<StonePayloadMetaBody>>),
-    Attributes(StonePayload<Vec<StonePayloadAttributeBody>>),
-    Layout(StonePayload<Vec<StonePayloadLayoutBody>>),
-    Index(StonePayload<Vec<StonePayloadIndexBody>>),
-    Content(StonePayload<StonePayloadContentBody>),
+    Meta(StonePayload<Vec<StonePayloadMeta>>),
+    Attributes(StonePayload<Vec<StonePayloadAttribute>>),
+    Layout(StonePayload<Vec<StonePayloadLayout>>),
+    Index(StonePayload<Vec<StonePayloadIndex>>),
+    Content(StonePayload<StonePayloadContent>),
 }
 
 impl StoneDecodedPayload {
+    pub fn header(&self) -> &StonePayloadHeader {
+        match self {
+            StoneDecodedPayload::Meta(payload) => &payload.header,
+            StoneDecodedPayload::Attributes(payload) => &payload.header,
+            StoneDecodedPayload::Layout(payload) => &payload.header,
+            StoneDecodedPayload::Index(payload) => &payload.header,
+            StoneDecodedPayload::Content(payload) => &payload.header,
+        }
+    }
+
     fn decode<R: Read + Seek>(mut reader: R, hasher: &mut digest::Hasher) -> Result<Option<Self>, StoneReadError> {
         match StonePayloadHeader::decode(&mut reader) {
             Ok(header) => {
@@ -192,7 +189,7 @@ impl StoneDecodedPayload {
 
                         StoneDecodedPayload::Content(StonePayload {
                             header,
-                            body: StonePayloadContentBody { offset },
+                            body: StonePayloadContent { offset },
                         })
                     }
                     StonePayloadKind::Dumb => unimplemented!("??"),
@@ -210,7 +207,7 @@ impl StoneDecodedPayload {
         }
     }
 
-    pub fn meta(&self) -> Option<&StonePayload<Vec<StonePayloadMetaBody>>> {
+    pub fn meta(&self) -> Option<&StonePayload<Vec<StonePayloadMeta>>> {
         if let Self::Meta(meta) = self {
             Some(meta)
         } else {
@@ -218,7 +215,7 @@ impl StoneDecodedPayload {
         }
     }
 
-    pub fn attributes(&self) -> Option<&StonePayload<Vec<StonePayloadAttributeBody>>> {
+    pub fn attributes(&self) -> Option<&StonePayload<Vec<StonePayloadAttribute>>> {
         if let Self::Attributes(attributes) = self {
             Some(attributes)
         } else {
@@ -226,7 +223,7 @@ impl StoneDecodedPayload {
         }
     }
 
-    pub fn layout(&self) -> Option<&StonePayload<Vec<StonePayloadLayoutBody>>> {
+    pub fn layout(&self) -> Option<&StonePayload<Vec<StonePayloadLayout>>> {
         if let Self::Layout(layouts) = self {
             Some(layouts)
         } else {
@@ -234,7 +231,7 @@ impl StoneDecodedPayload {
         }
     }
 
-    pub fn index(&self) -> Option<&StonePayload<Vec<StonePayloadIndexBody>>> {
+    pub fn index(&self) -> Option<&StonePayload<Vec<StonePayloadIndex>>> {
         if let Self::Index(indices) = self {
             Some(indices)
         } else {
@@ -242,7 +239,7 @@ impl StoneDecodedPayload {
         }
     }
 
-    pub fn content(&self) -> Option<&StonePayload<StonePayloadContentBody>> {
+    pub fn content(&self) -> Option<&StonePayload<StonePayloadContent>> {
         if let Self::Content(content) = self {
             Some(content)
         } else {

@@ -26,7 +26,7 @@ use nix::{
     unistd::{close, linkat, mkdir, symlinkat},
 };
 use postblit::TriggerScope;
-use stone::{StoneDecodedPayload, StonePayloadLayoutBody, StonePayloadLayoutEntry};
+use stone::{StoneDecodedPayload, StonePayloadLayout, StonePayloadLayoutEntry};
 use thiserror::Error;
 use tui::{MultiProgress, ProgressBar, ProgressStyle, Styled};
 use vfs::tree::{builder::TreeBuilder, BlitFile, Element};
@@ -840,7 +840,7 @@ pub struct PendingFile {
     pub id: package::Id,
 
     /// Corresponding layout entry, describing the inode
-    pub layout: StonePayloadLayoutBody,
+    pub layout: StonePayloadLayout,
 }
 
 impl BlitFile for PendingFile {
@@ -893,7 +893,7 @@ impl From<String> for PendingFile {
     fn from(value: String) -> Self {
         PendingFile {
             id: Default::default(),
-            layout: StonePayloadLayoutBody {
+            layout: StonePayloadLayout {
                 uid: 0,
                 gid: 0,
                 mode: 0o755,

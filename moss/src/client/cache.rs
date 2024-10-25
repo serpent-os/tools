@@ -12,7 +12,7 @@ use std::{
 };
 
 use futures_util::StreamExt;
-use stone::{StoneDecodedPayload, StonePayloadIndexBody, StoneReadError};
+use stone::{StoneDecodedPayload, StonePayloadIndex, StoneReadError};
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 use url::Url;
@@ -257,7 +257,7 @@ impl Download {
 }
 
 /// Returns true if all assets already exist in the installation
-fn check_assets_exist(indices: &[&StonePayloadIndexBody], installation: &Installation) -> bool {
+fn check_assets_exist(indices: &[&StonePayloadIndex], installation: &Installation) -> bool {
     indices.iter().all(|index| {
         let path = asset_path(installation, &format!("{:02x}", index.digest));
         path.exists()

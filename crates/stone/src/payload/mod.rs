@@ -14,11 +14,11 @@ use thiserror::Error;
 
 use crate::ext::{ReadExt, WriteExt};
 
-pub use self::attribute::StonePayloadAttributeBody;
-pub use self::content::StonePayloadContentBody;
-pub use self::index::StonePayloadIndexBody;
-pub use self::layout::{StonePayloadLayoutBody, StonePayloadLayoutEntry, StonePayloadLayoutFileType};
-pub use self::meta::{StonePayloadMetaBody, StonePayloadMetaDependency, StonePayloadMetaKind, StonePayloadMetaTag};
+pub use self::attribute::StonePayloadAttribute;
+pub use self::content::StonePayloadContent;
+pub use self::index::StonePayloadIndex;
+pub use self::layout::{StonePayloadLayout, StonePayloadLayoutEntry, StonePayloadLayoutFileType};
+pub use self::meta::{StonePayloadMeta, StonePayloadMetaDependency, StonePayloadMetaKind, StonePayloadMetaTag};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display)]
 #[strum(serialize_all = "kebab-case")]

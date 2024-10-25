@@ -84,3 +84,11 @@ diesel db +ARGS:
     --config-file {{root-dir}}/moss/src/db/{{db}}/diesel.toml \
     --database-url sqlite://{{root-dir}}/moss/src/db/{{db}}/test.db \
     {{ARGS}}
+
+test-ffi:
+  #!/bin/bash
+  cargo cbuild -p stone-ffi
+  gcc -o stone-ffi-test ./crates/stone-ffi/test.c -L./target/x86_64-unknown-linux-gnu/debug/ -lstone -I./target/x86_64-unknown-linux-gnu/debug/
+  ln -sf $(pwd)/target/x86_64-unknown-linux-gnu/debug/libstone.so ./target/x86_64-unknown-linux-gnu/debug/libstone.so.0.24
+  LD_LIBRARY_PATH=$(pwd)/target/x86_64-unknown-linux-gnu/debug/ ./stone-ffi-test
+  rm stone-ffi-test

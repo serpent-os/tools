@@ -1,0 +1,21 @@
+include_guard = "STONE_H"
+language = "C"
+
+header = """
+// SPDX-FileCopyrightText: Copyright © 2020-2024 Serpent OS Developers
+//
+// SPDX-License-Identifier: MPL-2.0
+"""
+
+[enum]
+prefix_with_name = true
+rename_variants = "ScreamingSnakeCase"
+
+[export]
+include = ["StonePayloadLayoutRecord"]
+
+[export.rename]
+
+[parse]
+parse_deps = true
+include = ['stone']

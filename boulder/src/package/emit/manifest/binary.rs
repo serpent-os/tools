@@ -6,7 +6,7 @@ use std::{collections::BTreeSet, path::Path};
 
 use fs_err::File;
 use moss::Dependency;
-use stone::{StoneHeaderV1FileType, StonePayloadMetaBody, StonePayloadMetaKind, StonePayloadMetaTag, StoneWriter};
+use stone::{StoneHeaderV1FileType, StonePayloadMeta, StonePayloadMetaKind, StonePayloadMetaTag, StoneWriter};
 
 use super::Error;
 use crate::package::emit::Package;
@@ -26,7 +26,7 @@ pub fn write(path: &Path, packages: &BTreeSet<&Package<'_>>, build_deps: &BTreeS
         // Add build deps
         for name in build_deps {
             if let Ok(dep) = Dependency::from_name(name) {
-                payload.push(StonePayloadMetaBody {
+                payload.push(StonePayloadMeta {
                     tag: StonePayloadMetaTag::BuildDepends,
                     kind: StonePayloadMetaKind::Dependency(dep.kind.into(), dep.name),
                 });

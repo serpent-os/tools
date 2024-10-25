@@ -8,12 +8,12 @@ use super::{Record, StonePayloadDecodeError, StonePayloadEncodeError};
 use crate::ext::{ReadExt, WriteExt};
 
 #[derive(Debug, Clone)]
-pub struct StonePayloadAttributeBody {
+pub struct StonePayloadAttribute {
     pub key: Vec<u8>,
     pub value: Vec<u8>,
 }
 
-impl Record for StonePayloadAttributeBody {
+impl Record for StonePayloadAttribute {
     fn decode<R: Read>(mut reader: R) -> Result<Self, StonePayloadDecodeError> {
         let key_length = reader.read_u64()?;
         let value_length = reader.read_u64()?;

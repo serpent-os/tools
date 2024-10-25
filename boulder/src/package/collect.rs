@@ -12,7 +12,7 @@ use std::{
 use fs_err as fs;
 use glob::Pattern;
 use nix::libc::{S_IFDIR, S_IRGRP, S_IROTH, S_IRWXU, S_IXGRP, S_IXOTH};
-use stone::{StoneDigestWriter, StoneDigestWriterHasher, StonePayloadLayoutBody, StonePayloadLayoutEntry};
+use stone::{StoneDigestWriter, StoneDigestWriterHasher, StonePayloadLayout, StonePayloadLayoutEntry};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -126,7 +126,7 @@ impl Collector {
 pub struct PathInfo {
     pub path: PathBuf,
     pub target_path: PathBuf,
-    pub layout: StonePayloadLayoutBody,
+    pub layout: StonePayloadLayout,
     pub size: u64,
     pub package: String,
 }
@@ -188,7 +188,7 @@ fn layout_from_metadata(
     target_path: &Path,
     metadata: &Metadata,
     hasher: &mut StoneDigestWriterHasher,
-) -> Result<StonePayloadLayoutBody, Error> {
+) -> Result<StonePayloadLayout, Error> {
     // Strip /usr
     let target = target_path
         .strip_prefix("/usr")
@@ -198,7 +198,7 @@ fn layout_from_metadata(
 
     let file_type = metadata.file_type();
 
-    Ok(StonePayloadLayoutBody {
+    Ok(StonePayloadLayout {
         uid: metadata.uid(),
         gid: metadata.gid(),
         mode: metadata.mode(),

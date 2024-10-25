@@ -4,13 +4,14 @@
 
 use std::io::{Read, Write};
 
-use super::{StonePayloadDecodeError, StonePayloadEncodeError, Record};
+use super::{Record, StonePayloadDecodeError, StonePayloadEncodeError};
 use crate::ext::{ReadExt, WriteExt};
 
 /// Layout entries record their target file type so they can be rebuilt on
 /// the target installation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display)]
+#[strum(serialize_all = "kebab-case")]
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StonePayloadLayoutFileType {
     /// Regular file
     Regular = 1,
@@ -72,22 +73,21 @@ impl StonePayloadLayoutEntry {
         }
     }
 
-    fn file_type(&self) -> u8 {
+    pub fn file_type(&self) -> StonePayloadLayoutFileType {
         match self {
-            StonePayloadLayoutEntry::Regular(..) => 1,
-            StonePayloadLayoutEntry::Symlink(..) => 2,
-            StonePayloadLayoutEntry::Directory(_) => 3,
-            StonePayloadLayoutEntry::CharacterDevice(_) => 4,
-            StonePayloadLayoutEntry::BlockDevice(_) => 5,
-            StonePayloadLayoutEntry::Fifo(_) => 6,
-            StonePayloadLayoutEntry::Socket(_) => 7,
+            StonePayloadLayoutEntry::Regular(..) => StonePayloadLayoutFileType::Regular,
+            StonePayloadLayoutEntry::Symlink(..) => StonePayloadLayoutFileType::Symlink,
+            StonePayloadLayoutEntry::Directory(_) => StonePayloadLayoutFileType::Directory,
+            StonePayloadLayoutEntry::CharacterDevice(_) => StonePayloadLayoutFileType::CharacterDevice,
+            StonePayloadLayoutEntry::BlockDevice(_) => StonePayloadLayoutFileType::BlockDevice,
+            StonePayloadLayoutEntry::Fifo(_) => StonePayloadLayoutFileType::Fifo,
+            StonePayloadLayoutEntry::Socket(_) => StonePayloadLayoutFileType::Socket,
         }
     }
 }
 
-// TODO: Strong types these fields
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StonePayloadLayoutBody {
+pub struct StonePayloadLayout {
     pub uid: u32,
     pub gid: u32,
     pub mode: u32,
@@ -95,7 +95,7 @@ pub struct StonePayloadLayoutBody {
     pub entry: StonePayloadLayoutEntry,
 }
 
-impl Record for StonePayloadLayoutBody {
+impl Record for StonePayloadLayout {
     fn decode<R: Read>(mut reader: R) -> Result<Self, StonePayloadDecodeError> {
         let uid = reader.read_u32()?;
         let gid = reader.read_u32()?;
@@ -131,7 +131,9 @@ impl Record for StonePayloadLayoutBody {
                 sanitize(reader.read_string(source_length as u64)?),
                 sanitize(reader.read_string(target_length as u64)?),
             ),
-            StonePayloadLayoutFileType::Directory => StonePayloadLayoutEntry::Directory(sanitize(reader.read_string(target_length as u64)?)),
+            StonePayloadLayoutFileType::Directory => {
+                StonePayloadLayoutEntry::Directory(sanitize(reader.read_string(target_length as u64)?))
+            }
             _ => {
                 if source_length > 0 {
                     let _ = reader.read_vec(source_length as usize);
@@ -160,7 +162,7 @@ impl Record for StonePayloadLayoutBody {
 
         writer.write_u16(source.len() as u16)?;
         writer.write_u16(target.len() as u16)?;
-        writer.write_u8(self.entry.file_type())?;
+        writer.write_u8(self.entry.file_type() as u8)?;
         writer.write_array([0; 11])?;
         writer.write_all(&source)?;
         writer.write_all(target.as_bytes())?;

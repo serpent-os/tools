@@ -2638,6 +2638,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "stone-ffi"
+version = "0.24.7"
+dependencies = [
+ "libc",
+ "stone",
+]
+
+[[package]]
 name = "stone_recipe"
 version = "0.24.7"
 dependencies = [

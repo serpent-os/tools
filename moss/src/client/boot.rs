@@ -18,7 +18,7 @@ use blsforme::{
 use fnmatch::Pattern;
 use fs_err as fs;
 use itertools::Itertools;
-use stone::{StonePayloadLayoutBody, StonePayloadLayoutEntry};
+use stone::{StonePayloadLayout, StonePayloadLayoutEntry};
 use thiserror::{self, Error};
 
 use crate::{db, package::Id, Installation, State};
@@ -51,7 +51,7 @@ pub enum Error {
 #[derive(Debug)]
 struct KernelCandidate {
     path: PathBuf,
-    _layout: StonePayloadLayoutBody,
+    _layout: StonePayloadLayout,
 }
 
 impl AsRef<Path> for KernelCandidate {
@@ -63,10 +63,7 @@ impl AsRef<Path> for KernelCandidate {
 /// From a given set of input paths, produce a set of match pairs
 /// NOTE: This only works for a *new* blit and doesn't retroactively
 /// sync old kernels!
-fn kernel_files_from_state<'a>(
-    layouts: &'a [(Id, StonePayloadLayoutBody)],
-    pattern: &'a Pattern,
-) -> Vec<KernelCandidate> {
+fn kernel_files_from_state<'a>(layouts: &'a [(Id, StonePayloadLayout)], pattern: &'a Pattern) -> Vec<KernelCandidate> {
     let mut kernel_entries = vec![];
 
     for (_, path) in layouts.iter() {
@@ -97,7 +94,7 @@ fn kernel_files_from_state<'a>(
 /// Find bootloader assets in the new state
 fn boot_files_from_new_state<'a>(
     install: &Installation,
-    layouts: &'a [(Id, StonePayloadLayoutBody)],
+    layouts: &'a [(Id, StonePayloadLayout)],
     pattern: &'a Pattern,
 ) -> Vec<PathBuf> {
     let mut rets = vec![];
@@ -114,7 +111,7 @@ fn boot_files_from_new_state<'a>(
 }
 
 /// Grab all layouts for the provided state, mapped to package id
-fn layouts_for_state(client: &Client, state: &State) -> Result<Vec<(Id, StonePayloadLayoutBody)>, db::Error> {
+fn layouts_for_state(client: &Client, state: &State) -> Result<Vec<(Id, StonePayloadLayout)>, db::Error> {
     client.layout_db.query(state.selections.iter().map(|s| &s.package))
 }
 

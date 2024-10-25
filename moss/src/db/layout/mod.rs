@@ -6,7 +6,7 @@ use diesel::prelude::*;
 use diesel::{Connection as _, SqliteConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use std::collections::BTreeSet;
-use stone::{StonePayloadLayoutBody, StonePayloadLayoutEntry};
+use stone::{StonePayloadLayout, StonePayloadLayoutEntry};
 
 use crate::package;
 
@@ -37,7 +37,7 @@ impl Database {
     pub fn query<'a>(
         &self,
         packages: impl IntoIterator<Item = &'a package::Id>,
-    ) -> Result<Vec<(package::Id, StonePayloadLayoutBody)>, Error> {
+    ) -> Result<Vec<(package::Id, StonePayloadLayout)>, Error> {
         self.conn.exec(|conn| {
             let packages = packages.into_iter().map(AsRef::<str>::as_ref).collect::<Vec<_>>();
 
@@ -58,7 +58,7 @@ impl Database {
         })
     }
 
-    pub fn all(&self) -> Result<Vec<(package::Id, StonePayloadLayoutBody)>, Error> {
+    pub fn all(&self) -> Result<Vec<(package::Id, StonePayloadLayout)>, Error> {
         self.conn.exec(|conn| {
             model::layout::table
                 .select(model::Layout::as_select())
@@ -83,13 +83,13 @@ impl Database {
         })
     }
 
-    pub fn add(&self, package: &package::Id, layout: &StonePayloadLayoutBody) -> Result<(), Error> {
+    pub fn add(&self, package: &package::Id, layout: &StonePayloadLayout) -> Result<(), Error> {
         self.batch_add(vec![(package, layout)])
     }
 
     pub fn batch_add<'a>(
         &self,
-        layouts: impl IntoIterator<Item = (&'a package::Id, &'a StonePayloadLayoutBody)>,
+        layouts: impl IntoIterator<Item = (&'a package::Id, &'a StonePayloadLayout)>,
     ) -> Result<(), Error> {
         self.conn.exclusive_tx(|tx| {
             let mut ids = vec![];
@@ -148,12 +148,12 @@ fn batch_remove_impl(packages: &[&str], tx: &mut SqliteConnection) -> Result<(),
     Ok(())
 }
 
-fn map_layout(result: QueryResult<model::Layout>) -> Result<(package::Id, StonePayloadLayoutBody), Error> {
+fn map_layout(result: QueryResult<model::Layout>) -> Result<(package::Id, StonePayloadLayout), Error> {
     let row = result?;
 
     let entry = decode_entry(row.entry_type, row.entry_value1, row.entry_value2).ok_or(Error::LayoutEntryDecode)?;
 
-    let layout = StonePayloadLayoutBody {
+    let layout = StonePayloadLayout {
         uid: row.uid as u32,
         gid: row.gid as u32,
         mode: row.mode as u32,

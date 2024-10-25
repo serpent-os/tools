@@ -3,6 +3,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #[derive(Debug)]
-pub struct StonePayloadContentBody {
+pub struct StonePayloadContent {
     pub offset: u64,
 }
