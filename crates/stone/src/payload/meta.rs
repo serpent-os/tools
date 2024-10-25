@@ -12,7 +12,7 @@ use crate::ext::{ReadExt, WriteExt};
 /// These record all metadata for every .stone packages and provide
 /// no content
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StonePayloadMetaBody {
+pub struct StonePayloadMeta {
     pub tag: StonePayloadMetaTag,
     pub kind: StonePayloadMetaKind,
 }
@@ -151,7 +151,7 @@ fn decode_dependency(i: u8) -> Result<StonePayloadMetaDependency, StonePayloadDe
     Ok(result)
 }
 
-impl Record for StonePayloadMetaBody {
+impl Record for StonePayloadMeta {
     fn decode<R: Read>(mut reader: R) -> Result<Self, StonePayloadDecodeError> {
         let length = reader.read_u32()?;
 

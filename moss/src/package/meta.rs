@@ -5,7 +5,7 @@
 use std::collections::BTreeSet;
 
 use derive_more::{AsRef, Display, From, Into};
-use stone::{StonePayloadMetaBody, StonePayloadMetaKind, StonePayloadMetaTag};
+use stone::{StonePayloadMeta, StonePayloadMetaKind, StonePayloadMetaTag};
 use thiserror::Error;
 
 use crate::{dependency, Dependency, Provider};
@@ -62,7 +62,7 @@ pub struct Meta {
 }
 
 impl Meta {
-    pub fn from_stone_payload(payload: &[StonePayloadMetaBody]) -> Result<Self, MissingMetaFieldError> {
+    pub fn from_stone_payload(payload: &[StonePayloadMeta]) -> Result<Self, MissingMetaFieldError> {
         let name = find_meta_string(payload, StonePayloadMetaTag::Name)?;
         let version_identifier = find_meta_string(payload, StonePayloadMetaTag::Version)?;
         let source_release = find_meta_u64(payload, StonePayloadMetaTag::Release)?;
@@ -112,7 +112,7 @@ impl Meta {
         })
     }
 
-    pub fn to_stone_payload(self) -> Vec<StonePayloadMetaBody> {
+    pub fn to_stone_payload(self) -> Vec<StonePayloadMeta> {
         vec![
             (
                 StonePayloadMetaTag::Name,
@@ -195,7 +195,7 @@ impl Meta {
                     )
                 }),
         )
-        .map(|(tag, kind)| StonePayloadMetaBody { tag, kind })
+        .map(|(tag, kind)| StonePayloadMeta { tag, kind })
         .collect()
     }
 
@@ -208,19 +208,19 @@ impl Meta {
     }
 }
 
-fn find_meta_string(meta: &[StonePayloadMetaBody], tag: StonePayloadMetaTag) -> Result<String, MissingMetaFieldError> {
+fn find_meta_string(meta: &[StonePayloadMeta], tag: StonePayloadMetaTag) -> Result<String, MissingMetaFieldError> {
     meta.iter()
         .find_map(|meta| meta_string(meta, tag))
         .ok_or(MissingMetaFieldError(tag))
 }
 
-fn find_meta_u64(meta: &[StonePayloadMetaBody], tag: StonePayloadMetaTag) -> Result<u64, MissingMetaFieldError> {
+fn find_meta_u64(meta: &[StonePayloadMeta], tag: StonePayloadMetaTag) -> Result<u64, MissingMetaFieldError> {
     meta.iter()
         .find_map(|meta| meta_u64(meta, tag))
         .ok_or(MissingMetaFieldError(tag))
 }
 
-fn meta_u64(meta: &StonePayloadMetaBody, tag: StonePayloadMetaTag) -> Option<u64> {
+fn meta_u64(meta: &StonePayloadMeta, tag: StonePayloadMetaTag) -> Option<u64> {
     if meta.tag == tag {
         Some(match meta.kind {
             StonePayloadMetaKind::Int8(i) => i as _,
@@ -238,14 +238,14 @@ fn meta_u64(meta: &StonePayloadMetaBody, tag: StonePayloadMetaTag) -> Option<u64
     }
 }
 
-fn meta_string(meta: &StonePayloadMetaBody, tag: StonePayloadMetaTag) -> Option<String> {
+fn meta_string(meta: &StonePayloadMeta, tag: StonePayloadMetaTag) -> Option<String> {
     match (meta.tag, &meta.kind) {
         (meta_tag, StonePayloadMetaKind::String(value)) if meta_tag == tag => Some(value.clone()),
         _ => None,
     }
 }
 
-fn meta_dependency(meta: &StonePayloadMetaBody) -> Option<Dependency> {
+fn meta_dependency(meta: &StonePayloadMeta) -> Option<Dependency> {
     if let StonePayloadMetaKind::Dependency(kind, name) = meta.kind.clone() {
         Some(Dependency {
             kind: dependency::Kind::from(kind),
@@ -256,7 +256,7 @@ fn meta_dependency(meta: &StonePayloadMetaBody) -> Option<Dependency> {
     }
 }
 
-fn meta_provider(meta: &StonePayloadMetaBody) -> Option<Provider> {
+fn meta_provider(meta: &StonePayloadMeta) -> Option<Provider> {
     match (meta.tag, meta.kind.clone()) {
         (StonePayloadMetaTag::Provides, StonePayloadMetaKind::Provider(kind, name)) => Some(Provider {
             kind: dependency::Kind::from(kind),
@@ -266,7 +266,7 @@ fn meta_provider(meta: &StonePayloadMetaBody) -> Option<Provider> {
     }
 }
 
-fn meta_conflict(meta: &StonePayloadMetaBody) -> Option<Provider> {
+fn meta_conflict(meta: &StonePayloadMeta) -> Option<Provider> {
     match (meta.tag, meta.kind.clone()) {
         (StonePayloadMetaTag::Conflicts, StonePayloadMetaKind::Provider(kind, name)) => Some(Provider {
             kind: dependency::Kind::from(kind),

@@ -1,0 +1,22 @@
+[package]
+name = "stone-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+capi = []
+
+[dependencies]
+stone = { path = "../stone", features = ["ffi"] }
+
+libc.workspace = true
+
+[package.metadata.capi.header]
+name = "stone"
+
+[package.metadata.capi.pkg_config]
+name = "stone"
+
+[package.metadata.capi.library]
+name = "stone"

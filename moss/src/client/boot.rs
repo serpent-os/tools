@@ -13,7 +13,7 @@ use std::{
 use blsforme::os_release::{self, OsRelease};
 use fnmatch::Pattern;
 use fs_err as fs;
-use stone::{StonePayloadLayoutBody, StonePayloadLayoutEntry};
+use stone::{StonePayloadLayout, StonePayloadLayoutEntry};
 use thiserror::{self, Error};
 
 use crate::{package::Id, Installation};
@@ -41,7 +41,7 @@ pub enum Error {
 #[derive(Debug)]
 struct KernelCandidate<'a> {
     path: PathBuf,
-    _layout: &'a StonePayloadLayoutBody,
+    _layout: &'a StonePayloadLayout,
 }
 
 impl AsRef<Path> for KernelCandidate<'_> {
@@ -55,7 +55,7 @@ impl AsRef<Path> for KernelCandidate<'_> {
 /// sync old kernels!
 fn kernel_files_from_state<'a>(
     install: &Installation,
-    layouts: &'a [(Id, StonePayloadLayoutBody)],
+    layouts: &'a [(Id, StonePayloadLayout)],
     pattern: &'a Pattern,
 ) -> Vec<KernelCandidate<'a>> {
     let mut kernel_entries = vec![];
@@ -88,7 +88,7 @@ fn kernel_files_from_state<'a>(
 /// Find bootloader assets
 fn boot_files_from_state<'a>(
     install: &Installation,
-    layouts: &'a [(Id, StonePayloadLayoutBody)],
+    layouts: &'a [(Id, StonePayloadLayout)],
     pattern: &'a Pattern,
 ) -> Vec<PathBuf> {
     let mut rets = vec![];
@@ -104,7 +104,7 @@ fn boot_files_from_state<'a>(
     rets
 }
 
-pub fn synchronize(install: &Installation, layouts: &[(Id, StonePayloadLayoutBody)]) -> Result<(), Error> {
+pub fn synchronize(install: &Installation, layouts: &[(Id, StonePayloadLayout)]) -> Result<(), Error> {
     let root = install.root.clone();
     let is_native = root.to_string_lossy() == "/";
     // Create an appropriate configuration

@@ -13,7 +13,7 @@ use crate::ext::{ReadExt, WriteExt};
 /// This is used to split the file into the content store on disk before promoting
 /// to a transaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct StonePayloadIndexBody {
+pub struct StonePayloadIndex {
     /// Start pf the entry within the ContentPayload
     pub start: u64,
 
@@ -24,7 +24,7 @@ pub struct StonePayloadIndexBody {
     pub digest: u128,
 }
 
-impl Record for StonePayloadIndexBody {
+impl Record for StonePayloadIndex {
     fn decode<R: Read>(mut reader: R) -> Result<Self, StonePayloadDecodeError> {
         let start = reader.read_u64()?;
         let end = reader.read_u64()?;
