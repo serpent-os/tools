@@ -118,6 +118,7 @@ int main(int argc, char *argv[]) {
   fptr = fopen(file, "r");
   stone_reader_read_file(fileno(fptr), &reader, &version);
   process_reader(reader, version);
+  fclose(fptr);
 
   printf("\n");
   printf("Reading stone header from buffer\n\n");
