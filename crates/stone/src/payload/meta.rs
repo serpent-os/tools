@@ -89,8 +89,9 @@ impl StonePayloadMetaKind {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display)]
+#[strum(serialize_all = "kebab-case")]
 #[repr(u16)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StonePayloadMetaTag {
     // Name of the package
     Name = 1,

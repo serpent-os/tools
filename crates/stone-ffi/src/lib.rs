@@ -15,14 +15,18 @@ use std::{
 use libc::{c_int, size_t};
 use stone::{
     StoneDecodedPayload, StoneHeader, StoneHeaderV1, StoneHeaderV1FileType, StoneHeaderVersion,
-    StonePayloadCompression, StonePayloadHeader, StonePayloadKind, StonePayloadLayoutFileType, StoneReadError,
+    StonePayloadCompression, StonePayloadHeader, StonePayloadKind, StonePayloadLayoutFileType,
+    StonePayloadMetaDependency, StonePayloadMetaTag, StoneReadError,
 };
 
-pub use self::payload::{StonePayload, StonePayloadLayoutRecord};
+pub use self::payload::{
+    StonePayload, StonePayloadAttributeRecord, StonePayloadIndexRecord, StonePayloadLayoutRecord,
+    StonePayloadMetaRecord,
+};
 
 mod payload;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct StoneString {
     pub buf: *const u8,
@@ -218,6 +222,51 @@ pub unsafe extern "C" fn stone_payload_next_layout_record(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn stone_payload_next_meta_record(
+    payload: *mut StonePayload,
+    record: *mut StonePayloadMetaRecord,
+) -> c_int {
+    fallible(|| {
+        let mut payload = NonNull::new(payload).ok_or("")?;
+        let mut record = NonNull::new(record).ok_or("")?;
+
+        *record.as_mut() = payload.as_mut().next_meta_record().ok_or("")?;
+
+        Ok(())
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn stone_payload_next_index_record(
+    payload: *mut StonePayload,
+    record: *mut StonePayloadIndexRecord,
+) -> c_int {
+    fallible(|| {
+        let mut payload = NonNull::new(payload).ok_or("")?;
+        let mut record = NonNull::new(record).ok_or("")?;
+
+        *record.as_mut() = payload.as_mut().next_index_record().ok_or("")?;
+
+        Ok(())
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn stone_payload_next_attribute_record(
+    payload: *mut StonePayload,
+    record: *mut StonePayloadAttributeRecord,
+) -> c_int {
+    fallible(|| {
+        let mut payload = NonNull::new(payload).ok_or("")?;
+        let mut record = NonNull::new(record).ok_or("")?;
+
+        *record.as_mut() = payload.as_mut().next_attribute_record().ok_or("")?;
+
+        Ok(())
+    })
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn stone_payload_destroy(payload: *mut StonePayload) {
     let Some(payload) = NonNull::new(payload) else {
         return;
@@ -244,6 +293,16 @@ pub unsafe extern "C" fn stone_format_payload_kind(kind: StonePayloadKind, buf: 
 #[no_mangle]
 pub unsafe extern "C" fn stone_format_payload_layout_file_type(file_type: StonePayloadLayoutFileType, buf: *mut u8) {
     fill_c_string(buf, file_type);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn stone_format_payload_meta_tag(tag: StonePayloadMetaTag, buf: *mut u8) {
+    fill_c_string(buf, tag);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn stone_format_payload_meta_dependency(dependency: StonePayloadMetaDependency, buf: *mut u8) {
+    fill_c_string(buf, dependency);
 }
 
 unsafe fn fill_c_string(buf: *mut u8, content: impl ToString) {
