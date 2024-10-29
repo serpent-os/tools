@@ -9,42 +9,42 @@ pub struct StonePayloadMetaRecord {
     pub primitive_payload: StonePayloadMetaPrimitivePayload,
 }
 
-impl From<&stone::StonePayloadMeta> for StonePayloadMetaRecord {
-    fn from(record: &stone::StonePayloadMeta) -> Self {
+impl From<&stone::StonePayloadMetaRecord> for StonePayloadMetaRecord {
+    fn from(record: &stone::StonePayloadMetaRecord) -> Self {
         Self {
             tag: record.tag,
-            primitive_type: match &record.kind {
-                stone::StonePayloadMetaKind::Int8(_) => StonePayloadMetaPrimitiveType::Int8,
-                stone::StonePayloadMetaKind::Uint8(_) => StonePayloadMetaPrimitiveType::Uint8,
-                stone::StonePayloadMetaKind::Int16(_) => StonePayloadMetaPrimitiveType::Int16,
-                stone::StonePayloadMetaKind::Uint16(_) => StonePayloadMetaPrimitiveType::Uint16,
-                stone::StonePayloadMetaKind::Int32(_) => StonePayloadMetaPrimitiveType::Int32,
-                stone::StonePayloadMetaKind::Uint32(_) => StonePayloadMetaPrimitiveType::Uint32,
-                stone::StonePayloadMetaKind::Int64(_) => StonePayloadMetaPrimitiveType::Int64,
-                stone::StonePayloadMetaKind::Uint64(_) => StonePayloadMetaPrimitiveType::Uint64,
-                stone::StonePayloadMetaKind::String(_) => StonePayloadMetaPrimitiveType::String,
-                stone::StonePayloadMetaKind::Dependency(_, _) => StonePayloadMetaPrimitiveType::Dependency,
-                stone::StonePayloadMetaKind::Provider(_, _) => StonePayloadMetaPrimitiveType::Provider,
+            primitive_type: match &record.primitive {
+                stone::StonePayloadMetaPrimitive::Int8(_) => StonePayloadMetaPrimitiveType::Int8,
+                stone::StonePayloadMetaPrimitive::Uint8(_) => StonePayloadMetaPrimitiveType::Uint8,
+                stone::StonePayloadMetaPrimitive::Int16(_) => StonePayloadMetaPrimitiveType::Int16,
+                stone::StonePayloadMetaPrimitive::Uint16(_) => StonePayloadMetaPrimitiveType::Uint16,
+                stone::StonePayloadMetaPrimitive::Int32(_) => StonePayloadMetaPrimitiveType::Int32,
+                stone::StonePayloadMetaPrimitive::Uint32(_) => StonePayloadMetaPrimitiveType::Uint32,
+                stone::StonePayloadMetaPrimitive::Int64(_) => StonePayloadMetaPrimitiveType::Int64,
+                stone::StonePayloadMetaPrimitive::Uint64(_) => StonePayloadMetaPrimitiveType::Uint64,
+                stone::StonePayloadMetaPrimitive::String(_) => StonePayloadMetaPrimitiveType::String,
+                stone::StonePayloadMetaPrimitive::Dependency(_, _) => StonePayloadMetaPrimitiveType::Dependency,
+                stone::StonePayloadMetaPrimitive::Provider(_, _) => StonePayloadMetaPrimitiveType::Provider,
             },
-            primitive_payload: match &record.kind {
-                stone::StonePayloadMetaKind::Int8(a) => StonePayloadMetaPrimitivePayload { int8: *a },
-                stone::StonePayloadMetaKind::Uint8(a) => StonePayloadMetaPrimitivePayload { uint8: *a },
-                stone::StonePayloadMetaKind::Int16(a) => StonePayloadMetaPrimitivePayload { int16: *a },
-                stone::StonePayloadMetaKind::Uint16(a) => StonePayloadMetaPrimitivePayload { uint16: *a },
-                stone::StonePayloadMetaKind::Int32(a) => StonePayloadMetaPrimitivePayload { int32: *a },
-                stone::StonePayloadMetaKind::Uint32(a) => StonePayloadMetaPrimitivePayload { uint32: *a },
-                stone::StonePayloadMetaKind::Int64(a) => StonePayloadMetaPrimitivePayload { int64: *a },
-                stone::StonePayloadMetaKind::Uint64(a) => StonePayloadMetaPrimitivePayload { uint64: *a },
-                stone::StonePayloadMetaKind::String(a) => StonePayloadMetaPrimitivePayload {
+            primitive_payload: match &record.primitive {
+                stone::StonePayloadMetaPrimitive::Int8(a) => StonePayloadMetaPrimitivePayload { int8: *a },
+                stone::StonePayloadMetaPrimitive::Uint8(a) => StonePayloadMetaPrimitivePayload { uint8: *a },
+                stone::StonePayloadMetaPrimitive::Int16(a) => StonePayloadMetaPrimitivePayload { int16: *a },
+                stone::StonePayloadMetaPrimitive::Uint16(a) => StonePayloadMetaPrimitivePayload { uint16: *a },
+                stone::StonePayloadMetaPrimitive::Int32(a) => StonePayloadMetaPrimitivePayload { int32: *a },
+                stone::StonePayloadMetaPrimitive::Uint32(a) => StonePayloadMetaPrimitivePayload { uint32: *a },
+                stone::StonePayloadMetaPrimitive::Int64(a) => StonePayloadMetaPrimitivePayload { int64: *a },
+                stone::StonePayloadMetaPrimitive::Uint64(a) => StonePayloadMetaPrimitivePayload { uint64: *a },
+                stone::StonePayloadMetaPrimitive::String(a) => StonePayloadMetaPrimitivePayload {
                     string: StoneString::new(a),
                 },
-                stone::StonePayloadMetaKind::Dependency(kind, name) => StonePayloadMetaPrimitivePayload {
+                stone::StonePayloadMetaPrimitive::Dependency(kind, name) => StonePayloadMetaPrimitivePayload {
                     dependency: StonePayloadMetaDependencyValue {
                         kind: *kind,
                         name: StoneString::new(name),
                     },
                 },
-                stone::StonePayloadMetaKind::Provider(kind, name) => StonePayloadMetaPrimitivePayload {
+                stone::StonePayloadMetaPrimitive::Provider(kind, name) => StonePayloadMetaPrimitivePayload {
                     provider: StonePayloadMetaProviderValue {
                         kind: *kind,
                         name: StoneString::new(name),

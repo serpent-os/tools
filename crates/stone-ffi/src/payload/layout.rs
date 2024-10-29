@@ -1,4 +1,4 @@
-use stone::{StonePayloadLayout, StonePayloadLayoutEntry, StonePayloadLayoutFileType};
+use stone::{StonePayloadLayoutFile, StonePayloadLayoutFileType};
 
 use crate::StoneString;
 
@@ -13,40 +13,40 @@ pub struct StonePayloadLayoutRecord {
     pub file_payload: StonePayloadLayoutFilePayload,
 }
 
-impl From<&StonePayloadLayout> for StonePayloadLayoutRecord {
-    fn from(record: &StonePayloadLayout) -> Self {
+impl From<&stone::StonePayloadLayoutRecord> for StonePayloadLayoutRecord {
+    fn from(record: &stone::StonePayloadLayoutRecord) -> Self {
         StonePayloadLayoutRecord {
             uid: record.uid,
             gid: record.gid,
             mode: record.mode,
             tag: record.tag,
-            file_type: record.entry.file_type(),
-            file_payload: match &record.entry {
-                StonePayloadLayoutEntry::Regular(hash, name) => StonePayloadLayoutFilePayload {
+            file_type: record.file.file_type(),
+            file_payload: match &record.file {
+                StonePayloadLayoutFile::Regular(hash, name) => StonePayloadLayoutFilePayload {
                     regular: StonePayloadLayoutFileRegular {
                         hash: hash.to_be_bytes(),
                         name: StoneString::new(name),
                     },
                 },
-                StonePayloadLayoutEntry::Symlink(source, target) => StonePayloadLayoutFilePayload {
+                StonePayloadLayoutFile::Symlink(source, target) => StonePayloadLayoutFilePayload {
                     symlink: StonePayloadLayoutFileSymlink {
                         source: StoneString::new(source),
                         target: StoneString::new(target),
                     },
                 },
-                StonePayloadLayoutEntry::Directory(name) => StonePayloadLayoutFilePayload {
+                StonePayloadLayoutFile::Directory(name) => StonePayloadLayoutFilePayload {
                     directory: StoneString::new(name),
                 },
-                StonePayloadLayoutEntry::CharacterDevice(name) => StonePayloadLayoutFilePayload {
+                StonePayloadLayoutFile::CharacterDevice(name) => StonePayloadLayoutFilePayload {
                     character_device: StoneString::new(name),
                 },
-                StonePayloadLayoutEntry::BlockDevice(name) => StonePayloadLayoutFilePayload {
+                StonePayloadLayoutFile::BlockDevice(name) => StonePayloadLayoutFilePayload {
                     block_device: StoneString::new(name),
                 },
-                StonePayloadLayoutEntry::Fifo(name) => StonePayloadLayoutFilePayload {
+                StonePayloadLayoutFile::Fifo(name) => StonePayloadLayoutFilePayload {
                     fifo: StoneString::new(name),
                 },
-                StonePayloadLayoutEntry::Socket(name) => StonePayloadLayoutFilePayload {
+                StonePayloadLayoutFile::Socket(name) => StonePayloadLayoutFilePayload {
                     socket: StoneString::new(name),
                 },
             },

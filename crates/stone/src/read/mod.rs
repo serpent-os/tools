@@ -7,9 +7,9 @@ use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 use thiserror::Error;
 
 use crate::{
-    payload, StoneHeader, StoneHeaderDecodeError, StonePayload, StonePayloadAttribute, StonePayloadCompression,
-    StonePayloadContent, StonePayloadDecodeError, StonePayloadHeader, StonePayloadIndex, StonePayloadKind,
-    StonePayloadLayout, StonePayloadMeta,
+    payload, StoneHeader, StoneHeaderDecodeError, StonePayload, StonePayloadAttributeRecord, StonePayloadCompression,
+    StonePayloadContent, StonePayloadDecodeError, StonePayloadHeader, StonePayloadIndexRecord, StonePayloadKind,
+    StonePayloadLayoutRecord, StonePayloadMetaRecord,
 };
 
 use self::zstd::Zstd;
@@ -127,10 +127,10 @@ impl<R: Read> Read for PayloadReader<R> {
 
 #[derive(Debug)]
 pub enum StoneDecodedPayload {
-    Meta(StonePayload<Vec<StonePayloadMeta>>),
-    Attributes(StonePayload<Vec<StonePayloadAttribute>>),
-    Layout(StonePayload<Vec<StonePayloadLayout>>),
-    Index(StonePayload<Vec<StonePayloadIndex>>),
+    Meta(StonePayload<Vec<StonePayloadMetaRecord>>),
+    Attributes(StonePayload<Vec<StonePayloadAttributeRecord>>),
+    Layout(StonePayload<Vec<StonePayloadLayoutRecord>>),
+    Index(StonePayload<Vec<StonePayloadIndexRecord>>),
     Content(StonePayload<StonePayloadContent>),
 }
 
@@ -207,7 +207,7 @@ impl StoneDecodedPayload {
         }
     }
 
-    pub fn meta(&self) -> Option<&StonePayload<Vec<StonePayloadMeta>>> {
+    pub fn meta(&self) -> Option<&StonePayload<Vec<StonePayloadMetaRecord>>> {
         if let Self::Meta(meta) = self {
             Some(meta)
         } else {
@@ -215,7 +215,7 @@ impl StoneDecodedPayload {
         }
     }
 
-    pub fn attributes(&self) -> Option<&StonePayload<Vec<StonePayloadAttribute>>> {
+    pub fn attributes(&self) -> Option<&StonePayload<Vec<StonePayloadAttributeRecord>>> {
         if let Self::Attributes(attributes) = self {
             Some(attributes)
         } else {
@@ -223,7 +223,7 @@ impl StoneDecodedPayload {
         }
     }
 
-    pub fn layout(&self) -> Option<&StonePayload<Vec<StonePayloadLayout>>> {
+    pub fn layout(&self) -> Option<&StonePayload<Vec<StonePayloadLayoutRecord>>> {
         if let Self::Layout(layouts) = self {
             Some(layouts)
         } else {
@@ -231,7 +231,7 @@ impl StoneDecodedPayload {
         }
     }
 
-    pub fn index(&self) -> Option<&StonePayload<Vec<StonePayloadIndex>>> {
+    pub fn index(&self) -> Option<&StonePayload<Vec<StonePayloadIndexRecord>>> {
         if let Self::Index(indices) = self {
             Some(indices)
         } else {
@@ -277,7 +277,7 @@ pub enum StoneReadError {
 mod test {
     use xxhash_rust::xxh3::xxh3_128;
 
-    use crate::{StoneHeaderVersion, StonePayloadLayoutEntry};
+    use crate::{StoneHeaderVersion, StonePayloadLayoutFile};
 
     use super::*;
 
@@ -326,7 +326,7 @@ mod test {
                     .filter_map(StoneDecodedPayload::layout)
                     .flat_map(|p| &p.body)
                     .find(|layout| {
-                        if let StonePayloadLayoutEntry::Regular(digest, _) = &layout.entry {
+                        if let StonePayloadLayoutFile::Regular(digest, _) = &layout.file {
                             return *digest == index.digest;
                         }
                         false

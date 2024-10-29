@@ -12,7 +12,7 @@ use std::{
 use fs_err as fs;
 use glob::Pattern;
 use nix::libc::{S_IFDIR, S_IRGRP, S_IROTH, S_IRWXU, S_IXGRP, S_IXOTH};
-use stone::{StoneDigestWriter, StoneDigestWriterHasher, StonePayloadLayout, StonePayloadLayoutEntry};
+use stone::{StoneDigestWriter, StoneDigestWriterHasher, StonePayloadLayoutFile, StonePayloadLayoutRecord};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -126,7 +126,7 @@ impl Collector {
 pub struct PathInfo {
     pub path: PathBuf,
     pub target_path: PathBuf,
-    pub layout: StonePayloadLayout,
+    pub layout: StonePayloadLayoutRecord,
     pub size: u64,
     pub package: String,
 }
@@ -158,11 +158,11 @@ impl PathInfo {
     }
 
     pub fn is_file(&self) -> bool {
-        matches!(self.layout.entry, StonePayloadLayoutEntry::Regular(_, _))
+        matches!(self.layout.file, StonePayloadLayoutFile::Regular(_, _))
     }
 
     pub fn file_hash(&self) -> Option<u128> {
-        if let StonePayloadLayoutEntry::Regular(hash, _) = &self.layout.entry {
+        if let StonePayloadLayoutFile::Regular(hash, _) = &self.layout.file {
             Some(*hash)
         } else {
             None
@@ -188,7 +188,7 @@ fn layout_from_metadata(
     target_path: &Path,
     metadata: &Metadata,
     hasher: &mut StoneDigestWriterHasher,
-) -> Result<StonePayloadLayout, Error> {
+) -> Result<StonePayloadLayoutRecord, Error> {
     // Strip /usr
     let target = target_path
         .strip_prefix("/usr")
@@ -198,25 +198,25 @@ fn layout_from_metadata(
 
     let file_type = metadata.file_type();
 
-    Ok(StonePayloadLayout {
+    Ok(StonePayloadLayoutRecord {
         uid: metadata.uid(),
         gid: metadata.gid(),
         mode: metadata.mode(),
         tag: 0,
-        entry: if file_type.is_symlink() {
+        file: if file_type.is_symlink() {
             let source = fs::read_link(path)?;
 
-            StonePayloadLayoutEntry::Symlink(source.to_string_lossy().to_string(), target)
+            StonePayloadLayoutFile::Symlink(source.to_string_lossy().to_string(), target)
         } else if file_type.is_dir() {
-            StonePayloadLayoutEntry::Directory(target)
+            StonePayloadLayoutFile::Directory(target)
         } else if file_type.is_char_device() {
-            StonePayloadLayoutEntry::CharacterDevice(target)
+            StonePayloadLayoutFile::CharacterDevice(target)
         } else if file_type.is_block_device() {
-            StonePayloadLayoutEntry::BlockDevice(target)
+            StonePayloadLayoutFile::BlockDevice(target)
         } else if file_type.is_fifo() {
-            StonePayloadLayoutEntry::Fifo(target)
+            StonePayloadLayoutFile::Fifo(target)
         } else if file_type.is_socket() {
-            StonePayloadLayoutEntry::Socket(target)
+            StonePayloadLayoutFile::Socket(target)
         } else {
             hasher.reset();
 
@@ -229,7 +229,7 @@ fn layout_from_metadata(
 
             let hash = hasher.digest128();
 
-            StonePayloadLayoutEntry::Regular(hash, target)
+            StonePayloadLayoutFile::Regular(hash, target)
         },
     })
 }

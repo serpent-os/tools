@@ -12,9 +12,9 @@ use crate::ext::{ReadExt, WriteExt};
 /// These record all metadata for every .stone packages and provide
 /// no content
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StonePayloadMeta {
+pub struct StonePayloadMetaRecord {
     pub tag: StonePayloadMetaTag,
-    pub kind: StonePayloadMetaKind,
+    pub primitive: StonePayloadMetaPrimitive,
 }
 
 #[repr(u8)]
@@ -54,7 +54,7 @@ pub enum StonePayloadMetaDependency {
 
 #[repr(u8)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StonePayloadMetaKind {
+pub enum StonePayloadMetaPrimitive {
     Int8(i8),
     Uint8(u8),
     Int16(i16),
@@ -68,23 +68,23 @@ pub enum StonePayloadMetaKind {
     Provider(StonePayloadMetaDependency, String),
 }
 
-impl StonePayloadMetaKind {
+impl StonePayloadMetaPrimitive {
     fn size(&self) -> usize {
         match self {
-            StonePayloadMetaKind::Int8(_) => size_of::<i8>(),
-            StonePayloadMetaKind::Uint8(_) => size_of::<u8>(),
-            StonePayloadMetaKind::Int16(_) => size_of::<i16>(),
-            StonePayloadMetaKind::Uint16(_) => size_of::<u16>(),
-            StonePayloadMetaKind::Int32(_) => size_of::<i32>(),
-            StonePayloadMetaKind::Uint32(_) => size_of::<u32>(),
-            StonePayloadMetaKind::Int64(_) => size_of::<i64>(),
-            StonePayloadMetaKind::Uint64(_) => size_of::<u64>(),
+            StonePayloadMetaPrimitive::Int8(_) => size_of::<i8>(),
+            StonePayloadMetaPrimitive::Uint8(_) => size_of::<u8>(),
+            StonePayloadMetaPrimitive::Int16(_) => size_of::<i16>(),
+            StonePayloadMetaPrimitive::Uint16(_) => size_of::<u16>(),
+            StonePayloadMetaPrimitive::Int32(_) => size_of::<i32>(),
+            StonePayloadMetaPrimitive::Uint32(_) => size_of::<u32>(),
+            StonePayloadMetaPrimitive::Int64(_) => size_of::<i64>(),
+            StonePayloadMetaPrimitive::Uint64(_) => size_of::<u64>(),
             // nul terminator
-            StonePayloadMetaKind::String(s) => s.len() + 1,
+            StonePayloadMetaPrimitive::String(s) => s.len() + 1,
             // Plus dep size & nul terminator
-            StonePayloadMetaKind::Dependency(_, s) => s.len() + 2,
+            StonePayloadMetaPrimitive::Dependency(_, s) => s.len() + 2,
             // Plus dep size & nul terminator
-            StonePayloadMetaKind::Provider(_, s) => s.len() + 2,
+            StonePayloadMetaPrimitive::Provider(_, s) => s.len() + 2,
         }
     }
 }
@@ -152,7 +152,7 @@ fn decode_dependency(i: u8) -> Result<StonePayloadMetaDependency, StonePayloadDe
     Ok(result)
 }
 
-impl Record for StonePayloadMeta {
+impl Record for StonePayloadMetaRecord {
     fn decode<R: Read>(mut reader: R) -> Result<Self, StonePayloadDecodeError> {
         let length = reader.read_u32()?;
 
@@ -187,21 +187,21 @@ impl Record for StonePayloadMeta {
         let sanitize = |s: String| s.trim_end_matches('\0').to_owned();
 
         let kind = match kind {
-            1 => StonePayloadMetaKind::Int8(reader.read_u8()? as i8),
-            2 => StonePayloadMetaKind::Uint8(reader.read_u8()?),
-            3 => StonePayloadMetaKind::Int16(reader.read_u16()? as i16),
-            4 => StonePayloadMetaKind::Uint16(reader.read_u16()?),
-            5 => StonePayloadMetaKind::Int32(reader.read_u32()? as i32),
-            6 => StonePayloadMetaKind::Uint32(reader.read_u32()?),
-            7 => StonePayloadMetaKind::Int64(reader.read_u64()? as i64),
-            8 => StonePayloadMetaKind::Uint64(reader.read_u64()?),
-            9 => StonePayloadMetaKind::String(sanitize(reader.read_string(length as u64)?)),
-            10 => StonePayloadMetaKind::Dependency(
+            1 => StonePayloadMetaPrimitive::Int8(reader.read_u8()? as i8),
+            2 => StonePayloadMetaPrimitive::Uint8(reader.read_u8()?),
+            3 => StonePayloadMetaPrimitive::Int16(reader.read_u16()? as i16),
+            4 => StonePayloadMetaPrimitive::Uint16(reader.read_u16()?),
+            5 => StonePayloadMetaPrimitive::Int32(reader.read_u32()? as i32),
+            6 => StonePayloadMetaPrimitive::Uint32(reader.read_u32()?),
+            7 => StonePayloadMetaPrimitive::Int64(reader.read_u64()? as i64),
+            8 => StonePayloadMetaPrimitive::Uint64(reader.read_u64()?),
+            9 => StonePayloadMetaPrimitive::String(sanitize(reader.read_string(length as u64)?)),
+            10 => StonePayloadMetaPrimitive::Dependency(
                 // DependencyKind u8 subtracted from length
                 decode_dependency(reader.read_u8()?)?,
                 sanitize(reader.read_string(length as u64 - 1)?),
             ),
-            11 => StonePayloadMetaKind::Provider(
+            11 => StonePayloadMetaPrimitive::Provider(
                 // DependencyKind u8 subtracted from length
                 decode_dependency(reader.read_u8()?)?,
                 sanitize(reader.read_string(length as u64 - 1)?),
@@ -209,44 +209,44 @@ impl Record for StonePayloadMeta {
             k => return Err(StonePayloadDecodeError::UnknownMetaKind(k)),
         };
 
-        Ok(Self { tag, kind })
+        Ok(Self { tag, primitive: kind })
     }
 
     fn encode<W: Write>(&self, writer: &mut W) -> Result<(), StonePayloadEncodeError> {
-        let kind = match self.kind {
-            StonePayloadMetaKind::Int8(_) => 1,
-            StonePayloadMetaKind::Uint8(_) => 2,
-            StonePayloadMetaKind::Int16(_) => 3,
-            StonePayloadMetaKind::Uint16(_) => 4,
-            StonePayloadMetaKind::Int32(_) => 5,
-            StonePayloadMetaKind::Uint32(_) => 6,
-            StonePayloadMetaKind::Int64(_) => 7,
-            StonePayloadMetaKind::Uint64(_) => 8,
-            StonePayloadMetaKind::String(_) => 9,
-            StonePayloadMetaKind::Dependency(_, _) => 10,
-            StonePayloadMetaKind::Provider(_, _) => 11,
+        let kind = match self.primitive {
+            StonePayloadMetaPrimitive::Int8(_) => 1,
+            StonePayloadMetaPrimitive::Uint8(_) => 2,
+            StonePayloadMetaPrimitive::Int16(_) => 3,
+            StonePayloadMetaPrimitive::Uint16(_) => 4,
+            StonePayloadMetaPrimitive::Int32(_) => 5,
+            StonePayloadMetaPrimitive::Uint32(_) => 6,
+            StonePayloadMetaPrimitive::Int64(_) => 7,
+            StonePayloadMetaPrimitive::Uint64(_) => 8,
+            StonePayloadMetaPrimitive::String(_) => 9,
+            StonePayloadMetaPrimitive::Dependency(_, _) => 10,
+            StonePayloadMetaPrimitive::Provider(_, _) => 11,
         };
 
-        writer.write_u32(self.kind.size() as u32)?;
+        writer.write_u32(self.primitive.size() as u32)?;
         writer.write_u16(self.tag as u16)?;
         writer.write_u8(kind)?;
         // Padding
         writer.write_array::<1>([0])?;
 
-        match &self.kind {
-            StonePayloadMetaKind::Int8(i) => writer.write_u8(*i as u8)?,
-            StonePayloadMetaKind::Uint8(i) => writer.write_u8(*i)?,
-            StonePayloadMetaKind::Int16(i) => writer.write_u16(*i as u16)?,
-            StonePayloadMetaKind::Uint16(i) => writer.write_u16(*i)?,
-            StonePayloadMetaKind::Int32(i) => writer.write_u32(*i as u32)?,
-            StonePayloadMetaKind::Uint32(i) => writer.write_u32(*i)?,
-            StonePayloadMetaKind::Int64(i) => writer.write_u64(*i as u64)?,
-            StonePayloadMetaKind::Uint64(i) => writer.write_u64(*i)?,
-            StonePayloadMetaKind::String(s) => {
+        match &self.primitive {
+            StonePayloadMetaPrimitive::Int8(i) => writer.write_u8(*i as u8)?,
+            StonePayloadMetaPrimitive::Uint8(i) => writer.write_u8(*i)?,
+            StonePayloadMetaPrimitive::Int16(i) => writer.write_u16(*i as u16)?,
+            StonePayloadMetaPrimitive::Uint16(i) => writer.write_u16(*i)?,
+            StonePayloadMetaPrimitive::Int32(i) => writer.write_u32(*i as u32)?,
+            StonePayloadMetaPrimitive::Uint32(i) => writer.write_u32(*i)?,
+            StonePayloadMetaPrimitive::Int64(i) => writer.write_u64(*i as u64)?,
+            StonePayloadMetaPrimitive::Uint64(i) => writer.write_u64(*i)?,
+            StonePayloadMetaPrimitive::String(s) => {
                 writer.write_all(s.as_bytes())?;
                 writer.write_u8(b'\0')?;
             }
-            StonePayloadMetaKind::Dependency(dep, s) | StonePayloadMetaKind::Provider(dep, s) => {
+            StonePayloadMetaPrimitive::Dependency(dep, s) | StonePayloadMetaPrimitive::Provider(dep, s) => {
                 writer.write_u8(*dep as u8)?;
                 writer.write_all(s.as_bytes())?;
                 writer.write_u8(b'\0')?;
@@ -257,6 +257,6 @@ impl Record for StonePayloadMeta {
     }
 
     fn size(&self) -> usize {
-        4 + 2 + 1 + 1 + self.kind.size()
+        4 + 2 + 1 + 1 + self.primitive.size()
     }
 }

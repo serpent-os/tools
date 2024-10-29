@@ -7,8 +7,8 @@ pub struct StonePayloadAttributeRecord {
     pub value_buf: *const u8,
 }
 
-impl From<&stone::StonePayloadAttribute> for StonePayloadAttributeRecord {
-    fn from(record: &stone::StonePayloadAttribute) -> Self {
+impl From<&stone::StonePayloadAttributeRecord> for StonePayloadAttributeRecord {
+    fn from(record: &stone::StonePayloadAttributeRecord) -> Self {
         Self {
             key_size: record.key.len(),
             key_buf: record.key.as_ptr(),

@@ -6,7 +6,7 @@ use diesel::prelude::*;
 use diesel::{Connection as _, SqliteConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use std::collections::BTreeSet;
-use stone::{StonePayloadLayout, StonePayloadLayoutEntry};
+use stone::{StonePayloadLayoutFile, StonePayloadLayoutRecord};
 
 use crate::package;
 
@@ -37,7 +37,7 @@ impl Database {
     pub fn query<'a>(
         &self,
         packages: impl IntoIterator<Item = &'a package::Id>,
-    ) -> Result<Vec<(package::Id, StonePayloadLayout)>, Error> {
+    ) -> Result<Vec<(package::Id, StonePayloadLayoutRecord)>, Error> {
         self.conn.exec(|conn| {
             let packages = packages.into_iter().map(AsRef::<str>::as_ref).collect::<Vec<_>>();
 
@@ -58,7 +58,7 @@ impl Database {
         })
     }
 
-    pub fn all(&self) -> Result<Vec<(package::Id, StonePayloadLayout)>, Error> {
+    pub fn all(&self) -> Result<Vec<(package::Id, StonePayloadLayoutRecord)>, Error> {
         self.conn.exec(|conn| {
             model::layout::table
                 .select(model::Layout::as_select())
@@ -83,13 +83,13 @@ impl Database {
         })
     }
 
-    pub fn add(&self, package: &package::Id, layout: &StonePayloadLayout) -> Result<(), Error> {
+    pub fn add(&self, package: &package::Id, layout: &StonePayloadLayoutRecord) -> Result<(), Error> {
         self.batch_add(vec![(package, layout)])
     }
 
     pub fn batch_add<'a>(
         &self,
-        layouts: impl IntoIterator<Item = (&'a package::Id, &'a StonePayloadLayout)>,
+        layouts: impl IntoIterator<Item = (&'a package::Id, &'a StonePayloadLayoutRecord)>,
     ) -> Result<(), Error> {
         self.conn.exclusive_tx(|tx| {
             let mut ids = vec![];
@@ -99,7 +99,7 @@ impl Database {
                 .map(|(package_id, layout)| {
                     ids.push(package_id.as_ref());
 
-                    let (entry_type, entry_value1, entry_value2) = encode_entry(layout.entry.clone());
+                    let (entry_type, entry_value1, entry_value2) = encode_entry(layout.file.clone());
 
                     model::NewLayout {
                         package_id: package_id.to_string(),
@@ -148,17 +148,17 @@ fn batch_remove_impl(packages: &[&str], tx: &mut SqliteConnection) -> Result<(),
     Ok(())
 }
 
-fn map_layout(result: QueryResult<model::Layout>) -> Result<(package::Id, StonePayloadLayout), Error> {
+fn map_layout(result: QueryResult<model::Layout>) -> Result<(package::Id, StonePayloadLayoutRecord), Error> {
     let row = result?;
 
     let entry = decode_entry(row.entry_type, row.entry_value1, row.entry_value2).ok_or(Error::LayoutEntryDecode)?;
 
-    let layout = StonePayloadLayout {
+    let layout = StonePayloadLayoutRecord {
         uid: row.uid as u32,
         gid: row.gid as u32,
         mode: row.mode as u32,
         tag: row.tag as u32,
-        entry,
+        file: entry,
     };
 
     Ok((row.package_id, layout))
@@ -168,33 +168,33 @@ fn decode_entry(
     entry_type: String,
     entry_value1: Option<String>,
     entry_value2: Option<String>,
-) -> Option<StonePayloadLayoutEntry> {
+) -> Option<StonePayloadLayoutFile> {
     match entry_type.as_str() {
         "regular" => {
             let hash = entry_value1?.parse::<u128>().ok()?;
             let name = entry_value2?;
 
-            Some(StonePayloadLayoutEntry::Regular(hash, name))
+            Some(StonePayloadLayoutFile::Regular(hash, name))
         }
-        "symlink" => Some(StonePayloadLayoutEntry::Symlink(entry_value1?, entry_value2?)),
-        "directory" => Some(StonePayloadLayoutEntry::Directory(entry_value1?)),
-        "character-device" => Some(StonePayloadLayoutEntry::CharacterDevice(entry_value1?)),
-        "block-device" => Some(StonePayloadLayoutEntry::BlockDevice(entry_value1?)),
-        "fifo" => Some(StonePayloadLayoutEntry::Fifo(entry_value1?)),
-        "socket" => Some(StonePayloadLayoutEntry::Socket(entry_value1?)),
+        "symlink" => Some(StonePayloadLayoutFile::Symlink(entry_value1?, entry_value2?)),
+        "directory" => Some(StonePayloadLayoutFile::Directory(entry_value1?)),
+        "character-device" => Some(StonePayloadLayoutFile::CharacterDevice(entry_value1?)),
+        "block-device" => Some(StonePayloadLayoutFile::BlockDevice(entry_value1?)),
+        "fifo" => Some(StonePayloadLayoutFile::Fifo(entry_value1?)),
+        "socket" => Some(StonePayloadLayoutFile::Socket(entry_value1?)),
         _ => None,
     }
 }
 
-fn encode_entry(entry: StonePayloadLayoutEntry) -> (&'static str, Option<String>, Option<String>) {
+fn encode_entry(entry: StonePayloadLayoutFile) -> (&'static str, Option<String>, Option<String>) {
     match entry {
-        StonePayloadLayoutEntry::Regular(hash, name) => ("regular", Some(hash.to_string()), Some(name)),
-        StonePayloadLayoutEntry::Symlink(a, b) => ("symlink", Some(a), Some(b)),
-        StonePayloadLayoutEntry::Directory(name) => ("directory", Some(name), None),
-        StonePayloadLayoutEntry::CharacterDevice(name) => ("character-device", Some(name), None),
-        StonePayloadLayoutEntry::BlockDevice(name) => ("block-device", Some(name), None),
-        StonePayloadLayoutEntry::Fifo(name) => ("fifo", Some(name), None),
-        StonePayloadLayoutEntry::Socket(name) => ("socket", Some(name), None),
+        StonePayloadLayoutFile::Regular(hash, name) => ("regular", Some(hash.to_string()), Some(name)),
+        StonePayloadLayoutFile::Symlink(a, b) => ("symlink", Some(a), Some(b)),
+        StonePayloadLayoutFile::Directory(name) => ("directory", Some(name), None),
+        StonePayloadLayoutFile::CharacterDevice(name) => ("character-device", Some(name), None),
+        StonePayloadLayoutFile::BlockDevice(name) => ("block-device", Some(name), None),
+        StonePayloadLayoutFile::Fifo(name) => ("fifo", Some(name), None),
+        StonePayloadLayoutFile::Socket(name) => ("socket", Some(name), None),
     }
 }
 

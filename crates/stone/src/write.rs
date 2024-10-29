@@ -6,9 +6,9 @@ use std::io::{self, Read, Seek, SeekFrom, Write};
 use thiserror::Error;
 
 use crate::{
-    payload, StoneHeader, StoneHeaderV1, StoneHeaderV1FileType, StonePayloadAttribute, StonePayloadCompression,
-    StonePayloadEncodeError, StonePayloadHeader, StonePayloadIndex, StonePayloadKind, StonePayloadLayout,
-    StonePayloadMeta,
+    payload, StoneHeader, StoneHeaderV1, StoneHeaderV1FileType, StonePayloadAttributeRecord, StonePayloadCompression,
+    StonePayloadEncodeError, StonePayloadHeader, StonePayloadIndexRecord, StonePayloadKind, StonePayloadLayoutRecord,
+    StonePayloadMetaRecord,
 };
 
 pub use self::digest::{StoneDigestWriter, StoneDigestWriterHasher};
@@ -129,7 +129,9 @@ where
         let end = self.content.plain_size;
 
         // Add index data
-        self.content.indices.push(StonePayloadIndex { start, end, digest });
+        self.content
+            .indices
+            .push(StonePayloadIndexRecord { start, end, digest });
 
         Ok(())
     }
@@ -164,7 +166,7 @@ pub struct StoneContentWriter<B> {
     buffer: B,
     plain_size: u64,
     stored_size: u64,
-    indices: Vec<StonePayloadIndex>,
+    indices: Vec<StonePayloadIndexRecord>,
     /// Used to generate un-compressed digest of file
     /// contents used for [`Index`]
     index_hasher: StoneDigestWriterHasher,
@@ -180,9 +182,9 @@ struct EncodedPayload {
 }
 
 pub enum StoneWritePayload<'a> {
-    Meta(&'a [StonePayloadMeta]),
-    Attributes(&'a [StonePayloadAttribute]),
-    Layout(&'a [StonePayloadLayout]),
+    Meta(&'a [StonePayloadMetaRecord]),
+    Attributes(&'a [StonePayloadAttributeRecord]),
+    Layout(&'a [StonePayloadLayoutRecord]),
 }
 
 impl<'a> From<StoneWritePayload<'a>> for InnerPayload<'a> {
@@ -199,10 +201,10 @@ impl<'a> From<StoneWritePayload<'a>> for InnerPayload<'a> {
 /// doesn't support passing in `Index` payloads
 /// since it's a side-effect of [`Writer::add_content`]
 enum InnerPayload<'a> {
-    Meta(&'a [StonePayloadMeta]),
-    Attributes(&'a [StonePayloadAttribute]),
-    Layout(&'a [StonePayloadLayout]),
-    Index(&'a [StonePayloadIndex]),
+    Meta(&'a [StonePayloadMetaRecord]),
+    Attributes(&'a [StonePayloadAttributeRecord]),
+    Layout(&'a [StonePayloadLayoutRecord]),
+    Index(&'a [StonePayloadIndexRecord]),
 }
 
 impl InnerPayload<'_> {
@@ -244,20 +246,20 @@ impl InnerPayload<'_> {
     }
 }
 
-impl<'a> From<&'a [StonePayloadMeta]> for StoneWritePayload<'a> {
-    fn from(payload: &'a [StonePayloadMeta]) -> Self {
+impl<'a> From<&'a [StonePayloadMetaRecord]> for StoneWritePayload<'a> {
+    fn from(payload: &'a [StonePayloadMetaRecord]) -> Self {
         Self::Meta(payload)
     }
 }
 
-impl<'a> From<&'a [StonePayloadAttribute]> for StoneWritePayload<'a> {
-    fn from(payload: &'a [StonePayloadAttribute]) -> Self {
+impl<'a> From<&'a [StonePayloadAttributeRecord]> for StoneWritePayload<'a> {
+    fn from(payload: &'a [StonePayloadAttributeRecord]) -> Self {
         Self::Attributes(payload)
     }
 }
 
-impl<'a> From<&'a [StonePayloadLayout]> for StoneWritePayload<'a> {
-    fn from(payload: &'a [StonePayloadLayout]) -> Self {
+impl<'a> From<&'a [StonePayloadLayoutRecord]> for StoneWritePayload<'a> {
+    fn from(payload: &'a [StonePayloadLayoutRecord]) -> Self {
         Self::Layout(payload)
     }
 }

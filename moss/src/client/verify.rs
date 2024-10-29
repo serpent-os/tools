@@ -7,7 +7,7 @@ use std::{collections::BTreeSet, fmt, io, path::PathBuf};
 use itertools::Itertools;
 
 use fs_err as fs;
-use stone::{StoneDigestWriter, StoneDigestWriterHasher, StonePayloadLayoutEntry};
+use stone::{StoneDigestWriter, StoneDigestWriterHasher, StonePayloadLayoutFile};
 use tui::{
     dialoguer::{theme::ColorfulTheme, Confirm},
     ProgressBar, ProgressStyle, Styled,
@@ -29,7 +29,7 @@ pub fn verify(client: &Client, yes: bool, verbose: bool) -> Result<(), client::E
     let unique_assets = layouts
         .into_iter()
         .filter_map(|(package, layout)| {
-            if let StonePayloadLayoutEntry::Regular(hash, file) = layout.entry {
+            if let StonePayloadLayoutFile::Regular(hash, file) = layout.file {
                 Some((format!("{hash:02x}"), (package, file)))
             } else {
                 None
