@@ -12,7 +12,7 @@ static uint8_t HEADER_BUF[] = {0x00, 0x6d, 0x6f, 0x73, 0x00, 0x04, 0x00, 0x00,
                                0x00, 0x00, 0x07, 0x01, 0x00, 0x00, 0x00, 0x01};
 
 void print_header_v1(StoneHeaderV1 *header) {
-  char file_type[100];
+  uint8_t file_type[100];
 
   stone_format_header_v1_file_type(header->file_type, file_type);
 
@@ -23,24 +23,31 @@ void print_header_v1(StoneHeaderV1 *header) {
 }
 
 void print_payload_header(StonePayloadHeader *header) {
-  char compression[100];
-  char kind[100];
+  uint8_t compression[100];
+  uint8_t kind[100];
 
   stone_format_payload_compression(header->compression, compression);
   stone_format_payload_kind(header->kind, &(kind[0]));
 
   printf("StonePayload {\n");
   printf("  kind: %s\n", kind);
-  printf("  plain_size: %d\n", header->plain_size);
-  printf("  stored_size: %d\n", header->stored_size);
+  printf("  plain_size: %ld\n", header->plain_size);
+  printf("  stored_size: %ld\n", header->stored_size);
   printf("  compression: %s\n", compression);
-  printf("  num_records: %d\n", header->num_records);
+  printf("  num_records: %ld\n", header->num_records);
   printf("  version: %d\n", header->version);
   printf("}\n");
 }
 
+void format_digest(uint8_t digest[16], char (*formatted)[32]) {
+  for (size_t i = 0; i < 16; i++) {
+    sprintf((char *)formatted + i * 2, "%.02x", digest[i]);
+  }
+}
+
 void print_payload_layout_record(StonePayloadLayoutRecord *record) {
-  char file_type[100];
+  uint8_t file_type[100];
+  char digest[32];
 
   stone_format_payload_layout_file_type(record->file_type, file_type);
 
@@ -53,59 +60,230 @@ void print_payload_layout_record(StonePayloadLayoutRecord *record) {
 
   switch (record->file_type) {
   case STONE_PAYLOAD_LAYOUT_FILE_TYPE_REGULAR: {
-    printf("  hash: ");
-    for (size_t i = 0; i < 16; i++) {
-      printf("%.02x", record->file_payload.regular.hash[i]);
-    }
-    printf("\n  name: %.*s\n", record->file_payload.regular.name.size,
+    format_digest(record->file_payload.regular.hash, &digest);
+    printf("  hash: %.32s\n", digest);
+    printf("  name: %.*s\n", (int)record->file_payload.regular.name.size,
            record->file_payload.regular.name.buf);
     break;
   }
   case STONE_PAYLOAD_LAYOUT_FILE_TYPE_SYMLINK: {
-    printf("  source: %.*s\n", record->file_payload.symlink.source.size,
+    printf("  source: %.*s\n", (int)record->file_payload.symlink.source.size,
            record->file_payload.symlink.source.buf);
-    printf("  target: %.*s\n", record->file_payload.symlink.target.size,
+    printf("  target: %.*s\n", (int)record->file_payload.symlink.target.size,
            record->file_payload.symlink.target.buf);
     break;
   }
-  default:
   }
 
   printf("}\n");
 }
 
+void print_payload_meta_record(StonePayloadMetaRecord *record) {
+  uint8_t tag[100];
+
+  stone_format_payload_meta_tag(record->tag, tag);
+
+  printf("StonePayloadMetaRecord {\n");
+  printf("  tag: %s\n", tag);
+
+  switch (record->primitive_type) {
+  case STONE_PAYLOAD_META_PRIMITIVE_TYPE_INT8: {
+    printf("  int8: %d\n", record->primitive_payload.int8);
+    break;
+  }
+  case STONE_PAYLOAD_META_PRIMITIVE_TYPE_UINT8: {
+    printf("  uint8: %d\n", record->primitive_payload.uint8);
+    break;
+  }
+  case STONE_PAYLOAD_META_PRIMITIVE_TYPE_INT16: {
+    printf("  int16: %d\n", record->primitive_payload.int16);
+    break;
+  }
+  case STONE_PAYLOAD_META_PRIMITIVE_TYPE_UINT16: {
+    printf("  uint16: %d\n", record->primitive_payload.uint16);
+    break;
+  }
+  case STONE_PAYLOAD_META_PRIMITIVE_TYPE_INT32: {
+    printf("  int32: %d\n", record->primitive_payload.int32);
+    break;
+  }
+  case STONE_PAYLOAD_META_PRIMITIVE_TYPE_UINT32: {
+    printf("  uint32: %d\n", record->primitive_payload.uint32);
+    break;
+  }
+  case STONE_PAYLOAD_META_PRIMITIVE_TYPE_INT64: {
+    printf("  int64: %ld\n", record->primitive_payload.int64);
+    break;
+  }
+  case STONE_PAYLOAD_META_PRIMITIVE_TYPE_UINT64: {
+    printf("  uint64: %ld\n", record->primitive_payload.uint64);
+    break;
+  }
+  case STONE_PAYLOAD_META_PRIMITIVE_TYPE_STRING: {
+    printf("  string: %.*s\n", (int)record->primitive_payload.string.size,
+           record->primitive_payload.string.buf);
+    break;
+  }
+  case STONE_PAYLOAD_META_PRIMITIVE_TYPE_DEPENDENCY: {
+    uint8_t dependency[100];
+
+    stone_format_payload_meta_dependency(
+        record->primitive_payload.dependency.kind, dependency);
+
+    printf("  dependency: %s(%.*s)\n", dependency,
+           (int)record->primitive_payload.dependency.name.size,
+           record->primitive_payload.dependency.name.buf);
+    break;
+  }
+  case STONE_PAYLOAD_META_PRIMITIVE_TYPE_PROVIDER: {
+    uint8_t provider[100];
+
+    stone_format_payload_meta_dependency(
+        record->primitive_payload.provider.kind, provider);
+
+    printf("  provider: %s(%.*s)\n", provider,
+           (int)record->primitive_payload.provider.name.size,
+           record->primitive_payload.provider.name.buf);
+    break;
+  }
+  }
+
+  printf("}\n");
+}
+
+void print_payload_index_record(StonePayloadIndexRecord *record) {
+  char digest[32];
+
+  format_digest(record->digest, &digest);
+
+  printf("StonePayloadIndexRecord {\n");
+  printf("  start: %ld\n", record->start);
+  printf("  end: %ld\n", record->end);
+  printf("  digest: %.32s\n", digest);
+  printf("}\n");
+}
+
+void print_payload_attribute_record(StonePayloadAttributeRecord *record) {
+  printf("StonePayloadAttributeRecord {\n");
+  printf("  key_size: %ld\n", record->key_size);
+  printf("  value_size: %ld\n", record->value_size);
+  printf("}\n");
+}
+
+void process_records(StonePayload *payload, StonePayloadHeader *payload_header,
+                     void **records, int *num_records, int record_size,
+                     int (*next_record)(StonePayload *, void *),
+                     void (*print_record)(void *)) {
+
+  void *record;
+  int i = 0;
+
+  *records =
+      realloc(*records, sizeof(StonePayloadLayoutRecord) *
+                            (*num_records + payload_header->num_records));
+  if (records == NULL) {
+    exit(1);
+  }
+
+  while (next_record(payload, record = *records +
+                                       (*num_records + i) * record_size) >= 0) {
+    print_record(record);
+    i++;
+  }
+
+  *num_records += payload_header->num_records;
+}
+
 void process_reader(StoneReader *reader, StoneHeaderVersion version) {
-  StoneHeaderV1 header;
-  StonePayload *payload;
+  StoneHeaderV1 header = {0};
+  StonePayload **payloads = NULL;
+  StonePayloadLayoutRecord *layouts = NULL;
+  StonePayloadMetaRecord *metas = NULL;
+  StonePayloadIndexRecord *indexes = NULL;
+  StonePayloadAttributeRecord *attributes = NULL;
+  int num_layouts = 0, num_metas = 0, num_indexes = 0, num_attributes = 0,
+      current_payload = 0;
 
   assert(version == STONE_HEADER_VERSION_V1);
 
   stone_reader_header_v1(reader, &header);
   print_header_v1(&header);
 
-  while (stone_reader_next_payload(reader, &payload) >= 0) {
-    StonePayloadHeader payload_header;
+  payloads = calloc(header.num_payloads, sizeof(StonePayload *));
+  if (payloads == NULL) {
+    exit(1);
+  }
+
+  while (stone_reader_next_payload(reader, &payloads[current_payload]) >= 0) {
+    StonePayload *payload = payloads[current_payload];
+    StonePayloadHeader payload_header = {0};
 
     stone_payload_header(payload, &payload_header);
     print_payload_header(&payload_header);
 
     switch (payload_header.kind) {
     case STONE_PAYLOAD_KIND_LAYOUT: {
-      StonePayloadLayoutRecord record;
-
-      while (stone_payload_next_layout_record(payload, &record) >= 0) {
-        print_payload_layout_record(&record);
-      }
-
+      process_records(payload, &payload_header, (void *)&layouts, &num_layouts,
+                      sizeof(StonePayloadLayoutRecord),
+                      (void *)stone_payload_next_layout_record,
+                      (void *)print_payload_layout_record);
       break;
     }
-    default:
+    case STONE_PAYLOAD_KIND_META: {
+      process_records(payload, &payload_header, (void *)&metas, &num_metas,
+                      sizeof(StonePayloadMetaRecord),
+                      (void *)stone_payload_next_meta_record,
+                      (void *)print_payload_meta_record);
+      break;
+    }
+    case STONE_PAYLOAD_KIND_INDEX: {
+      process_records(payload, &payload_header, (void *)&indexes, &num_indexes,
+                      sizeof(StonePayloadIndexRecord),
+                      (void *)stone_payload_next_index_record,
+                      (void *)print_payload_index_record);
+      break;
+    }
+    case STONE_PAYLOAD_KIND_ATTRIBUTES: {
+      process_records(payload, &payload_header, (void *)&attributes,
+                      &num_attributes, sizeof(StonePayloadAttributeRecord),
+                      (void *)stone_payload_next_attribute_record,
+                      (void *)print_payload_attribute_record);
+      break;
+    }
+    case STONE_PAYLOAD_KIND_CONTENT: {
+      void *data = malloc(payload_header.plain_size);
+
+      if (data == NULL) {
+        exit(1);
+      }
+
+      stone_reader_unpack_content_payload(reader, payload, data);
+
+      free(data);
+    }
     }
 
-    stone_payload_destroy(payload);
+    current_payload += 1;
   }
 
-  stone_reader_destroy(reader);
+  if (layouts != NULL) {
+    free(layouts);
+  }
+  if (metas != NULL) {
+    free(metas);
+  }
+  if (indexes != NULL) {
+    free(indexes);
+  }
+  if (attributes != NULL) {
+    free(attributes);
+  }
+  for (int i = 0; i < header.num_payloads; i++) {
+    stone_payload_destroy(payloads[i]);
+  }
+  if (payloads != NULL) {
+    free(payloads);
+  }
 }
 
 int main(int argc, char *argv[]) {
@@ -118,12 +296,14 @@ int main(int argc, char *argv[]) {
   fptr = fopen(file, "r");
   stone_reader_read_file(fileno(fptr), &reader, &version);
   process_reader(reader, version);
+  stone_reader_destroy(reader);
   fclose(fptr);
 
   printf("\n");
   printf("Reading stone header from buffer\n\n");
   stone_reader_read_buf(HEADER_BUF, sizeof(HEADER_BUF), &reader, &version);
   process_reader(reader, version);
+  stone_reader_destroy(reader);
 
   return 0;
 }
