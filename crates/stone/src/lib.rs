@@ -13,10 +13,10 @@ pub use self::header::{
     StoneHeaderV1FileType, StoneHeaderVersion, STONE_HEADER_MAGIC,
 };
 pub use self::payload::{
-    StonePayload, StonePayloadAttribute, StonePayloadCompression, StonePayloadContent, StonePayloadDecodeError,
-    StonePayloadEncodeError, StonePayloadHeader, StonePayloadIndex, StonePayloadKind, StonePayloadLayout,
-    StonePayloadLayoutEntry, StonePayloadLayoutFileType, StonePayloadMeta, StonePayloadMetaDependency,
-    StonePayloadMetaKind, StonePayloadMetaTag,
+    StonePayload, StonePayloadAttributeRecord, StonePayloadCompression, StonePayloadContent, StonePayloadDecodeError,
+    StonePayloadEncodeError, StonePayloadHeader, StonePayloadIndexRecord, StonePayloadKind, StonePayloadLayoutFile,
+    StonePayloadLayoutFileType, StonePayloadLayoutRecord, StonePayloadMetaDependency, StonePayloadMetaPrimitive,
+    StonePayloadMetaRecord, StonePayloadMetaTag,
 };
 pub use self::read::{read, read_bytes, StoneDecodedPayload, StoneReadError, StoneReader};
 pub use self::write::{
