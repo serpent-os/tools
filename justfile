@@ -85,10 +85,14 @@ diesel db +ARGS:
     --database-url sqlite://{{root-dir}}/moss/src/db/{{db}}/test.db \
     {{ARGS}}
 
-test-ffi:
+# Run libstone example
+libstone example="read" *ARGS="./test/bash-completion-2.11-1-1-x86_64.stone":
   #!/bin/bash
-  cargo cbuild -p stone-ffi
-  gcc -o stone-ffi-test ./crates/stone-ffi/test.c -L./target/x86_64-unknown-linux-gnu/debug/ -lstone -I./target/x86_64-unknown-linux-gnu/debug/
-  ln -sf $(pwd)/target/x86_64-unknown-linux-gnu/debug/libstone.so ./target/x86_64-unknown-linux-gnu/debug/libstone.so.0.24
-  LD_LIBRARY_PATH=$(pwd)/target/x86_64-unknown-linux-gnu/debug/ valgrind  --track-origins=yes ./stone-ffi-test
-  rm stone-ffi-test
+  output=$(mktemp)
+  cargo build -p libstone --release
+  clang libstone/examples/{{example}}.c -o $output -I./libstone/src/ -lstone -L./target/release/ -Wl,-rpath,./target/release/
+  if [ "$USE_VALGRIND" == "1" ]; 
+    then time valgrind --track-origins=yes $output {{ARGS}};
+    else time $output {{ARGS}}; 
+  fi
+  rm "$output"

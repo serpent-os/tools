@@ -5,7 +5,9 @@
 use clap::{arg, ArgMatches, Command};
 use fs_err::File;
 use std::path::PathBuf;
-use stone::{StoneDecodedPayload, StonePayloadLayoutFile, StonePayloadMetaPrimitive, StonePayloadMetaTag, StoneReadError};
+use stone::{
+    StoneDecodedPayload, StonePayloadLayoutFile, StonePayloadMetaPrimitive, StonePayloadMetaTag, StoneReadError,
+};
 use thiserror::Error;
 
 const COLUMN_WIDTH: usize = 20;
@@ -56,10 +58,14 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
                         let name = format!("{:?}", record.tag);
 
                         match &record.primitive {
-                            StonePayloadMetaPrimitive::Provider(k, p) if record.tag == StonePayloadMetaTag::Provides => {
+                            StonePayloadMetaPrimitive::Provider(k, p)
+                                if record.tag == StonePayloadMetaTag::Provides =>
+                            {
                                 provs.push(format!("{}({})", k, p))
                             }
-                            StonePayloadMetaPrimitive::Provider(k, p) if record.tag == StonePayloadMetaTag::Conflicts => {
+                            StonePayloadMetaPrimitive::Provider(k, p)
+                                if record.tag == StonePayloadMetaTag::Conflicts =>
+                            {
                                 cnfls.push(format!("{}({})", k, p))
                             }
                             StonePayloadMetaPrimitive::Dependency(k, d) => deps.push(format!("{}({})", k, d)),
