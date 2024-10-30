@@ -61,15 +61,15 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
                             StonePayloadMetaPrimitive::Provider(k, p)
                                 if record.tag == StonePayloadMetaTag::Provides =>
                             {
-                                provs.push(format!("{k}({p})"))
+                                provs.push(format!("{k}({p})"));
                             }
                             StonePayloadMetaPrimitive::Provider(k, p)
                                 if record.tag == StonePayloadMetaTag::Conflicts =>
                             {
-                                cnfls.push(format!("{k}({p})"))
+                                cnfls.push(format!("{k}({p})"));
                             }
                             StonePayloadMetaPrimitive::Dependency(k, d) => {
-                                deps.push(format!("{}({})", k, d));
+                                deps.push(format!("{k}({d})"));
                             }
                             StonePayloadMetaPrimitive::String(s) => {
                                 println!("{name:COLUMN_WIDTH$} : {s}");

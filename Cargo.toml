@@ -1,6 +1,6 @@
 [workspace]
-members = ["boulder", "moss", "crates/*"]
 default-members = ["moss"]
+members = ["boulder", "moss", "libstone", "crates/*"]
 resolver = "2"
 
 [workspace.package]

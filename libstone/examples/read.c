@@ -170,6 +170,14 @@ void print_payload_attribute_record(StonePayloadAttributeRecord *record) {
   printf("}\n");
 }
 
+void print_inspect_output(StonePayloadMetaRecord *metas, int num_metas,
+                          StonePayloadLayoutRecord *layouts, int num_layotus) {
+
+  for (int i = 0; i < num_metas; i++) {
+    StonePayloadMetaRecord *meta = &metas[i];
+  }
+}
+
 void process_records(StonePayload *payload, StonePayloadHeader *payload_header,
                      void **records, int *num_records, int record_size,
                      int (*next_record)(StonePayload *, void *),
@@ -251,19 +259,20 @@ void process_reader(StoneReader *reader, StoneHeaderVersion version) {
       break;
     }
     case STONE_PAYLOAD_KIND_CONTENT: {
-      void *data = malloc(payload_header.plain_size);
+      FILE *fptr;
+      fptr = fopen("/dev/null", "w+");
 
-      if (data == NULL) {
-        exit(1);
-      }
+      stone_reader_unpack_content_payload_to_file(reader, payload, fileno(fptr));
 
-      stone_reader_unpack_content_payload(reader, payload, data);
-
-      free(data);
+      fclose(fptr);
     }
     }
 
     current_payload += 1;
+  }
+
+  if (num_metas + num_layouts > 0) {
+    print_inspect_output(metas, num_metas, layouts, num_layouts);
   }
 
   if (layouts != NULL) {
@@ -290,20 +299,24 @@ int main(int argc, char *argv[]) {
   FILE *fptr;
   StoneReader *reader;
   StoneHeaderVersion version;
-  char *file = "./test/bash-completion-2.11-1-1-x86_64.stone";
 
-  printf("Reading stone from '%s'\n\n", file);
-  fptr = fopen(file, "r");
-  stone_reader_read_file(fileno(fptr), &reader, &version);
-  process_reader(reader, version);
-  stone_reader_destroy(reader);
-  fclose(fptr);
+  if (argc != 2) {
+    printf("usage: %s <stone>\n", argv[0]);
+    exit(1);
+  }
 
-  printf("\n");
   printf("Reading stone header from buffer\n\n");
   stone_reader_read_buf(HEADER_BUF, sizeof(HEADER_BUF), &reader, &version);
   process_reader(reader, version);
   stone_reader_destroy(reader);
+
+  printf("\n");
+  printf("Reading stone from '%s'\n\n", argv[1]);
+  fptr = fopen(argv[1], "r");
+  stone_reader_read_file(fileno(fptr), &reader, &version);
+  process_reader(reader, version);
+  stone_reader_destroy(reader);
+  fclose(fptr);
 
   return 0;
 }

@@ -160,7 +160,28 @@ pub unsafe extern "C" fn stone_reader_next_payload(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn stone_reader_unpack_content_payload(
+pub unsafe extern "C" fn stone_reader_unpack_content_payload_to_file(
+    reader: *mut StoneReader,
+    payload: *const StonePayload,
+    file: c_int,
+) -> c_int {
+    fallible(|| {
+        let mut reader = NonNull::new(reader).ok_or("")?;
+        let payload = NonNull::new(payload as *mut StonePayload).ok_or("")?;
+        let mut file = File::from_raw_fd(file);
+
+        if let StoneDecodedPayload::Content(content) = &payload.as_ref().decoded {
+            reader.as_mut().unpack_content(content, &mut file)?;
+        } else {
+            Err("incorrect payload kind")?;
+        }
+
+        Ok(())
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn stone_reader_unpack_content_payload_to_buf(
     reader: *mut StoneReader,
     payload: *const StonePayload,
     data: *mut u8,
