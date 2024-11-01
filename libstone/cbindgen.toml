@@ -12,9 +12,12 @@ prefix_with_name = true
 rename_variants = "ScreamingSnakeCase"
 
 [export]
-include = ["StonePayloadLayoutRecord"]
+include = []
+exclude = []
 
 [export.rename]
+"StoneReader_StoneReadImpl" = "StoneReader"
+"StonePayloadContentReader_StoneReadImpl" = "StonePayloadContentReader"
 
 [parse]
 parse_deps = true

@@ -72,13 +72,10 @@ impl<R: Read + Seek> StoneReader<R> {
         self.reader.seek(SeekFrom::Start(content.body.offset))?;
         self.hasher.reset();
 
-        let mut hashed = digest::Reader::new(&mut self.reader, &mut self.hasher);
-        let mut framed = (&mut hashed).take(content.header.stored_size);
+        let hashed = digest::Reader::new(&mut self.reader, &mut self.hasher);
+        let framed = hashed.take(content.header.stored_size);
 
-        io::copy(
-            &mut PayloadReader::new(&mut framed, content.header.compression)?,
-            writer,
-        )?;
+        io::copy(&mut PayloadReader::new(framed, content.header.compression)?, writer)?;
 
         // Validate checksum
         validate_checksum(&self.hasher, &content.header)?;
@@ -100,6 +97,45 @@ impl<R: Read + Seek> StoneReader<R> {
             Ok(None)
         }
     }
+
+    pub fn read_content<'a>(
+        &'a mut self,
+        content: &StonePayload<StonePayloadContent>,
+    ) -> Result<StonePayloadContentReader<'a, R>, StoneReadError> {
+        self.reader.seek(SeekFrom::Start(content.body.offset))?;
+        self.hasher.reset();
+
+        let hashed = digest::Reader::new(&mut self.reader, &mut self.hasher);
+        let framed = hashed.take(content.header.stored_size);
+
+        Ok(StonePayloadContentReader {
+            reader: PayloadReader::new(framed, content.header.compression)?,
+            header_checksum: u64::from_be_bytes(content.header.checksum),
+            is_checksum_valid: false,
+        })
+    }
+}
+
+#[cfg(feature = "ffi")]
+pub struct StonePayloadContentReader<'a, R: Read> {
+    reader: PayloadReader<io::Take<digest::Reader<'a, &'a mut R>>>,
+    header_checksum: u64,
+    pub is_checksum_valid: bool,
+}
+
+#[cfg(feature = "ffi")]
+impl<'a, R: Read> Read for StonePayloadContentReader<'a, R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self.reader.read(buf) {
+            Ok(read) if !buf.is_empty() && read == 0 => {
+                self.is_checksum_valid = self.header_checksum == self.reader.get_mut().get_mut().hasher.digest();
+
+                Ok(read)
+            }
+            Ok(read) => Ok(read),
+            e @ Err(_) => e,
+        }
+    }
 }
 
 enum PayloadReader<R: Read> {
@@ -113,6 +149,13 @@ impl<R: Read> PayloadReader<R> {
             StonePayloadCompression::None => PayloadReader::Plain(reader),
             StonePayloadCompression::Zstd => PayloadReader::Zstd(Zstd::new(reader)?),
         })
+    }
+
+    fn get_mut(&mut self) -> &mut R {
+        match self {
+            PayloadReader::Plain(reader) => reader,
+            PayloadReader::Zstd(reader) => reader.get_mut(),
+        }
     }
 }
 

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stone.h>
+#include <string.h>
 #include <unistd.h>
 
 // 32 byte stone header
@@ -260,10 +261,34 @@ void process_reader(StoneReader *reader, StoneHeaderVersion version) {
     }
     case STONE_PAYLOAD_KIND_CONTENT: {
       FILE *fptr;
+      StonePayloadContentReader *content_reader;
       fptr = fopen("/dev/null", "w+");
+      char buf[1024];
+      int read = 0;
 
-      stone_reader_unpack_content_payload_to_file(reader, payload, fileno(fptr));
+      // We can instead unpack directly to file as a convenience
+      // stone_reader_unpack_content_payload(reader, payload, fileno(fptr));
 
+      stone_reader_read_content_payload(reader, payload, &content_reader);
+
+      while ((read = stone_payload_content_reader_read(
+                  content_reader, (void *)buf, sizeof buf)) > 0) {
+        int total = 0, n = 0;
+
+        while (total < read) {
+          n = fwrite(buf, 1, read - total, fptr);
+          if (n == 0) {
+            exit(1);
+          }
+          total += n;
+        }
+      }
+
+      assert(stone_payload_content_reader_is_checksum_valid(content_reader) ==
+             1);
+
+      stone_payload_content_reader_destroy(content_reader);
+      fflush(fptr);
       fclose(fptr);
     }
     }
@@ -295,6 +320,20 @@ void process_reader(StoneReader *reader, StoneHeaderVersion version) {
   }
 }
 
+size_t read_shim(void *fptr, char *buf, size_t n) {
+  return fread(buf, 1, n, fptr);
+}
+
+uint64_t seek_shim(void *fptr, int64_t offset, StoneSeekFrom from) {
+  fseek(fptr, offset, from);
+  return ftell(fptr);
+}
+
+StoneReadVTable vtable = {
+    .read = read_shim,
+    .seek = seek_shim,
+};
+
 int main(int argc, char *argv[]) {
   FILE *fptr;
   StoneReader *reader;
@@ -306,14 +345,14 @@ int main(int argc, char *argv[]) {
   }
 
   printf("Reading stone header from buffer\n\n");
-  stone_reader_read_buf(HEADER_BUF, sizeof(HEADER_BUF), &reader, &version);
+  stone_read_buf(HEADER_BUF, sizeof(HEADER_BUF), &reader, &version);
   process_reader(reader, version);
   stone_reader_destroy(reader);
 
   printf("\n");
   printf("Reading stone from '%s'\n\n", argv[1]);
   fptr = fopen(argv[1], "r");
-  stone_reader_read_file(fileno(fptr), &reader, &version);
+  stone_read(fptr, vtable, &reader, &version);
   process_reader(reader, version);
   stone_reader_destroy(reader);
   fclose(fptr);

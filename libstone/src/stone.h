@@ -11,6 +11,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#define STONE_HEADER_SIZE 32
+
 /**
  * Well known file type for a v1 stone container
  *
@@ -131,7 +133,7 @@ enum StonePayloadMetaDependency {
    */
   STONE_PAYLOAD_META_DEPENDENCY_SYSTEM_BINARY,
   /**
-   * An emul32-compatible pkgconfig .pc dependency (lib32/*.pc)
+   * An emul32-compatible pkgconfig .pc dependency (lib32*.pc)
    */
   STONE_PAYLOAD_META_DEPENDENCY_PKG_CONFIG32,
 };
@@ -175,7 +177,23 @@ enum StonePayloadMetaTag {
 };
 typedef uint16_t StonePayloadMetaTag;
 
+enum StoneSeekFrom {
+  STONE_SEEK_FROM_START = 0,
+  STONE_SEEK_FROM_CURRENT = 1,
+  STONE_SEEK_FROM_END = 2,
+};
+typedef uint8_t StoneSeekFrom;
+
 typedef struct StonePayload StonePayload;
+
+typedef struct StonePayloadContentReader StonePayloadContentReader;
+
+typedef struct StoneReader StoneReader;
+
+typedef struct StoneReadVTable {
+  uintptr_t (*read)(void*, char*, uintptr_t);
+  int64_t (*seek)(void*, int64_t, StoneSeekFrom);
+} StoneReadVTable;
 
 typedef struct StoneReader StoneReader;
 
@@ -186,6 +204,8 @@ typedef struct StoneHeaderV1 {
   uint16_t num_payloads;
   StoneHeaderV1FileType file_type;
 } StoneHeaderV1;
+
+typedef struct StonePayloadContentReader StonePayloadContentReader;
 
 typedef struct StonePayloadHeader {
   uint64_t stored_size;
@@ -274,28 +294,42 @@ typedef struct StonePayloadAttributeRecord {
   const uint8_t *value_buf;
 } StonePayloadAttributeRecord;
 
+int stone_read(void *data,
+               struct StoneReadVTable vtable,
+               StoneReader **reader_ptr,
+               StoneHeaderVersion *version);
 
+int stone_read_file(int file, StoneReader **reader_ptr, StoneHeaderVersion *version);
 
-int stone_reader_read_file(int file, struct StoneReader **reader_ptr, StoneHeaderVersion *version);
+int stone_read_buf(const uint8_t *buf,
+                   uintptr_t len,
+                   StoneReader **reader_ptr,
+                   StoneHeaderVersion *version);
 
-int stone_reader_read_buf(const uint8_t *buf,
-                          uintptr_t len,
-                          struct StoneReader **reader_ptr,
-                          StoneHeaderVersion *version);
+int stone_reader_header_v1(const StoneReader *reader, struct StoneHeaderV1 *header);
 
-int stone_reader_header_v1(const struct StoneReader *reader, struct StoneHeaderV1 *header);
+int stone_reader_next_payload(StoneReader *reader, struct StonePayload **payload_ptr);
 
-int stone_reader_next_payload(struct StoneReader *reader, struct StonePayload **payload_ptr);
+int stone_reader_unpack_content_payload(StoneReader *reader,
+                                        const struct StonePayload *payload,
+                                        int file);
 
-int stone_reader_unpack_content_payload_to_file(struct StoneReader *reader,
-                                                const struct StonePayload *payload,
-                                                int file);
+int stone_reader_read_content_payload(StoneReader *reader,
+                                      const struct StonePayload *payload,
+                                      StonePayloadContentReader **content_reader);
 
-int stone_reader_unpack_content_payload_to_buf(struct StoneReader *reader,
-                                               const struct StonePayload *payload,
-                                               uint8_t *data);
+void stone_reader_destroy(StoneReader *reader);
 
-void stone_reader_destroy(struct StoneReader *reader);
+size_t stone_payload_content_reader_read(StonePayloadContentReader *content_reader,
+                                         uint8_t *buf,
+                                         size_t size);
+
+int stone_payload_content_reader_buf_hint(const StonePayloadContentReader *content_reader,
+                                          uintptr_t *hint);
+
+int stone_payload_content_reader_is_checksum_valid(const StonePayloadContentReader *content_reader);
+
+void stone_payload_content_reader_destroy(StonePayloadContentReader *content_reader);
 
 int stone_payload_header(const struct StonePayload *payload, struct StonePayloadHeader *header);
 

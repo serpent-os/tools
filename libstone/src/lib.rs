@@ -6,17 +6,17 @@
 
 use std::{
     fs::File,
-    io::{Cursor, Write},
+    io::{Cursor, Read, Seek},
     os::fd::FromRawFd,
     ptr::NonNull,
     slice,
 };
 
-use libc::{c_int, size_t};
+use libc::{c_char, c_int, c_void, size_t};
 use stone::{
     StoneDecodedPayload, StoneHeader, StoneHeaderV1, StoneHeaderV1FileType, StoneHeaderVersion,
     StonePayloadCompression, StonePayloadHeader, StonePayloadKind, StonePayloadLayoutFileType,
-    StonePayloadMetaDependency, StonePayloadMetaTag, StoneReadError,
+    StonePayloadMetaDependency, StonePayloadMetaTag,
 };
 
 pub use self::payload::{
@@ -25,6 +25,9 @@ pub use self::payload::{
 };
 
 mod payload;
+
+pub type StoneReader<'a> = stone::StoneReader<StoneReadImpl<'a>>;
+pub type StonePayloadContentReader<'a> = stone::StonePayloadContentReader<'a, StoneReadImpl<'a>>;
 
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
@@ -42,38 +45,55 @@ impl StoneString {
     }
 }
 
-pub enum StoneReader<'a> {
-    File(stone::StoneReader<File>),
-    Buffer(stone::StoneReader<Cursor<&'a [u8]>>),
+pub enum StoneReadImpl<'a> {
+    File(File),
+    Buffer(Cursor<&'a [u8]>),
+    Shim(StoneReadShim),
 }
 
-impl<'a> StoneReader<'a> {
-    pub fn header(&self) -> &StoneHeader {
-        match self {
-            StoneReader::File(reader) => &reader.header,
-            StoneReader::Buffer(reader) => &reader.header,
+macro_rules! delegate {
+    ($self:expr,$($t:tt)*) => {
+        match $self {
+            StoneReadImpl::File(reader) => reader.$($t)*,
+            StoneReadImpl::Buffer(reader) => reader.$($t)*,
+            StoneReadImpl::Shim(reader) => reader.$($t)*,
         }
+    };
+}
+
+impl<'a> Read for StoneReadImpl<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        delegate!(self, read(buf))
     }
 
-    pub fn next_payload(&mut self) -> Result<Option<StoneDecodedPayload>, StoneReadError> {
-        match self {
-            StoneReader::File(reader) => reader.next_payload(),
-            StoneReader::Buffer(reader) => reader.next_payload(),
-        }
+    fn read_vectored(&mut self, bufs: &mut [std::io::IoSliceMut<'_>]) -> std::io::Result<usize> {
+        delegate!(self, read_vectored(bufs))
     }
 
-    pub fn unpack_content<W>(
-        &mut self,
-        content: &stone::StonePayload<stone::StonePayloadContent>,
-        writer: &mut W,
-    ) -> Result<(), StoneReadError>
-    where
-        W: Write,
-    {
-        match self {
-            StoneReader::File(reader) => reader.unpack_content(content, writer),
-            StoneReader::Buffer(reader) => reader.unpack_content(content, writer),
-        }
+    fn read_to_end(&mut self, buf: &mut Vec<u8>) -> std::io::Result<usize> {
+        delegate!(self, read_to_end(buf))
+    }
+
+    fn read_to_string(&mut self, buf: &mut String) -> std::io::Result<usize> {
+        delegate!(self, read_to_string(buf))
+    }
+
+    fn read_exact(&mut self, buf: &mut [u8]) -> std::io::Result<()> {
+        delegate!(self, read_exact(buf))
+    }
+}
+
+impl<'a> Seek for StoneReadImpl<'a> {
+    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        delegate!(self, seek(pos))
+    }
+
+    fn rewind(&mut self) -> std::io::Result<()> {
+        delegate!(self, rewind())
+    }
+
+    fn stream_position(&mut self) -> std::io::Result<u64> {
+        delegate!(self, stream_position())
     }
 }
 
@@ -85,20 +105,63 @@ fn fallible(f: impl FnOnce() -> Result<(), Box<dyn std::error::Error>>) -> c_int
     }
 }
 
+#[repr(u8)]
+enum StoneSeekFrom {
+    Start = 0,
+    Current = 1,
+    End = 2,
+}
+
+#[repr(C)]
+pub struct StoneReadVTable {
+    read: Option<unsafe extern "C" fn(*mut c_void, *mut c_char, usize) -> usize>,
+    seek: Option<unsafe extern "C" fn(*mut c_void, i64, StoneSeekFrom) -> u64>,
+}
+
+pub struct StoneReadShim {
+    data: *mut c_void,
+    read: unsafe extern "C" fn(*mut c_void, *mut c_char, usize) -> usize,
+    seek: unsafe extern "C" fn(*mut c_void, i64, StoneSeekFrom) -> u64,
+}
+
+impl Read for StoneReadShim {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        unsafe { Ok((self.read)(self.data, buf.as_mut_ptr() as *mut _, buf.len())) }
+    }
+}
+
+impl Seek for StoneReadShim {
+    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        let (from, offset) = match pos {
+            std::io::SeekFrom::Start(i) => (StoneSeekFrom::Start, i as i64),
+            std::io::SeekFrom::Current(i) => (StoneSeekFrom::Current, i),
+            std::io::SeekFrom::End(i) => (StoneSeekFrom::End, i),
+        };
+
+        unsafe { Ok((self.seek)(self.data, offset, from)) }
+    }
+}
+
 #[no_mangle]
-pub unsafe extern "C" fn stone_reader_read_file(
-    file: c_int,
+pub unsafe extern "C" fn stone_read(
+    data: *mut c_void,
+    vtable: StoneReadVTable,
     reader_ptr: *mut *mut StoneReader,
     version: *mut StoneHeaderVersion,
 ) -> c_int {
     fallible(|| {
         // TODO: Errors
+        let data = NonNull::new(data).ok_or("")?;
         let reader_ptr = NonNull::new(reader_ptr).ok_or("")?;
         let mut version = NonNull::new(version).ok_or("")?;
 
-        let reader = stone::read(File::from_raw_fd(file)).map(StoneReader::File)?;
+        let reader = stone::read(StoneReadImpl::Shim(StoneReadShim {
+            data: data.as_ptr(),
+            read: vtable.read.ok_or("")?,
+            seek: vtable.seek.ok_or("")?,
+        }))?;
 
-        *version.as_mut() = reader.header().version();
+        *version.as_mut() = reader.header.version();
         *reader_ptr.as_ptr() = Box::into_raw(Box::new(reader));
 
         Ok(())
@@ -106,7 +169,26 @@ pub unsafe extern "C" fn stone_reader_read_file(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn stone_reader_read_buf(
+pub unsafe extern "C" fn stone_read_file(
+    file: c_int,
+    reader_ptr: *mut *mut StoneReader,
+    version: *mut StoneHeaderVersion,
+) -> c_int {
+    fallible(|| {
+        let reader_ptr = NonNull::new(reader_ptr).ok_or("")?;
+        let mut version = NonNull::new(version).ok_or("")?;
+
+        let reader = stone::read(StoneReadImpl::File(File::from_raw_fd(file)))?;
+
+        *version.as_mut() = reader.header.version();
+        *reader_ptr.as_ptr() = Box::into_raw(Box::new(reader));
+
+        Ok(())
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn stone_read_buf(
     buf: *const u8,
     len: usize,
     reader_ptr: *mut *mut StoneReader,
@@ -117,9 +199,12 @@ pub unsafe extern "C" fn stone_reader_read_buf(
         let reader_ptr = NonNull::new(reader_ptr).ok_or("")?;
         let mut version = NonNull::new(version).ok_or("")?;
 
-        let reader = stone::read_bytes(slice::from_raw_parts(buf.as_ptr(), len)).map(StoneReader::Buffer)?;
+        let reader = stone::read(StoneReadImpl::Buffer(Cursor::new(slice::from_raw_parts(
+            buf.as_ptr(),
+            len,
+        ))))?;
 
-        *version.as_mut() = reader.header().version();
+        *version.as_mut() = reader.header.version();
         *reader_ptr.as_ptr() = Box::into_raw(Box::new(reader));
 
         Ok(())
@@ -132,7 +217,7 @@ pub unsafe extern "C" fn stone_reader_header_v1(reader: *const StoneReader, head
         let reader = NonNull::new(reader as *mut StoneReader).ok_or("")?;
         let mut header = NonNull::new(header).ok_or("")?;
 
-        match reader.as_ref().header() {
+        match &reader.as_ref().header {
             StoneHeader::V1(v1) => *header.as_mut() = *v1,
         }
 
@@ -160,7 +245,7 @@ pub unsafe extern "C" fn stone_reader_next_payload(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn stone_reader_unpack_content_payload_to_file(
+pub unsafe extern "C" fn stone_reader_unpack_content_payload(
     reader: *mut StoneReader,
     payload: *const StonePayload,
     file: c_int,
@@ -181,23 +266,18 @@ pub unsafe extern "C" fn stone_reader_unpack_content_payload_to_file(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn stone_reader_unpack_content_payload_to_buf(
-    reader: *mut StoneReader,
+pub unsafe extern "C" fn stone_reader_read_content_payload<'a>(
+    reader: *mut StoneReader<'a>,
     payload: *const StonePayload,
-    data: *mut u8,
+    content_reader: *mut *mut StonePayloadContentReader<'a>,
 ) -> c_int {
     fallible(|| {
         let mut reader = NonNull::new(reader).ok_or("")?;
         let payload = NonNull::new(payload as *mut StonePayload).ok_or("")?;
-        let data = NonNull::new(data).ok_or("")?;
-
-        let mut cursor = Cursor::new(slice::from_raw_parts_mut(
-            data.as_ptr(),
-            payload.as_ref().header().stored_size as usize,
-        ));
+        let content_reader = NonNull::new(content_reader).ok_or("")?;
 
         if let StoneDecodedPayload::Content(content) = &payload.as_ref().decoded {
-            reader.as_mut().unpack_content(content, &mut cursor)?;
+            *content_reader.as_ptr() = Box::into_raw(Box::new(reader.as_mut().read_content(content)?));
         } else {
             Err("incorrect payload kind")?;
         }
@@ -213,6 +293,42 @@ pub unsafe extern "C" fn stone_reader_destroy(reader: *mut StoneReader) {
     };
 
     drop(Box::from_raw(reader.as_ptr()));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn stone_payload_content_reader_read(
+    content_reader: *mut StonePayloadContentReader,
+    buf: *mut u8,
+    size: size_t,
+) -> size_t {
+    let Some(mut content_reader) = NonNull::new(content_reader) else {
+        return 0;
+    };
+
+    content_reader
+        .as_mut()
+        .read(slice::from_raw_parts_mut(buf, size))
+        .unwrap_or(0)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn stone_payload_content_reader_is_checksum_valid(
+    content_reader: *const StonePayloadContentReader,
+) -> c_int {
+    let Some(content_reader) = NonNull::new(content_reader as *mut StonePayloadContentReader) else {
+        return -1;
+    };
+
+    content_reader.as_ref().is_checksum_valid as c_int
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn stone_payload_content_reader_destroy(content_reader: *mut StonePayloadContentReader) {
+    let Some(content_reader) = NonNull::new(content_reader) else {
+        return;
+    };
+
+    drop(Box::from_raw(content_reader.as_ptr()));
 }
 
 #[no_mangle]
