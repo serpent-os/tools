@@ -17,6 +17,10 @@ impl<R: Read> Zstd<R> {
 
         Ok(Self { decoder })
     }
+
+    pub fn get_mut(&mut self) -> &mut R {
+        self.decoder.get_mut().get_mut()
+    }
 }
 
 impl<R: Read> Read for Zstd<R> {

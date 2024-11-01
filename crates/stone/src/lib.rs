@@ -18,6 +18,8 @@ pub use self::payload::{
     StonePayloadLayoutFileType, StonePayloadLayoutRecord, StonePayloadMetaDependency, StonePayloadMetaPrimitive,
     StonePayloadMetaRecord, StonePayloadMetaTag,
 };
+#[cfg(feature = "ffi")]
+pub use self::read::StonePayloadContentReader;
 pub use self::read::{read, read_bytes, StoneDecodedPayload, StoneReadError, StoneReader};
 pub use self::write::{
     StoneContentWriter, StoneDigestWriter, StoneDigestWriterHasher, StoneWriteError, StoneWritePayload, StoneWriter,
