@@ -322,6 +322,9 @@ size_t stone_payload_content_reader_read(StonePayloadContentReader *content_read
                                          uint8_t *buf,
                                          size_t size);
 
+int stone_payload_content_reader_buf_hint(const StonePayloadContentReader *content_reader,
+                                          uintptr_t *hint);
+
 int stone_payload_content_reader_is_checksum_valid(const StonePayloadContentReader *content_reader);
 
 void stone_payload_content_reader_destroy(StonePayloadContentReader *content_reader);

@@ -107,11 +107,15 @@ impl<R: Read + Seek> StoneReader<R> {
 
         let hashed = digest::Reader::new(&mut self.reader, &mut self.hasher);
         let framed = hashed.take(content.header.stored_size);
+        let reader = PayloadReader::new(framed, content.header.compression)?;
+
+        let buf_hint = reader.buf_hint();
 
         Ok(StonePayloadContentReader {
-            reader: PayloadReader::new(framed, content.header.compression)?,
+            reader,
             header_checksum: u64::from_be_bytes(content.header.checksum),
             is_checksum_valid: false,
+            buf_hint,
         })
     }
 }
@@ -121,6 +125,7 @@ pub struct StonePayloadContentReader<'a, R: Read> {
     reader: PayloadReader<io::Take<digest::Reader<'a, &'a mut R>>>,
     header_checksum: u64,
     pub is_checksum_valid: bool,
+    pub buf_hint: Option<usize>,
 }
 
 #[cfg(feature = "ffi")]
@@ -155,6 +160,13 @@ impl<R: Read> PayloadReader<R> {
         match self {
             PayloadReader::Plain(reader) => reader,
             PayloadReader::Zstd(reader) => reader.get_mut(),
+        }
+    }
+
+    fn buf_hint(&self) -> Option<usize> {
+        match self {
+            PayloadReader::Plain(_) => None,
+            PayloadReader::Zstd(z) => Some(z.capacity()),
         }
     }
 }

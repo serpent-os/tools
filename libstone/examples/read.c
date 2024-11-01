@@ -263,7 +263,8 @@ void process_reader(StoneReader *reader, StoneHeaderVersion version) {
       FILE *fptr;
       StonePayloadContentReader *content_reader;
       fptr = fopen("/dev/null", "w+");
-      char buf[1024];
+      char *buf;
+      uint64_t buf_hint = 0;
       int read = 0;
 
       // We can instead unpack directly to file as a convenience
@@ -271,8 +272,18 @@ void process_reader(StoneReader *reader, StoneHeaderVersion version) {
 
       stone_reader_read_content_payload(reader, payload, &content_reader);
 
+      stone_payload_content_reader_buf_hint(content_reader, &buf_hint);
+
+      buf_hint = buf_hint > 0 ? buf_hint : 1024;
+      printf("Unpacking w/ buffer size: %ld\n", buf_hint);
+
+      buf = malloc(buf_hint);
+      if (buf == NULL) {
+        exit(1);
+      }
+
       while ((read = stone_payload_content_reader_read(
-                  content_reader, (void *)buf, sizeof buf)) > 0) {
+                  content_reader, (void *)buf, buf_hint)) > 0) {
         int total = 0, n = 0;
 
         while (total < read) {
@@ -288,6 +299,7 @@ void process_reader(StoneReader *reader, StoneHeaderVersion version) {
              1);
 
       stone_payload_content_reader_destroy(content_reader);
+      free(buf);
       fflush(fptr);
       fclose(fptr);
     }

@@ -312,6 +312,20 @@ pub unsafe extern "C" fn stone_payload_content_reader_read(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn stone_payload_content_reader_buf_hint(
+    content_reader: *const StonePayloadContentReader,
+    hint: *mut usize,
+) -> c_int {
+    fallible(|| {
+        let content_reader = NonNull::new(content_reader as *mut StonePayloadContentReader).ok_or("")?;
+
+        *hint = content_reader.as_ref().buf_hint.unwrap_or(0);
+
+        Ok(())
+    })
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn stone_payload_content_reader_is_checksum_valid(
     content_reader: *const StonePayloadContentReader,
 ) -> c_int {
