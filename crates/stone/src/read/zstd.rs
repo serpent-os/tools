@@ -21,6 +21,10 @@ impl<R: Read> Zstd<R> {
     pub fn get_mut(&mut self) -> &mut R {
         self.decoder.get_mut().get_mut()
     }
+
+    pub fn capacity(&self) -> usize {
+        self.decoder.get_ref().capacity()
+    }
 }
 
 impl<R: Read> Read for Zstd<R> {
