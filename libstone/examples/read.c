@@ -6,12 +6,6 @@
 #include <string.h>
 #include <unistd.h>
 
-// 32 byte stone header
-static uint8_t HEADER_BUF[] = {0x00, 0x6d, 0x6f, 0x73, 0x00, 0x04, 0x00, 0x00,
-                               0x01, 0x00, 0x00, 0x02, 0x00, 0x00, 0x03, 0x00,
-                               0x00, 0x04, 0x00, 0x00, 0x05, 0x00, 0x00, 0x06,
-                               0x00, 0x00, 0x07, 0x01, 0x00, 0x00, 0x00, 0x01};
-
 void print_header_v1(StoneHeaderV1 *header) {
   uint8_t file_type[100];
 
@@ -355,11 +349,6 @@ int main(int argc, char *argv[]) {
     printf("usage: %s <stone>\n", argv[0]);
     exit(1);
   }
-
-  printf("Reading stone header from buffer\n\n");
-  stone_read_buf(HEADER_BUF, sizeof(HEADER_BUF), &reader, &version);
-  process_reader(reader, version);
-  stone_reader_destroy(reader);
 
   printf("\n");
   printf("Reading stone from '%s'\n\n", argv[1]);
