@@ -188,9 +188,7 @@ const BASE_PACKAGES: &[&str] = &[
     "linux-headers",
     "pkgconf",
     "sed",
-    "util-linux",
     // Needed for chroot
-    "binary(git)",
     "binary(nano)",
     "binary(vim)",
     "binary(ps)",
