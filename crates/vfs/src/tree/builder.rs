@@ -113,7 +113,8 @@ impl<T: BlitFile> TreeBuilder<T> {
             .collect::<Vec<_>>();
         full_set.sort_by(|a, b| sorted_paths(a, b));
 
-        let mut tree: Tree<T> = Tree::new();
+        let estimated_capacity = self.implicit_dirs.len() + self.explicit.len();
+        let mut tree: Tree<T> = Tree::with_capacity(estimated_capacity);
 
         // Build the initial full tree now.
         for entry in full_set {

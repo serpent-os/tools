@@ -5,7 +5,7 @@
 //! Virtual filesystem tree (optimise layout inserts)
 
 use core::fmt::Debug;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::vec;
 
 use indextree::{Arena, Descendants, NodeId};
@@ -71,16 +71,16 @@ impl<T: BlitFile> File<T> {
 #[derive(Debug)]
 pub struct Tree<T: BlitFile> {
     arena: Arena<File<T>>,
-    map: BTreeMap<String, NodeId>,
+    map: HashMap<String, NodeId>,
     length: u64,
 }
 
 impl<T: BlitFile> Tree<T> {
-    /// Construct a new Tree
-    fn new() -> Self {
+    /// Construct a new Tree with specified capacity
+    fn with_capacity(capacity: usize) -> Self {
         Tree {
-            arena: Arena::new(),
-            map: BTreeMap::new(),
+            arena: Arena::with_capacity(capacity),
+            map: HashMap::with_capacity(capacity),
             length: 0_u64,
         }
     }
