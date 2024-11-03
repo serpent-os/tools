@@ -26,6 +26,7 @@ use nix::{
     unistd::{close, linkat, mkdir, symlinkat},
 };
 use postblit::TriggerScope;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use stone::{payload::layout, read::PayloadKind};
 use thiserror::Error;
 use tui::{MultiProgress, ProgressBar, ProgressStyle, Styled};
@@ -644,9 +645,9 @@ impl Client {
             let root_dir = fcntl::open(&blit_target, OFlag::O_DIRECTORY | OFlag::O_RDONLY, Mode::empty())?;
 
             if let Element::Directory(_, _, children) = root {
-                for child in children {
-                    self.blit_element(root_dir, cache_fd, child, &progress)?;
-                }
+                children
+                    .into_par_iter()
+                    .try_for_each(|child| self.blit_element(root_dir, cache_fd, child, &progress))?;
             }
 
             close(root_dir)?;
