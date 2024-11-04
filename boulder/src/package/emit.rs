@@ -139,15 +139,21 @@ pub fn emit(paths: &Paths, recipe: &Recipe, packages: &[Package]) -> Result<(), 
 fn emit_package(paths: &Paths, package: &Package) -> Result<(), Error> {
     let filename = package.filename();
 
-    // Sort all files by size, largest to smallest
-    let sorted_files = package
+    // Filter for all files -> dedupe by hash -> sort largest to smallest
+    let files = package
         .analysis
         .paths
         .iter()
-        .filter(|p| p.is_file())
-        .sorted_by(|a, b| a.size.cmp(&b.size).reverse())
+        // Filter by file
+        .filter_map(|info| info.file_hash().map(|hash| (hash, info)))
+        // Dedupe by hash
+        .unique_by(|(hash, _)| *hash)
+        // Sort largest to smallest
+        .sorted_by(|(_, a), (_, b)| a.size.cmp(&b.size).reverse())
+        .map(|(_, info)| info)
         .collect::<Vec<_>>();
-    let total_file_size = sorted_files.iter().map(|p| p.size).sum();
+
+    let total_file_size = files.iter().map(|info| info.size).sum();
 
     let pb = ProgressBar::new(total_file_size)
         .with_message(format!("Generating {filename}"))
@@ -188,7 +194,7 @@ fn emit_package(paths: &Paths, package: &Package) -> Result<(), Error> {
     }
 
     // Only add content payload if we have some files
-    if !sorted_files.is_empty() {
+    if !files.is_empty() {
         // Temp file for building content payload
         let temp_content_path = format!("/tmp/{}.tmp", &filename);
         let mut temp_content = fs::OpenOptions::new()
@@ -201,8 +207,8 @@ fn emit_package(paths: &Paths, package: &Package) -> Result<(), Error> {
         let mut writer =
             writer.with_content(&mut temp_content, Some(total_file_size), util::num_cpus().get() as u32)?;
 
-        for file in sorted_files {
-            let file = File::open(&file.path)?;
+        for info in files {
+            let file = File::open(&info.path)?;
             writer.add_content(&mut pb.wrap_read(&file))?;
         }
 

@@ -162,6 +162,14 @@ impl PathInfo {
         matches!(self.layout.entry, layout::Entry::Regular(_, _))
     }
 
+    pub fn file_hash(&self) -> Option<u128> {
+        if let layout::Entry::Regular(hash, _) = &self.layout.entry {
+            Some(*hash)
+        } else {
+            None
+        }
+    }
+
     pub fn file_name(&self) -> &str {
         self.target_path
             .file_name()
