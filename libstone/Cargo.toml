@@ -21,7 +21,7 @@ cbindgen.workspace = true
 
 [package.metadata.capi.header]
 name = "stone"
-subdirectory = "libstone"
+subdirectory = false
 
 [package.metadata.capi.pkg_config]
 name = "libstone"
