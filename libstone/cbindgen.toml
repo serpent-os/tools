@@ -12,7 +12,7 @@ prefix_with_name = true
 rename_variants = "ScreamingSnakeCase"
 
 [export]
-include = []
+include = ["STONE_HEADER_SIZE"]
 exclude = []
 
 [export.rename]

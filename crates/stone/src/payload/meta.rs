@@ -48,7 +48,7 @@ pub enum StonePayloadMetaDependency {
     #[strum(serialize = "sysbinary")]
     SystemBinary,
 
-    /// An emul32-compatible pkgconfig .pc dependency (lib32/*.pc)
+    /// An emul32-compatible pkgconfig .pc dependency (lib32*.pc)
     PkgConfig32,
 }
 
