@@ -16,7 +16,7 @@ pub use self::digest::{StoneDigestWriter, StoneDigestWriterHasher};
 pub mod digest;
 mod zstd;
 
-pub struct StoneWriter<W, T = ()> {
+pub struct StoneWriter<W, T> {
     writer: W,
     content: T,
     file_type: StoneHeaderV1FileType,
