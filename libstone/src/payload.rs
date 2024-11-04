@@ -25,10 +25,10 @@ impl StonePayload {
             return None;
         }
 
-        self.next_record += 1;
-
         let payload = self.decoded.layout()?;
         let record = payload.body.get(self.next_record)?;
+
+        self.next_record += 1;
 
         Some(record.into())
     }
@@ -38,10 +38,10 @@ impl StonePayload {
             return None;
         }
 
-        self.next_record += 1;
-
         let payload = self.decoded.meta()?;
         let record = payload.body.get(self.next_record)?;
+
+        self.next_record += 1;
 
         Some(record.into())
     }
@@ -51,10 +51,10 @@ impl StonePayload {
             return None;
         }
 
-        self.next_record += 1;
-
         let payload = self.decoded.index()?;
         let record = payload.body.get(self.next_record)?;
+
+        self.next_record += 1;
 
         Some(record.into())
     }
@@ -64,10 +64,10 @@ impl StonePayload {
             return None;
         }
 
-        self.next_record += 1;
-
         let payload = self.decoded.attributes()?;
         let record = payload.body.get(self.next_record)?;
+
+        self.next_record += 1;
 
         Some(record.into())
     }

@@ -330,7 +330,7 @@ size_t read_shim(void *fptr, char *buf, size_t n) {
   return fread(buf, 1, n, fptr);
 }
 
-uint64_t seek_shim(void *fptr, int64_t offset, StoneSeekFrom from) {
+int64_t seek_shim(void *fptr, int64_t offset, StoneSeekFrom from) {
   fseek(fptr, offset, from);
   return ftell(fptr);
 }

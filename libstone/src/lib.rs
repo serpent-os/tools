@@ -26,6 +26,8 @@ pub use self::payload::{
 
 mod payload;
 
+pub const STONE_HEADER_SIZE: usize = 32;
+
 pub type StoneReader<'a> = stone::StoneReader<StoneReadImpl<'a>>;
 pub type StonePayloadContentReader<'a> = stone::StonePayloadContentReader<'a, StoneReadImpl<'a>>;
 
@@ -115,13 +117,13 @@ enum StoneSeekFrom {
 #[repr(C)]
 pub struct StoneReadVTable {
     read: Option<unsafe extern "C" fn(*mut c_void, *mut c_char, usize) -> usize>,
-    seek: Option<unsafe extern "C" fn(*mut c_void, i64, StoneSeekFrom) -> u64>,
+    seek: Option<unsafe extern "C" fn(*mut c_void, i64, StoneSeekFrom) -> i64>,
 }
 
 pub struct StoneReadShim {
     data: *mut c_void,
     read: unsafe extern "C" fn(*mut c_void, *mut c_char, usize) -> usize,
-    seek: unsafe extern "C" fn(*mut c_void, i64, StoneSeekFrom) -> u64,
+    seek: unsafe extern "C" fn(*mut c_void, i64, StoneSeekFrom) -> i64,
 }
 
 impl Read for StoneReadShim {
@@ -138,7 +140,13 @@ impl Seek for StoneReadShim {
             std::io::SeekFrom::End(i) => (StoneSeekFrom::End, i),
         };
 
-        unsafe { Ok((self.seek)(self.data, offset, from)) }
+        let ret = unsafe { (self.seek)(self.data, offset, from) };
+
+        if ret < 0 {
+            Err(std::io::Error::new(std::io::ErrorKind::Other, ret.to_string()))
+        } else {
+            Ok(ret as u64)
+        }
     }
 }
 

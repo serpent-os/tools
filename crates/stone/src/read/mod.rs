@@ -237,14 +237,14 @@ impl StoneDecodedPayload {
                         )?,
                     }),
                     StonePayloadKind::Content => {
-                        let offset = reader.stream_position()?;
-
                         // Skip past, these are read by user later
-                        reader.seek(SeekFrom::Current(header.stored_size as i64))?;
+                        let new_offset = reader.seek(SeekFrom::Current(header.stored_size as i64))?;
 
                         StoneDecodedPayload::Content(StonePayload {
                             header,
-                            body: StonePayloadContent { offset },
+                            body: StonePayloadContent {
+                                offset: (new_offset as i64 - header.stored_size as i64) as u64,
+                            },
                         })
                     }
                     StonePayloadKind::Dumb => unimplemented!("??"),

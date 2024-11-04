@@ -11,6 +11,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#define STONE_HEADER_SIZE 32
+
 /**
  * Well known file type for a v1 stone container
  *
@@ -131,7 +133,7 @@ enum StonePayloadMetaDependency {
    */
   STONE_PAYLOAD_META_DEPENDENCY_SYSTEM_BINARY,
   /**
-   * An emul32-compatible pkgconfig .pc dependency (lib32/*.pc)
+   * An emul32-compatible pkgconfig .pc dependency (lib32*.pc)
    */
   STONE_PAYLOAD_META_DEPENDENCY_PKG_CONFIG32,
 };
@@ -190,7 +192,7 @@ typedef struct StoneReader StoneReader;
 
 typedef struct StoneReadVTable {
   uintptr_t (*read)(void*, char*, uintptr_t);
-  uint64_t (*seek)(void*, int64_t, StoneSeekFrom);
+  int64_t (*seek)(void*, int64_t, StoneSeekFrom);
 } StoneReadVTable;
 
 typedef struct StoneReader StoneReader;
