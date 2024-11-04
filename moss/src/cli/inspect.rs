@@ -5,9 +5,9 @@
 use clap::{arg, ArgMatches, Command};
 use fs_err::File;
 use std::path::PathBuf;
-use stone::payload::layout;
-use stone::payload::meta;
-use stone::read::PayloadKind;
+use stone::{
+    StoneDecodedPayload, StonePayloadLayoutFile, StonePayloadMetaPrimitive, StonePayloadMetaTag, StoneReadError,
+};
 use thiserror::Error;
 
 const COLUMN_WIDTH: usize = 20;
@@ -50,28 +50,32 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
             let mut cnfls = vec![];
 
             match payload {
-                PayloadKind::Layout(l) => layouts = l.body,
-                PayloadKind::Meta(meta) => {
+                StoneDecodedPayload::Layout(l) => layouts = l.body,
+                StoneDecodedPayload::Meta(meta) => {
                     println!();
 
                     for record in meta.body {
                         let name = format!("{:?}", record.tag);
 
-                        match &record.kind {
-                            meta::Kind::Provider(k, p) if record.tag == meta::Tag::Provides => {
+                        match &record.primitive {
+                            StonePayloadMetaPrimitive::Provider(k, p)
+                                if record.tag == StonePayloadMetaTag::Provides =>
+                            {
                                 provs.push(format!("{}({})", k, p))
                             }
-                            meta::Kind::Provider(k, p) if record.tag == meta::Tag::Conflicts => {
+                            StonePayloadMetaPrimitive::Provider(k, p)
+                                if record.tag == StonePayloadMetaTag::Conflicts =>
+                            {
                                 cnfls.push(format!("{}({})", k, p))
                             }
-                            meta::Kind::Dependency(k, d) => deps.push(format!("{}({})", k, d)),
-                            meta::Kind::String(s) => {
+                            StonePayloadMetaPrimitive::Dependency(k, d) => deps.push(format!("{}({})", k, d)),
+                            StonePayloadMetaPrimitive::String(s) => {
                                 println!("{:width$} : {}", name, s, width = COLUMN_WIDTH)
                             }
-                            meta::Kind::Int64(i) => {
+                            StonePayloadMetaPrimitive::Int64(i) => {
                                 println!("{:width$} : {}", name, i, width = COLUMN_WIDTH)
                             }
-                            meta::Kind::Uint64(i) => {
+                            StonePayloadMetaPrimitive::Uint64(i) => {
                                 println!("{:width$} : {}", name, i, width = COLUMN_WIDTH)
                             }
                             _ => {
@@ -105,14 +109,14 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
             if !layouts.is_empty() {
                 println!("\n{:width$} :", "Layout entries", width = COLUMN_WIDTH);
                 for layout in layouts {
-                    match layout.entry {
-                        layout::Entry::Regular(hash, target) => {
+                    match layout.file {
+                        StonePayloadLayoutFile::Regular(hash, target) => {
                             println!("    - /usr/{} - [Regular] {:032x}", target, hash)
                         }
-                        layout::Entry::Directory(target) => {
+                        StonePayloadLayoutFile::Directory(target) => {
                             println!("    - /usr/{} [Directory]", target)
                         }
-                        layout::Entry::Symlink(source, target) => {
+                        StonePayloadLayoutFile::Symlink(source, target) => {
                             println!("    - /usr/{} -> {} [Symlink]", target, source)
                         }
                         _ => unreachable!(),
@@ -131,5 +135,5 @@ pub enum Error {
     IO(#[from] std::io::Error),
 
     #[error("stone format")]
-    Format(#[from] stone::read::Error),
+    Format(#[from] StoneReadError),
 }

@@ -6,9 +6,9 @@ use std::{io, num::NonZeroU64};
 
 use fs_err as fs;
 use itertools::Itertools;
+use stone::StoneDigestWriterHasher;
 use thiserror::Error;
 
-use stone::write::digest;
 use stone_recipe::{script, Package};
 
 use crate::{build, container, timing, util, Macros, Paths, Recipe, Timing};
@@ -60,7 +60,7 @@ impl<'a> Packager<'a> {
 
     pub fn package(&self, timing: &mut Timing) -> Result<(), Error> {
         // Hasher used for calculating file digests
-        let mut hasher = digest::Hasher::new();
+        let mut hasher = StoneDigestWriterHasher::new();
 
         let timer = timing.begin(timing::Kind::Analyze);
 

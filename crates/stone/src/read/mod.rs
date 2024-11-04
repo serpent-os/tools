@@ -1,62 +1,81 @@
 // SPDX-FileCopyrightText: Copyright © 2020-2024 Serpent OS Developers
 //
 // SPDX-License-Identifier: MPL-2.0
+#![allow(dead_code)]
 
 use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 use thiserror::Error;
 
-use crate::payload::{Attribute, Compression, Index, Layout, Meta};
-use crate::{header, Payload};
-use crate::{payload, Header};
+use crate::{
+    payload, StoneHeader, StoneHeaderDecodeError, StonePayload, StonePayloadAttributeRecord, StonePayloadCompression,
+    StonePayloadContent, StonePayloadDecodeError, StonePayloadHeader, StonePayloadIndexRecord, StonePayloadKind,
+    StonePayloadLayoutRecord, StonePayloadMetaRecord,
+};
 
 use self::zstd::Zstd;
 
 mod digest;
 mod zstd;
 
-pub fn read<R: Read + Seek>(mut reader: R) -> Result<Reader<R>, Error> {
-    let header = Header::decode(&mut reader).map_err(Error::HeaderDecode)?;
+pub fn read<R: Read + Seek>(mut reader: R) -> Result<StoneReader<R>, StoneReadError> {
+    let header = StoneHeader::decode(&mut reader).map_err(StoneReadError::HeaderDecode)?;
 
-    Ok(Reader {
+    Ok(StoneReader {
         header,
         reader,
         hasher: digest::Hasher::new(),
+
+        #[cfg(feature = "ffi")]
+        next_payload: 0,
     })
 }
 
-pub fn read_bytes(bytes: &[u8]) -> Result<Reader<Cursor<&[u8]>>, Error> {
+pub fn read_bytes(bytes: &[u8]) -> Result<StoneReader<Cursor<&[u8]>>, StoneReadError> {
     read(Cursor::new(bytes))
 }
 
-pub struct Reader<R> {
-    pub header: Header,
+pub struct StoneReader<R> {
+    pub header: StoneHeader,
     reader: R,
     hasher: digest::Hasher,
+
+    #[cfg(feature = "ffi")]
+    next_payload: u16,
 }
 
-impl<R: Read + Seek> Reader<R> {
-    pub fn payloads(&mut self) -> Result<impl Iterator<Item = Result<PayloadKind, Error>> + '_, Error> {
-        if self.reader.stream_position()? != Header::SIZE as u64 {
+impl<R: Read + Seek> StoneReader<R> {
+    pub fn payloads(
+        &mut self,
+    ) -> Result<impl Iterator<Item = Result<StoneDecodedPayload, StoneReadError>> + '_, StoneReadError> {
+        if self.reader.stream_position()? != StoneHeader::SIZE as u64 {
             // Rewind to start of payloads
-            self.reader.seek(SeekFrom::Start(Header::SIZE as u64))?;
+            self.reader.seek(SeekFrom::Start(StoneHeader::SIZE as u64))?;
+        }
+
+        #[cfg(feature = "ffi")]
+        {
+            self.next_payload = self.header.num_payloads();
         }
 
         Ok((0..self.header.num_payloads())
-            .flat_map(|_| PayloadKind::decode(&mut self.reader, &mut self.hasher).transpose()))
+            .flat_map(|_| StoneDecodedPayload::decode(&mut self.reader, &mut self.hasher).transpose()))
     }
 
-    pub fn unpack_content<W>(&mut self, content: &Payload<Content>, writer: &mut W) -> Result<(), Error>
+    pub fn unpack_content<W>(
+        &mut self,
+        content: &StonePayload<StonePayloadContent>,
+        writer: &mut W,
+    ) -> Result<(), StoneReadError>
     where
         W: Write,
     {
         self.reader.seek(SeekFrom::Start(content.body.offset))?;
         self.hasher.reset();
 
-        let mut hashed = digest::Reader::new(&mut self.reader, &mut self.hasher);
-        let mut framed = (&mut hashed).take(content.header.stored_size);
-        let mut reader = PayloadReader::new(&mut framed, content.header.compression)?;
+        let hashed = digest::Reader::new(&mut self.reader, &mut self.hasher);
+        let framed = hashed.take(content.header.stored_size);
 
-        io::copy(&mut reader, writer)?;
+        io::copy(&mut PayloadReader::new(framed, content.header.compression)?, writer)?;
 
         // Validate checksum
         validate_checksum(&self.hasher, &content.header)?;
@@ -65,9 +84,63 @@ impl<R: Read + Seek> Reader<R> {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Content {
-    offset: u64,
+#[cfg(feature = "ffi")]
+impl<R: Read + Seek> StoneReader<R> {
+    pub fn next_payload(&mut self) -> Result<Option<StoneDecodedPayload>, StoneReadError> {
+        if self.next_payload < self.header.num_payloads() {
+            let payload = StoneDecodedPayload::decode(&mut self.reader, &mut self.hasher)?;
+
+            self.next_payload += 1;
+
+            Ok(payload)
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn read_content<'a>(
+        &'a mut self,
+        content: &StonePayload<StonePayloadContent>,
+    ) -> Result<StonePayloadContentReader<'a, R>, StoneReadError> {
+        self.reader.seek(SeekFrom::Start(content.body.offset))?;
+        self.hasher.reset();
+
+        let hashed = digest::Reader::new(&mut self.reader, &mut self.hasher);
+        let framed = hashed.take(content.header.stored_size);
+        let reader = PayloadReader::new(framed, content.header.compression)?;
+
+        let buf_hint = reader.buf_hint();
+
+        Ok(StonePayloadContentReader {
+            reader,
+            header_checksum: u64::from_be_bytes(content.header.checksum),
+            is_checksum_valid: false,
+            buf_hint,
+        })
+    }
+}
+
+#[cfg(feature = "ffi")]
+pub struct StonePayloadContentReader<'a, R: Read> {
+    reader: PayloadReader<io::Take<digest::Reader<'a, &'a mut R>>>,
+    header_checksum: u64,
+    pub is_checksum_valid: bool,
+    pub buf_hint: Option<usize>,
+}
+
+#[cfg(feature = "ffi")]
+impl<'a, R: Read> Read for StonePayloadContentReader<'a, R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self.reader.read(buf) {
+            Ok(read) if !buf.is_empty() && read == 0 => {
+                self.is_checksum_valid = self.header_checksum == self.reader.get_mut().get_mut().hasher.digest();
+
+                Ok(read)
+            }
+            Ok(read) => Ok(read),
+            e @ Err(_) => e,
+        }
+    }
 }
 
 enum PayloadReader<R: Read> {
@@ -76,11 +149,25 @@ enum PayloadReader<R: Read> {
 }
 
 impl<R: Read> PayloadReader<R> {
-    fn new(reader: R, compression: Compression) -> Result<Self, Error> {
+    fn new(reader: R, compression: StonePayloadCompression) -> Result<Self, StoneReadError> {
         Ok(match compression {
-            Compression::None => PayloadReader::Plain(reader),
-            Compression::Zstd => PayloadReader::Zstd(Zstd::new(reader)?),
+            StonePayloadCompression::None => PayloadReader::Plain(reader),
+            StonePayloadCompression::Zstd => PayloadReader::Zstd(Zstd::new(reader)?),
         })
+    }
+
+    fn get_mut(&mut self) -> &mut R {
+        match self {
+            PayloadReader::Plain(reader) => reader,
+            PayloadReader::Zstd(reader) => reader.get_mut(),
+        }
+    }
+
+    fn buf_hint(&self) -> Option<usize> {
+        match self {
+            PayloadReader::Plain(_) => None,
+            PayloadReader::Zstd(z) => Some(z.capacity()),
+        }
     }
 }
 
@@ -94,78 +181,88 @@ impl<R: Read> Read for PayloadReader<R> {
 }
 
 #[derive(Debug)]
-pub enum PayloadKind {
-    Meta(Payload<Vec<Meta>>),
-    Attributes(Payload<Vec<Attribute>>),
-    Layout(Payload<Vec<Layout>>),
-    Index(Payload<Vec<Index>>),
-    Content(Payload<Content>),
+pub enum StoneDecodedPayload {
+    Meta(StonePayload<Vec<StonePayloadMetaRecord>>),
+    Attributes(StonePayload<Vec<StonePayloadAttributeRecord>>),
+    Layout(StonePayload<Vec<StonePayloadLayoutRecord>>),
+    Index(StonePayload<Vec<StonePayloadIndexRecord>>),
+    Content(StonePayload<StonePayloadContent>),
 }
 
-impl PayloadKind {
-    fn decode<R: Read + Seek>(mut reader: R, hasher: &mut digest::Hasher) -> Result<Option<Self>, Error> {
-        match payload::Header::decode(&mut reader) {
+impl StoneDecodedPayload {
+    pub fn header(&self) -> &StonePayloadHeader {
+        match self {
+            StoneDecodedPayload::Meta(payload) => &payload.header,
+            StoneDecodedPayload::Attributes(payload) => &payload.header,
+            StoneDecodedPayload::Layout(payload) => &payload.header,
+            StoneDecodedPayload::Index(payload) => &payload.header,
+            StoneDecodedPayload::Content(payload) => &payload.header,
+        }
+    }
+
+    fn decode<R: Read + Seek>(mut reader: R, hasher: &mut digest::Hasher) -> Result<Option<Self>, StoneReadError> {
+        match StonePayloadHeader::decode(&mut reader) {
             Ok(header) => {
                 hasher.reset();
                 let mut hashed = digest::Reader::new(&mut reader, hasher);
                 let mut framed = (&mut hashed).take(header.stored_size);
 
                 let payload = match header.kind {
-                    payload::Kind::Meta => PayloadKind::Meta(Payload {
+                    StonePayloadKind::Meta => StoneDecodedPayload::Meta(StonePayload {
                         header,
                         body: payload::decode_records(
                             PayloadReader::new(&mut framed, header.compression)?,
                             header.num_records,
                         )?,
                     }),
-                    payload::Kind::Layout => PayloadKind::Layout(Payload {
+                    StonePayloadKind::Layout => StoneDecodedPayload::Layout(StonePayload {
                         header,
                         body: payload::decode_records(
                             PayloadReader::new(&mut framed, header.compression)?,
                             header.num_records,
                         )?,
                     }),
-                    payload::Kind::Index => PayloadKind::Index(Payload {
+                    StonePayloadKind::Index => StoneDecodedPayload::Index(StonePayload {
                         header,
                         body: payload::decode_records(
                             PayloadReader::new(&mut framed, header.compression)?,
                             header.num_records,
                         )?,
                     }),
-                    payload::Kind::Attributes => PayloadKind::Attributes(Payload {
+                    StonePayloadKind::Attributes => StoneDecodedPayload::Attributes(StonePayload {
                         header,
                         body: payload::decode_records(
                             PayloadReader::new(&mut framed, header.compression)?,
                             header.num_records,
                         )?,
                     }),
-                    payload::Kind::Content => {
-                        let offset = reader.stream_position()?;
-
+                    StonePayloadKind::Content => {
                         // Skip past, these are read by user later
-                        reader.seek(SeekFrom::Current(header.stored_size as i64))?;
+                        let new_offset = reader.seek(SeekFrom::Current(header.stored_size as i64))?;
 
-                        PayloadKind::Content(Payload {
+                        StoneDecodedPayload::Content(StonePayload {
                             header,
-                            body: Content { offset },
+                            body: StonePayloadContent {
+                                offset: (new_offset as i64 - header.stored_size as i64) as u64,
+                            },
                         })
                     }
-                    payload::Kind::Dumb => unimplemented!("??"),
+                    StonePayloadKind::Dumb => unimplemented!("??"),
                 };
 
                 // Validate hash for non-content payloads
-                if !matches!(header.kind, payload::Kind::Content) {
+                if !matches!(header.kind, StonePayloadKind::Content) {
                     validate_checksum(hasher, &header)?;
                 }
 
                 Ok(Some(payload))
             }
-            Err(payload::DecodeError::Io(error)) if error.kind() == io::ErrorKind::UnexpectedEof => Ok(None),
-            Err(error) => Err(Error::PayloadDecode(error)),
+            Err(StonePayloadDecodeError::Io(error)) if error.kind() == io::ErrorKind::UnexpectedEof => Ok(None),
+            Err(error) => Err(StoneReadError::PayloadDecode(error)),
         }
     }
 
-    pub fn meta(&self) -> Option<&Payload<Vec<Meta>>> {
+    pub fn meta(&self) -> Option<&StonePayload<Vec<StonePayloadMetaRecord>>> {
         if let Self::Meta(meta) = self {
             Some(meta)
         } else {
@@ -173,7 +270,7 @@ impl PayloadKind {
         }
     }
 
-    pub fn attributes(&self) -> Option<&Payload<Vec<Attribute>>> {
+    pub fn attributes(&self) -> Option<&StonePayload<Vec<StonePayloadAttributeRecord>>> {
         if let Self::Attributes(attributes) = self {
             Some(attributes)
         } else {
@@ -181,7 +278,7 @@ impl PayloadKind {
         }
     }
 
-    pub fn layout(&self) -> Option<&Payload<Vec<Layout>>> {
+    pub fn layout(&self) -> Option<&StonePayload<Vec<StonePayloadLayoutRecord>>> {
         if let Self::Layout(layouts) = self {
             Some(layouts)
         } else {
@@ -189,7 +286,7 @@ impl PayloadKind {
         }
     }
 
-    pub fn index(&self) -> Option<&Payload<Vec<Index>>> {
+    pub fn index(&self) -> Option<&StonePayload<Vec<StonePayloadIndexRecord>>> {
         if let Self::Index(indices) = self {
             Some(indices)
         } else {
@@ -197,7 +294,7 @@ impl PayloadKind {
         }
     }
 
-    pub fn content(&self) -> Option<&Payload<Content>> {
+    pub fn content(&self) -> Option<&StonePayload<StonePayloadContent>> {
         if let Self::Content(content) = self {
             Some(content)
         } else {
@@ -206,25 +303,25 @@ impl PayloadKind {
     }
 }
 
-fn validate_checksum(hasher: &digest::Hasher, header: &payload::Header) -> Result<(), Error> {
+fn validate_checksum(hasher: &digest::Hasher, header: &StonePayloadHeader) -> Result<(), StoneReadError> {
     let got = hasher.digest();
     let expected = u64::from_be_bytes(header.checksum);
 
     if got != expected {
-        Err(Error::PayloadChecksum { got, expected })
+        Err(StoneReadError::PayloadChecksum { got, expected })
     } else {
         Ok(())
     }
 }
 
 #[derive(Debug, Error)]
-pub enum Error {
+pub enum StoneReadError {
     #[error("Multiple content payloads not allowed")]
     MultipleContent,
     #[error("header decode")]
-    HeaderDecode(#[from] header::DecodeError),
+    HeaderDecode(#[from] StoneHeaderDecodeError),
     #[error("payload decode")]
-    PayloadDecode(#[from] payload::DecodeError),
+    PayloadDecode(#[from] StonePayloadDecodeError),
     #[error("payload checksum mismatch: got {got:02x}, expected {expected:02x}")]
     PayloadChecksum { got: u64, expected: u64 },
     #[error("io")]
@@ -235,7 +332,7 @@ pub enum Error {
 mod test {
     use xxhash_rust::xxh3::xxh3_128;
 
-    use crate::payload::layout::Entry;
+    use crate::{StoneHeaderVersion, StonePayloadLayoutFile};
 
     use super::*;
 
@@ -248,14 +345,14 @@ mod test {
     #[test]
     fn read_header() {
         let stone = read_bytes(&BASH_TEST_STONE).expect("valid stone");
-        assert_eq!(stone.header.version(), header::Version::V1);
+        assert_eq!(stone.header.version(), StoneHeaderVersion::V1);
     }
 
     #[test]
     fn read_bash_completion() {
         let mut stone =
             read_bytes(include_bytes!("../../../../test/bash-completion-2.11-1-1-x86_64.stone")).expect("valid stone");
-        assert_eq!(stone.header.version(), header::Version::V1);
+        assert_eq!(stone.header.version(), StoneHeaderVersion::V1);
 
         let payloads = stone
             .payloads()
@@ -265,22 +362,26 @@ mod test {
 
         let mut unpacked_content = vec![];
 
-        if let Some(content) = payloads.iter().find_map(PayloadKind::content) {
+        if let Some(content) = payloads.iter().find_map(StoneDecodedPayload::content) {
             stone
                 .unpack_content(content, &mut unpacked_content)
                 .expect("valid content");
 
-            for index in payloads.iter().filter_map(PayloadKind::index).flat_map(|p| &p.body) {
+            for index in payloads
+                .iter()
+                .filter_map(StoneDecodedPayload::index)
+                .flat_map(|p| &p.body)
+            {
                 let content = &unpacked_content[index.start as usize..index.end as usize];
                 let digest = xxh3_128(content);
                 assert_eq!(digest, index.digest);
 
                 payloads
                     .iter()
-                    .filter_map(PayloadKind::layout)
+                    .filter_map(StoneDecodedPayload::layout)
                     .flat_map(|p| &p.body)
                     .find(|layout| {
-                        if let Entry::Regular(digest, _) = &layout.entry {
+                        if let StonePayloadLayoutFile::Regular(digest, _) = &layout.file {
                             return *digest == index.digest;
                         }
                         false

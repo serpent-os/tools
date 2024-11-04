@@ -7,7 +7,7 @@ use std::{collections::BTreeSet, fmt, io, path::PathBuf};
 use itertools::Itertools;
 
 use fs_err as fs;
-use stone::{payload::layout, write::digest};
+use stone::{StoneDigestWriter, StoneDigestWriterHasher, StonePayloadLayoutFile};
 use tui::{
     dialoguer::{theme::ColorfulTheme, Confirm},
     ProgressBar, ProgressStyle, Styled,
@@ -29,7 +29,7 @@ pub fn verify(client: &Client, yes: bool, verbose: bool) -> Result<(), client::E
     let unique_assets = layouts
         .into_iter()
         .filter_map(|(package, layout)| {
-            if let layout::Entry::Regular(hash, file) = layout.entry {
+            if let StonePayloadLayoutFile::Regular(hash, file) = layout.file {
                 Some((format!("{hash:02x}"), (package, file)))
             } else {
                 None
@@ -38,7 +38,7 @@ pub fn verify(client: &Client, yes: bool, verbose: bool) -> Result<(), client::E
         .into_group_map();
 
     let mut issues = vec![];
-    let mut hasher = digest::Hasher::new();
+    let mut hasher = StoneDigestWriterHasher::new();
 
     let pb = ProgressBar::new(unique_assets.len() as u64)
         .with_message("Verifying")
@@ -77,7 +77,7 @@ pub fn verify(client: &Client, yes: bool, verbose: bool) -> Result<(), client::E
 
         hasher.reset();
 
-        let mut digest_writer = digest::Writer::new(io::sink(), &mut hasher);
+        let mut digest_writer = StoneDigestWriter::new(io::sink(), &mut hasher);
         let mut file = fs::File::open(&path)?;
 
         // Copy bytes to null sink so we don't
