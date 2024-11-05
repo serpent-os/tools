@@ -5,7 +5,7 @@ use std::{
 };
 
 use elf::{
-    abi::{DT_NEEDED, DT_SONAME},
+    abi::{DT_NEEDED, DT_RUNPATH, DT_SONAME},
     endian::AnyEndian,
     file::Class,
     note::Note,
@@ -99,6 +99,10 @@ fn parse_dynamic_section(
 ) {
     let mut needed_offsets = vec![];
     let mut soname_offset = None;
+    let mut rpath_offset = vec![];
+
+    // i.e `/` `usr` `lib` `libfoo.so.1.2.3`
+    let in_root_tree = info.target_path.ancestors().skip(1).count() == 3;
 
     // Get all dynamic entry offsets into string table
     if let Ok(Some(table)) = elf.dynamic() {
@@ -109,6 +113,9 @@ fn parse_dynamic_section(
                 }
                 DT_SONAME => {
                     soname_offset = Some(entry.d_val() as usize);
+                }
+                DT_RUNPATH => {
+                    rpath_offset.push(entry.d_val() as usize);
                 }
                 _ => {}
             }
@@ -127,12 +134,67 @@ fn parse_dynamic_section(
     // Resolve offsets against string table and add the applicable
     // depends and provides
     if let Ok(Some((_, strtab))) = elf.dynamic_symbol_table() {
+        let libdir = if matches!(bit_size, Class::ELF64) {
+            "/usr/lib"
+        } else {
+            "/usr/lib32"
+        };
+
+        let origin = info.target_path.parent().unwrap().to_string_lossy().to_string();
+        let mut rpaths = vec![libdir.into(), origin.clone()];
+
+        let root_dir = info
+            .path
+            .ancestors()
+            .find(|p| p.ends_with("usr"))
+            .and_then(|p| p.parent())
+            .and_then(|p| p.to_str())
+            .unwrap_or("/mason/install");
+
+        // rpath list
+        for offset in rpath_offset {
+            if let Ok(val) = strtab.get(offset) {
+                for path in val.split(':') {
+                    let path = path.replace("$ORIGIN", &origin);
+                    rpaths.push(path);
+                }
+            }
+        }
+
         // needed = dependency
         for offset in needed_offsets {
             if let Ok(name) = strtab.get(offset) {
+                let rpath_name = rpaths.iter().find_map(|rpath| {
+                    let p = root_dir.to_owned() + "/" + rpath + "/" + name;
+                    let path = Path::new(&p);
+                    if path.exists() {
+                        Some(
+                            Path::new("/")
+                                .join(rpath)
+                                .join(name)
+                                .components()
+                                .skip(3)
+                                .collect::<PathBuf>(),
+                        )
+                    } else {
+                        None
+                    }
+                });
+
+                // ignore RPATH if in root tree
+                let picked = if let Some(rpath_name) = rpath_name.as_ref() {
+                    if in_root_tree {
+                        name
+                    } else {
+                        &rpath_name.to_string_lossy().to_string()
+                    }
+                } else {
+                    name
+                };
+
                 bucket.dependencies.insert(Dependency {
                     kind: dependency::Kind::SharedLibrary,
-                    name: format!("{name}({depends_isa})"),
+                    name: format!("{picked}({depends_isa})"),
                 });
             }
         }
@@ -151,16 +213,41 @@ fn parse_dynamic_section(
                 soname = file_name;
             }
 
-            bucket.providers.insert(Provider {
-                kind: dependency::Kind::SharedLibrary,
-                name: format!("{soname}({machine_isa})"),
-            });
-
-            if add_provide_x86 {
+            // RPATH based soname
+            if !in_root_tree {
+                let rpathed = info
+                    .target_path
+                    .parent()
+                    .unwrap()
+                    .components()
+                    .skip(3)
+                    .collect::<PathBuf>()
+                    .join(soname)
+                    .to_string_lossy()
+                    .to_string();
                 bucket.providers.insert(Provider {
                     kind: dependency::Kind::SharedLibrary,
-                    name: format!("{soname}(x86)"),
+                    name: format!("{rpathed}({machine_isa})"),
                 });
+
+                if add_provide_x86 {
+                    bucket.providers.insert(Provider {
+                        kind: dependency::Kind::SharedLibrary,
+                        name: format!("{rpathed}(x86)"),
+                    });
+                }
+            } else {
+                bucket.providers.insert(Provider {
+                    kind: dependency::Kind::SharedLibrary,
+                    name: format!("{soname}({machine_isa})"),
+                });
+
+                if add_provide_x86 {
+                    bucket.providers.insert(Provider {
+                        kind: dependency::Kind::SharedLibrary,
+                        name: format!("{soname}(x86)"),
+                    });
+                }
             }
 
             // Do we possibly have an Interpreter? This is a .dynamic library ..
