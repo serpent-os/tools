@@ -4,7 +4,9 @@
 use std::path::PathBuf;
 
 use boulder::{env, Env};
-use clap::{Args, Parser};
+use clap::{Args, CommandFactory, Parser};
+use clap_mangen::Man;
+use std::fs::{self, File};
 use thiserror::Error;
 
 mod build;
@@ -18,7 +20,7 @@ pub struct Command {
     #[command(flatten)]
     pub global: Global,
     #[command(subcommand)]
-    pub subcommand: Subcommand,
+    pub subcommand: Option<Subcommand>,
 }
 
 #[derive(Debug, Args)]
@@ -39,6 +41,8 @@ pub struct Global {
     pub data_dir: Option<PathBuf>,
     #[arg(long, global = true)]
     pub moss_root: Option<PathBuf>,
+    #[arg(long, global = true)]
+    pub generate_manpages: Option<PathBuf>,
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -52,13 +56,39 @@ pub enum Subcommand {
 
 pub fn process() -> Result<(), Error> {
     let args = replace_aliases(std::env::args());
-    let Command { global, subcommand } = Command::parse_from(args);
+    let Command { global, subcommand } = Command::parse_from(args.clone());
+
+    if let Some(dir) = global.generate_manpages {
+        fs::create_dir_all(&dir)?;
+        let main_cmd = Command::command();
+        // Generate man page for the main command
+        let main_man = Man::new(main_cmd.clone());
+        let mut buffer = File::create(dir.join("boulder.1"))?;
+        main_man.render(&mut buffer)?;
+
+        // Generate man pages for all subcommands
+        for sub in main_cmd.get_subcommands() {
+            let sub_man = Man::new(sub.clone());
+            let name = format!("boulder-{}.1", sub.get_name());
+            let mut buffer = File::create(dir.join(&name))?;
+            sub_man.render(&mut buffer)?;
+
+            // Generate man pages for nested subcommands
+            for nested in sub.get_subcommands() {
+                let nested_man = Man::new(nested.clone());
+                let name = format!("boulder-{}-{}.1", sub.get_name(), nested.get_name());
+                let mut buffer = File::create(dir.join(&name))?;
+                nested_man.render(&mut buffer)?;
+            }
+        }
+        return Ok(());
+    }
 
     let env = Env::new(global.cache_dir, global.config_dir, global.data_dir, global.moss_root)?;
 
     if global.verbose {
         match subcommand {
-            Subcommand::Version(_) => (),
+            Some(Subcommand::Version(_)) => (),
             _ => version::print(),
         }
         println!("{:?}", env.config);
@@ -68,11 +98,12 @@ pub fn process() -> Result<(), Error> {
     }
 
     match subcommand {
-        Subcommand::Build(command) => build::handle(command, env)?,
-        Subcommand::Chroot(command) => chroot::handle(command, env)?,
-        Subcommand::Profile(command) => profile::handle(command, env)?,
-        Subcommand::Recipe(command) => recipe::handle(command, env)?,
-        Subcommand::Version(command) => version::handle(command),
+        Some(Subcommand::Build(command)) => build::handle(command, env)?,
+        Some(Subcommand::Chroot(command)) => chroot::handle(command, env)?,
+        Some(Subcommand::Profile(command)) => profile::handle(command, env)?,
+        Some(Subcommand::Recipe(command)) => recipe::handle(command, env)?,
+        Some(Subcommand::Version(command)) => version::handle(command),
+        None => (),
     }
 
     Ok(())
@@ -119,4 +150,6 @@ pub enum Error {
     Env(#[from] env::Error),
     #[error("recipe")]
     Recipe(#[from] recipe::Error),
+    #[error("io error")]
+    Io(#[from] std::io::Error),
 }
