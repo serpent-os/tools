@@ -5,6 +5,10 @@ use std::path::PathBuf;
 
 use boulder::{env, Env};
 use clap::{Args, CommandFactory, Parser};
+use clap_complete::{
+    generate_to,
+    shells::{Bash, Fish, Zsh},
+};
 use clap_mangen::Man;
 use std::fs::{self, File};
 use thiserror::Error;
@@ -41,8 +45,10 @@ pub struct Global {
     pub data_dir: Option<PathBuf>,
     #[arg(long, global = true)]
     pub moss_root: Option<PathBuf>,
-    #[arg(long, global = true)]
+    #[arg(long, global = true, hide = true)]
     pub generate_manpages: Option<PathBuf>,
+    #[arg(long, global = true, hide = true)]
+    pub generate_completions: Option<PathBuf>,
 }
 
 #[derive(Debug, clap::Subcommand)]
@@ -81,6 +87,15 @@ pub fn process() -> Result<(), Error> {
                 nested_man.render(&mut buffer)?;
             }
         }
+        return Ok(());
+    }
+
+    if let Some(dir) = global.generate_completions {
+        fs::create_dir_all(&dir)?;
+        let mut cmd = Command::command();
+        generate_to(Bash, &mut cmd, "boulder", &dir)?;
+        generate_to(Fish, &mut cmd, "boulder", &dir)?;
+        generate_to(Zsh, &mut cmd, "boulder", &dir)?;
         return Ok(());
     }
 

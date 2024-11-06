@@ -380,6 +380,7 @@ version = "0.24.3"
 dependencies = [
  "chrono",
  "clap",
+ "clap_complete",
  "clap_mangen",
  "config",
  "container",
