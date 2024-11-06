@@ -19,6 +19,8 @@ blsforme = { git = "https://github.com/serpent-os/blsforme.git", rev = "59a8f12f
 bytes = "1.6.0"
 chrono = "0.4.38"
 clap = { version = "4.5.8", features = ["derive", "string"] }
+clap_complete = "4.5.37"
+clap_mangen = "0.2.24"
 criterion = { version = "0.5.1", features = ["html_reports"] }
 crossterm = "0.27.0"
 derive_more = "0.99.18"

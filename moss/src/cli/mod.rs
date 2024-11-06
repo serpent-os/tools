@@ -5,6 +5,7 @@
 use std::{env, path::PathBuf};
 
 use clap::{Arg, ArgAction, Command};
+use clap_mangen::Man;
 use moss::{installation, runtime, Installation};
 use thiserror::Error;
 
@@ -59,6 +60,14 @@ fn command() -> Command {
                 .help("Assume yes for all questions")
                 .action(ArgAction::SetTrue),
         )
+        .arg(
+            Arg::new("generate-manpages")
+                .long("generate-manpages")
+                .help("Generate manpages")
+                .action(ArgAction::Set)
+                .value_name("DIR")
+                .hide(true),
+        )
         .arg_required_else_help(true)
         .subcommand(extract::command())
         .subcommand(index::command())
@@ -74,10 +83,43 @@ fn command() -> Command {
         .subcommand(version::command())
 }
 
+/// Generate manpages for all commands recursively
+fn generate_manpages(cmd: &Command, dir: &std::path::Path, prefix: Option<&str>) -> std::io::Result<()> {
+    let name = cmd.get_name();
+    let man = Man::new(cmd.to_owned());
+    let mut buffer: Vec<u8> = Default::default();
+    man.render(&mut buffer)?;
+
+    let filename = if let Some(prefix) = prefix {
+        format!("{}-{}.1", prefix, name)
+    } else {
+        format!("{}.1", name)
+    };
+
+    std::fs::write(dir.join(filename), buffer)?;
+
+    for subcmd in cmd.get_subcommands() {
+        let new_prefix = if let Some(p) = prefix {
+            format!("{}-{}", p, name)
+        } else {
+            name.to_string()
+        };
+        generate_manpages(subcmd, dir, Some(&new_prefix))?;
+    }
+    Ok(())
+}
+
 /// Process all CLI arguments
 pub fn process() -> Result<(), Error> {
     let args = replace_aliases(env::args());
     let matches = command().get_matches_from(args);
+
+    if let Some(dir) = matches.get_one::<String>("generate-manpages") {
+        let dir = std::path::Path::new(dir);
+        std::fs::create_dir_all(dir)?;
+        generate_manpages(&command(), dir, None)?;
+        return Ok(());
+    }
 
     // Print the version, but not if the user is using the version subcommand
     if matches.get_flag("verbose") {
@@ -190,4 +232,7 @@ pub enum Error {
 
     #[error("installation")]
     Installation(#[from] installation::Error),
+
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
 }
