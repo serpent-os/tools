@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use chrono::Local;
 use clap::{arg, ArgAction, ArgMatches, Command};
 use moss::{
     client::{self, prune, Client},
@@ -141,19 +142,18 @@ pub fn verify(args: &ArgMatches, installation: Installation) -> Result<(), Error
 
 /// Emit a state description for the TUI
 fn print_state(state: state::State) {
+    let local_time = state.created.with_timezone(&Local);
+    let formatted_time = local_time.format("%Y-%m-%d %H:%M:%S %Z");
+
     println!(
         "State #{} - {}",
         state.id.to_string().bold(),
-        state.summary.unwrap_or(String::from("system transaction")),
+        state.summary.unwrap_or_else(|| String::from("system transaction"))
     );
-    println!("{} {}", "Created:".bold(), state.created);
-    println!(
-        "{} {}",
-        "Description:".bold(),
-        state.description.unwrap_or(String::from("no description"))
-    );
-    // TODO: List packages?
-    // TODO: Start with normal list, compute diff, reverse to print ?
+    println!("{} {}", "Created:".bold(), formatted_time);
+    if let Some(desc) = &state.description {
+        println!("{} {}", "Description:".bold(), desc);
+    }
     println!("{} {}", "Packages:".bold(), state.selections.len());
     println!();
 }
