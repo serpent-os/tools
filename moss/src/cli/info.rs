@@ -12,7 +12,7 @@ use moss::{
 };
 use stone::payload::layout;
 use thiserror::Error;
-use tui::Styled;
+use tui::{Styled, TermSize};
 use vfs::tree::BlitFile;
 
 const COLUMN_WIDTH: usize = 20;
@@ -42,6 +42,7 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
         let resolved = client
             .registry
             .by_provider(&lookup, Flags::default())
+            .unique_by(|p| p.id.clone())
             .collect::<Vec<_>>();
         if resolved.is_empty() {
             return Err(Error::NotFound(pkg));
@@ -66,13 +67,51 @@ fn print_titled(title: &'static str) {
     print!("{}{:width$} ", title.bold(), " ", width = display_width);
 }
 
-/// Ugly hack: Printing a paragraph by line breaks.
-/// TODO: Split into proper paragraphs - limited to num columns in tty
+/// Print paragraph with breaks
 fn print_paragraph(p: &str) {
-    for (index, line) in p.lines().enumerate() {
-        match index {
-            0 => println!("{}", line),
-            _ => println!("{:width$} {}", " ", line.dim(), width = COLUMN_WIDTH),
+    let term_width = TermSize::default().width;
+    let available_width = term_width - COLUMN_WIDTH;
+
+    // Split into words and build lines up to available width
+    let mut current_line = String::new();
+    let mut first_line = true;
+
+    for word in p.split_whitespace() {
+        if current_line.len() + word.len() < available_width {
+            if !current_line.is_empty() {
+                current_line.push(' ');
+            }
+            current_line.push_str(word);
+        } else {
+            // Print current line
+            if first_line {
+                println!("{}", current_line.dim());
+                first_line = false;
+            } else {
+                println!("{:width$} {}", " ", current_line.dim(), width = COLUMN_WIDTH);
+            }
+            current_line = word.to_string();
+        }
+    }
+
+    // Print any remaining content
+    if !current_line.is_empty() {
+        if first_line {
+            println!("{}", current_line);
+        } else {
+            println!("{:width$} {}", " ", current_line.dim(), width = COLUMN_WIDTH);
+        }
+    }
+}
+
+fn print_list<T>(items: impl IntoIterator<Item = T>)
+where
+    T: ToString,
+{
+    for (idx, item) in items.into_iter().enumerate() {
+        match idx {
+            0 => println!("• {}", item.to_string()),
+            _ => println!("{:width$} • {}", " ", item.to_string(), width = COLUMN_WIDTH),
         }
     }
 }
@@ -81,8 +120,20 @@ fn print_paragraph(p: &str) {
 fn print_package(pkg: &Package) {
     print_titled("Name");
     println!("{}", pkg.meta.name);
+    print_titled("Status");
+    if pkg.flags.installed {
+        println!("Installed");
+    } else {
+        println!("Not installed");
+    }
     print_titled("Version");
     println!("{}", pkg.meta.version_identifier);
+    print_titled("Release number");
+    println!("{}", pkg.meta.source_release);
+    if pkg.meta.build_release > 1 {
+        print_titled("Build Release");
+        println!("{}", pkg.meta.build_release);
+    }
     print_titled("Homepage");
     println!("{}", pkg.meta.homepage);
     print_titled("Summary");
@@ -90,14 +141,14 @@ fn print_package(pkg: &Package) {
     print_titled("Description");
     print_paragraph(&pkg.meta.description);
     if !pkg.meta.dependencies.is_empty() {
+        println!();
         print_titled("Dependencies");
-        let deps = pkg.meta.dependencies.iter().map(|d| d.to_string()).sorted().join("\n");
-        print_paragraph(&deps);
+        print_list(pkg.meta.dependencies.iter().sorted());
     }
     if !pkg.meta.providers.is_empty() {
+        println!();
         print_titled("Providers");
-        let provs = pkg.meta.providers.iter().map(|p| p.to_string()).sorted().join("\n");
-        print_paragraph(&provs);
+        print_list(pkg.meta.providers.iter().sorted());
     }
 }
 
