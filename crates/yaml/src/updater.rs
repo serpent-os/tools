@@ -34,9 +34,14 @@ impl Updater {
     }
 
     pub fn apply(&self, input: impl ToString) -> String {
-        self.operations
+        let mut output = self
+            .operations
             .iter()
-            .fold(input.to_string(), |input, operation| operation.apply(&input))
+            .fold(input.to_string(), |input, operation| operation.apply(&input));
+        if !output.ends_with('\n') {
+            output.push('\n');
+        }
+        output
     }
 }
 
