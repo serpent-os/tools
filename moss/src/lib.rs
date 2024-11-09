@@ -23,3 +23,5 @@ pub mod request;
 pub mod runtime;
 pub mod signal;
 pub mod state;
+
+mod varlink;

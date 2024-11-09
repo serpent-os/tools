@@ -1,0 +1,4 @@
+interface com.serpentos.moss
+
+# Placeholder until we add real varlink API
+method Version() -> (version: string)
