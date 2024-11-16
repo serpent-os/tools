@@ -379,9 +379,17 @@ pub fn set_term_fg(pgid: Pid) -> Result<(), nix::Error> {
         )?
     };
     // Set term fg to pid
-    tcsetpgrp(io::stdin().as_raw_fd(), pgid)?;
+    let res = tcsetpgrp(io::stdin().as_raw_fd(), pgid);
     // Set up old handler
     unsafe { sigaction(Signal::SIGTTOU, &prev_handler)? };
+
+    match res {
+        Ok(_) => {}
+        // Ignore ENOTTY error
+        Err(nix::Error::ENOTTY) => {}
+        Err(e) => return Err(e),
+    }
+
     Ok(())
 }
 
