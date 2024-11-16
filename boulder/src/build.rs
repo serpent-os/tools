@@ -150,9 +150,9 @@ impl Builder {
         // This is so we can restore this process back as
         // the fg term after using `bash` for chroot below
         // so we can reestablish SIGINT forwarding to scripts
-        setpgid(Pid::from_raw(0), Pid::from_raw(0))?;
-        let pgid = getpgrp();
-        ::container::set_term_fg(pgid)?;
+        // setpgid(Pid::from_raw(0), Pid::from_raw(0))?;
+        // let pgid = getpgrp();
+        // ::container::set_term_fg(pgid)?;
 
         for (i, target) in self.targets.iter().enumerate() {
             println!("{}", build_target_prefix(target.build_target, i));
@@ -218,7 +218,7 @@ impl Builder {
                                 command.wait()?;
 
                                 // Restore ourselves as fg term since bash steals it
-                                ::container::set_term_fg(pgid)?;
+                                // ::container::set_term_fg(pgid)?;
 
                                 if breakpoint.exit {
                                     return Ok(());
