@@ -115,16 +115,26 @@ pub(super) fn triggers<'a>(
     scope: TriggerScope<'a>,
     fstree: &vfs::tree::Tree<PendingFile>,
 ) -> Result<Vec<TriggerRunner<'a>>, Error> {
-    let trigger_root = Path::new("usr").join("share").join("moss").join("triggers");
+    // Pre-calculate trigger root path once
+    let trigger_root = {
+        let mut path = PathBuf::with_capacity(50);
+        path.push("usr");
+        path.push("share");
+        path.push("moss");
+        path.push("triggers");
+        path
+    };
+
+    let full_trigger_path = scope.root_dir().join(&trigger_root);
 
     // Load appropriate triggers from their locations and convert back to a vec of Trigger
     let triggers = match scope {
-        TriggerScope::Transaction(..) => config::Manager::custom(scope.root_dir().join(trigger_root))
+        TriggerScope::Transaction(..) => config::Manager::custom(&full_trigger_path)
             .load::<TransactionTrigger>()
             .into_iter()
             .map(|t| t.0)
             .collect_vec(),
-        TriggerScope::System(..) => config::Manager::custom(scope.root_dir().join(trigger_root))
+        TriggerScope::System(..) => config::Manager::custom(&full_trigger_path)
             .load::<SystemTrigger>()
             .into_iter()
             .map(|t| t.0)
@@ -190,9 +200,13 @@ fn execute_trigger_directly(trigger: &CompiledHandler) -> Result<(), Error> {
 
             if let Some(code) = cmd.status.code() {
                 if code != 0 {
+                    // Convert outputs once and reuse
+                    let stdout = String::from_utf8_lossy(&cmd.stdout);
+                    let stderr = String::from_utf8_lossy(&cmd.stderr);
+
                     eprintln!("Trigger exited with non-zero status code: {run} {args:?}");
-                    eprintln!("   Stdout: {}", String::from_utf8(cmd.stdout).unwrap());
-                    eprintln!("   Stderr: {}", String::from_utf8(cmd.stderr).unwrap());
+                    eprintln!("   Stdout: {}", stdout);
+                    eprintln!("   Stderr: {}", stderr);
                 }
             } else {
                 eprintln!("Failed to execute trigger: {run} {args:?}");
