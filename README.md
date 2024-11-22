@@ -34,6 +34,12 @@ cd ~/repos/serpent-os/
 git clone https://github.com/serpent-os/tools.git
 cd tools/
 
+# Install a few prerequisites (this how you'd do it on Serpent OS)
+sudo moss it binutils glibc-devel linux-headers clang
+
+# remember to add ~/.cargo/bin to your $PATH if this is how you installed rustfmt
+cargo install rustfmt
+
 # from inside the moss clone, this will build boulder and moss
 # and install them to ${HOME}/.local/bin/ by default
 just get-started
