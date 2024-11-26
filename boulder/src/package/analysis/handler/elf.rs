@@ -5,7 +5,7 @@ use std::{
 };
 
 use elf::{
-    abi::{DT_NEEDED, DT_RUNPATH, DT_SONAME},
+    abi::{DT_NEEDED, DT_RPATH, DT_SONAME},
     endian::AnyEndian,
     file::Class,
     note::Note,
@@ -114,7 +114,7 @@ fn parse_dynamic_section(
                 DT_SONAME => {
                     soname_offset = Some(entry.d_val() as usize);
                 }
-                DT_RUNPATH => {
+                DT_RPATH => {
                     rpath_offset.push(entry.d_val() as usize);
                 }
                 _ => {}
@@ -134,14 +134,8 @@ fn parse_dynamic_section(
     // Resolve offsets against string table and add the applicable
     // depends and provides
     if let Ok(Some((_, strtab))) = elf.dynamic_symbol_table() {
-        let libdir = if matches!(bit_size, Class::ELF64) {
-            "/usr/lib"
-        } else {
-            "/usr/lib32"
-        };
-
         let origin = info.target_path.parent().unwrap().to_string_lossy().to_string();
-        let mut rpaths = vec![libdir.into(), origin.clone()];
+        let mut rpaths = vec![];
 
         let root_dir = info
             .path
@@ -181,13 +175,8 @@ fn parse_dynamic_section(
                     }
                 });
 
-                // ignore RPATH if in root tree
                 let picked = if let Some(rpath_name) = rpath_name.as_ref() {
-                    if in_root_tree {
-                        name
-                    } else {
-                        &rpath_name.to_string_lossy().to_string()
-                    }
+                    &rpath_name.to_string_lossy().to_string()
                 } else {
                     name
                 };
