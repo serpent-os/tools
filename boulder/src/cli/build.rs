@@ -98,7 +98,7 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
         "boulder".into(),
         format!("Build in-progress: {}", pkg_name),
         "block".into(),
-    )?;
+    );
 
     // Build & package from within container
     container::exec::<Error>(paths, networking, || {
@@ -143,6 +143,4 @@ pub enum Error {
     Container(#[from] container::Error),
     #[error("setting thread priority")]
     Priority(#[from] thread_priority::Error),
-    #[error("failed to connect to dbus")]
-    Zbus(#[from] moss::signal::Error),
 }
