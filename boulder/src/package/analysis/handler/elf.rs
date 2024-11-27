@@ -5,7 +5,7 @@ use std::{
 };
 
 use elf::{
-    abi::{DT_NEEDED, DT_RPATH, DT_SONAME},
+    abi::{DT_NEEDED, DT_RPATH, DT_RUNPATH, DT_SONAME},
     endian::AnyEndian,
     file::Class,
     note::Note,
@@ -100,6 +100,7 @@ fn parse_dynamic_section(
     let mut needed_offsets = vec![];
     let mut soname_offset = None;
     let mut rpath_offset = vec![];
+    let mut runpath_offset = vec![];
 
     // i.e `/` `usr` `lib` `libfoo.so.1.2.3`
     let in_root_tree = info.target_path.ancestors().skip(1).count() == 3;
@@ -116,6 +117,9 @@ fn parse_dynamic_section(
                 }
                 DT_RPATH => {
                     rpath_offset.push(entry.d_val() as usize);
+                }
+                DT_RUNPATH => {
+                    runpath_offset.push(entry.d_val() as usize);
                 }
                 _ => {}
             }
@@ -145,13 +149,14 @@ fn parse_dynamic_section(
             .and_then(|p| p.to_str())
             .unwrap_or("/mason/install");
 
-        // rpath list
-        for offset in rpath_offset {
-            if let Ok(val) = strtab.get(offset) {
-                for path in val.split(':') {
-                    let path = path.replace("$ORIGIN", &origin);
-                    rpaths.push(path);
-                }
+        for rpath in runpath_offset
+            .iter()
+            .chain(rpath_offset.iter())
+            .filter_map(|v| strtab.get(*v).ok())
+        {
+            for path in rpath.split(':') {
+                let path = path.replace("$ORIGIN", &origin);
+                rpaths.push(path);
             }
         }
 
