@@ -135,7 +135,7 @@ fn parse_dynamic_section(
     // depends and provides
     if let Ok(Some((_, strtab))) = elf.dynamic_symbol_table() {
         let origin = info.target_path.parent().unwrap().to_string_lossy().to_string();
-        let mut rpaths = vec![];
+        let mut rpaths = vec![origin.clone()];
 
         let root_dir = info
             .path
