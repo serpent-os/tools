@@ -164,8 +164,10 @@ fn parse_dynamic_section(
         for offset in needed_offsets {
             if let Ok(name) = strtab.get(offset) {
                 let rpath_name = rpaths.iter().find_map(|rpath| {
-                    let p = root_dir.to_owned() + "/" + rpath + "/" + name;
-                    let path = Path::new(&p);
+                    let local_p = root_dir.to_owned() + "/" + rpath + "/" + name;
+                    let native_p = rpath.to_owned() + "/" + name;
+                    let path = Path::new(&local_p);
+                    let native_path = Path::new(&native_p);
                     if path.exists() {
                         Some(
                             Path::new("/")
@@ -175,6 +177,8 @@ fn parse_dynamic_section(
                                 .skip(3)
                                 .collect::<PathBuf>(),
                         )
+                    } else if native_path.exists() {
+                        Some(Path::new(rpath).join(name).components().skip(3).collect::<PathBuf>())
                     } else {
                         None
                     }
