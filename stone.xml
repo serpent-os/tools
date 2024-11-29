@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <!-- Base stone container type -->
+  <mime-type type="application/x-stone">
+    <comment>Stone Container</comment>
+    <magic priority="50">
+      <!-- Check for \0mos magic (0x006D6F73) -->
+      <match type="big32" offset="0" value="0x006D6F73"/>
+    </magic>
+    <icon name="application-x-stone"/>
+    <generic-icon name="package-x-generic"/>
+  </mime-type>
+
+  <!-- V1 Binary package -->
+  <mime-type type="application/x-stone-binary">
+    <comment>Stone Binary Package</comment>
+    <sub-class-of type="application/x-stone"/>
+    <magic priority="60">
+      <match type="big32" offset="0" value="0x006D6F73">
+        <!-- Check version = 1 (BE) -->
+        <match type="big32" offset="28" value="0x00000001">
+          <!-- Check file type = 1 (Binary) -->
+          <match type="byte" offset="27" value="1"/>
+        </match>
+      </match>
+    </magic>
+    <glob pattern="*.stone"/>
+    <icon name="application-x-stone-binary"/>
+    <generic-icon name="package-x-generic"/>
+  </mime-type>
+
+  <!-- V1 Delta package -->
+  <mime-type type="application/x-stone-delta">
+    <comment>Stone Delta Package</comment>
+    <sub-class-of type="application/x-stone"/>
+    <magic priority="50">
+      <match type="big32" offset="0" value="0x006D6F73">
+        <match type="big32" offset="28" value="0x00000001">
+          <!-- Check file type = 2 (Delta) -->
+          <match type="byte" offset="27" value="2"/>
+        </match>
+      </match>
+    </magic>
+    <glob pattern="*.stone"/>
+    <icon name="application-x-stone-delta"/>
+    <generic-icon name="package-x-generic"/>
+  </mime-type>
+
+  <!-- V1 Repository index -->
+  <mime-type type="application/x-stone-repository">
+    <comment>Stone Repository Index</comment>
+    <sub-class-of type="application/x-stone"/>
+    <magic priority="50">
+      <match type="big32" offset="0" value="0x006D6F73">
+        <match type="big32" offset="28" value="0x00000001">
+          <!-- Check file type = 3 (Repository) -->
+          <match type="byte" offset="27" value="3"/>
+        </match>
+      </match>
+    </magic>
+    <glob pattern="*.index"/>
+    <icon name="application-x-stone-repository"/>
+    <generic-icon name="package-x-generic"/>
+  </mime-type>
+
+  <!-- V1 Build manifest -->
+  <mime-type type="application/x-stone-manifest">
+    <comment>Stone Build Manifest</comment>
+    <sub-class-of type="application/x-stone"/>
+    <magic priority="50">
+      <match type="big32" offset="0" value="0x006D6F73">
+        <match type="big32" offset="28" value="0x00000001">
+          <!-- Check file type = 4 (BuildManifest) -->
+          <match type="byte" offset="27" value="4"/>
+        </match>
+      </match>
+    </magic>
+    <glob pattern="manifest.*.bin"/>
+    <icon name="application-x-stone-manifest"/>
+    <generic-icon name="package-x-generic"/>
+  </mime-type>
+
+  <!-- JSON Build manifest -->
+  <mime-type type="application/x-stone-manifest-json">
+    <comment>Stone Build Manifest (JSON)</comment>
+    <sub-class-of type="application/json"/>
+    <glob pattern="*.jsonc"/>
+    <icon name="application-x-stone-manifest"/>
+    <generic-icon name="text-x-generic"/>
+  </mime-type>
+</mime-info>
