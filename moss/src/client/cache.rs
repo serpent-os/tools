@@ -12,7 +12,7 @@ use std::{
 };
 
 use fs_err::tokio::{self as fs, File};
-use futures::StreamExt;
+use futures_util::StreamExt;
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 use url::Url;

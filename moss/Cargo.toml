@@ -29,7 +29,7 @@ diesel_migrations.workspace = true
 itertools.workspace = true
 fnmatch = { path = "../crates/fnmatch" }
 fs-err.workspace = true
-futures.workspace = true
+futures-util.workspace = true
 hex.workspace = true
 libsqlite3-sys.workspace = true
 log.workspace = true

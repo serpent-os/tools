@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use fs_err::{self as fs, File};
-use futures::{stream, StreamExt, TryStreamExt};
+use futures_util::{stream, StreamExt, TryStreamExt};
 use thiserror::Error;
 use xxhash_rust::xxh3::xxh3_64;
 

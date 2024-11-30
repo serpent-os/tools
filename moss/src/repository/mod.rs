@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use derive_more::{Display, From, Into};
 use fs_err::tokio::File;
-use futures::StreamExt;
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::io::{self, AsyncWriteExt};
