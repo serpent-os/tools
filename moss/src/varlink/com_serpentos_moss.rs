@@ -107,7 +107,7 @@ impl From<&varlink::Reply> for ErrorKind {
     }
 }
 pub trait VarlinkCallError: varlink::CallTrait {}
-impl<'a> VarlinkCallError for varlink::Call<'a> {}
+impl VarlinkCallError for varlink::Call<'_> {}
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Version_Reply {
     pub r#version: String,
@@ -120,7 +120,7 @@ pub trait Call_Version: VarlinkCallError {
         self.reply_struct(Version_Reply { r#version }.into())
     }
 }
-impl<'a> Call_Version for varlink::Call<'a> {}
+impl Call_Version for varlink::Call<'_> {}
 pub trait VarlinkInterface {
     fn version(&self, call: &mut dyn Call_Version) -> varlink::Result<()>;
     fn call_upgraded(&self, _call: &mut varlink::Call, _bufreader: &mut dyn BufRead) -> varlink::Result<Vec<u8>> {
