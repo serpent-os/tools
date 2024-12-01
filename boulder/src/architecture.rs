@@ -39,9 +39,9 @@ impl Architecture {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Display)]
 pub enum BuildTarget {
-    #[display(fmt = "{_0}")]
+    #[display("{_0}")]
     Native(Architecture),
-    #[display(fmt = "emul32/{_0}")]
+    #[display("emul32/{_0}")]
     Emul32(Architecture),
 }
 

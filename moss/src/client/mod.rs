@@ -17,7 +17,7 @@ use std::{
 };
 
 use fs_err::{self as fs, create_dir_all};
-use futures::{stream, StreamExt, TryStreamExt};
+use futures_util::{stream, StreamExt, TryStreamExt};
 use nix::{
     errno::Errno,
     fcntl::{self, OFlag},

@@ -14,7 +14,7 @@ use boulder::{
 };
 use clap::Parser;
 use fs_err as fs;
-use futures::StreamExt;
+use futures_util::StreamExt;
 use itertools::Itertools;
 use moss::{request, runtime};
 use sha2::{Digest, Sha256};

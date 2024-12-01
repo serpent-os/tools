@@ -10,7 +10,7 @@ use std::{
 };
 
 use fs_err as fs;
-use futures::{stream, StreamExt, TryStreamExt};
+use futures_util::{stream, StreamExt, TryStreamExt};
 use moss::runtime;
 use nix::unistd::{linkat, LinkatFlags};
 use sha2::{Digest, Sha256};

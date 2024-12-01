@@ -377,7 +377,7 @@ fn breakpoint_line(
 
     let has_key = |line: &str, key: &str| {
         line.split_once(':')
-            .map_or(false, |(leading, _)| leading.trim().ends_with(key))
+            .is_some_and(|(leading, _)| leading.trim().ends_with(key))
     };
 
     let mut lines = recipe

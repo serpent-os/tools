@@ -30,7 +30,7 @@ pub fn ignore(signals: impl IntoIterator<Item = Signal>) -> Result<Guard, Error>
 
 // https://www.freedesktop.org/wiki/Software/systemd/inhibit/
 pub fn inhibit(what: Vec<&str>, who: String, why: String, mode: String) -> Result<message::Body, Error> {
-    let conn = zbus::blocking::ConnectionBuilder::system()?.build()?;
+    let conn = zbus::blocking::Connection::system()?;
     let msg = conn.call_method(
         Some("org.freedesktop.login1"),
         "/org/freedesktop/login1",

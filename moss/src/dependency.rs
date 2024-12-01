@@ -98,7 +98,7 @@ impl From<Kind> for payload::meta::Dependency {
 /// A Dependency in moss is simplistic in that it only contains
 /// a target and a Kind, ie. `pkgconfig(zlib)`
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Display)]
-#[display(fmt = "{kind}({name})")]
+#[display("{kind}({name})")]
 pub struct Dependency {
     /// Specific type of dependency
     pub kind: Kind,
@@ -168,7 +168,7 @@ impl TryFrom<String> for Dependency {
 
 /// A provider is the inverse of a [`Dependency`] - providing the matching requirement
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Display)]
-#[display(fmt = "{kind}({name})")]
+#[display("{kind}({name})")]
 pub struct Provider {
     /// Specific type of dependency
     pub kind: Kind,
