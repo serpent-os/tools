@@ -1,7 +1,6 @@
 default-x86_64:
   repositories:
     volatile:
-      uri: "https://dev.serpentos.com/volatile/x86_64/stone.index"
-      description: "Volatile moss repo"
+      uri: "https://packages.serpentos.com/volatile/x86_64/stone.index"
+      description: "Volatile Serpent OS repo"
       priority: 0
-

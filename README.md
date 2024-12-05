@@ -78,7 +78,7 @@ just get-started
 mkdir -pv sosroot/
 
 # Add the volatile repo
-moss -D sosroot/ repo add volatile https://dev.serpentos.com/volatile/x86_64/stone.index
+moss -D sosroot/ repo add volatile https://packages.serpentos.com/volatile/x86_64/stone.index
 
 # List packages
 moss -D sosroot/ list available

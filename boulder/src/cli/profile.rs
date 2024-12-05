@@ -34,7 +34,7 @@ pub enum Subcommand {
         help = "profile repositories",
         value_parser = parse_repository,
         help = "repository to add to profile, can be passed multiple times",
-        long_help = "repository to add to profile\n\nExample: --repo name=volatile,uri=https://dev.serpentos.com/volatile/x86_64/stone.index,priority=100"
+        long_help = "repository to add to profile\n\nExample: --repo name=volatile,uri=https://packages.serpentos.com/volatile/x86_64/stone.index,priority=100"
         )]
         repos: Vec<(repository::Id, Repository)>,
     },
