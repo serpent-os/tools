@@ -86,6 +86,8 @@ pub enum Subcommand {
             help = "Overwrite the recipe file in place instead of printing to standard output"
         )]
         overwrite: bool,
+        #[arg(long, default_value = "false", help = "Don't increment the release number")]
+        no_bump: bool,
     },
     #[command(about = "Print macro definitions")]
     Macros {
@@ -116,7 +118,8 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
             overwrite,
             version,
             upstreams,
-        } => update(recipe, overwrite, version, upstreams),
+            no_bump,
+        } => update(recipe, overwrite, version, upstreams, no_bump),
         Subcommand::Macros { _macro } => macros(_macro, env),
     }
 }
@@ -163,7 +166,13 @@ fn new(output: PathBuf, upstreams: Vec<Url>) -> Result<(), Error> {
     Ok(())
 }
 
-fn update(recipe: Option<PathBuf>, overwrite: bool, version: String, upstreams: Vec<Upstream>) -> Result<(), Error> {
+fn update(
+    recipe: Option<PathBuf>,
+    overwrite: bool,
+    version: String,
+    upstreams: Vec<Upstream>,
+    no_bump: bool,
+) -> Result<(), Error> {
     if overwrite && recipe.is_none() {
         return Err(Error::OverwriteRecipeRequired);
     }
@@ -191,7 +200,10 @@ fn update(recipe: Option<PathBuf>, overwrite: bool, version: String, upstreams: 
         GitUpstream(usize, serde_yaml::Value, String),
     }
 
-    let mut updates = vec![Update::Version(version), Update::Release(parsed.source.release + 1)];
+    let mut updates = vec![Update::Version(version)];
+    if !no_bump {
+        updates.push(Update::Release(parsed.source.release + 1));
+    }
 
     for (i, (original, update)) in parsed.upstreams.iter().zip(upstreams).enumerate() {
         match (original, update) {
