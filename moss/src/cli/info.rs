@@ -72,35 +72,52 @@ fn print_paragraph(p: &str) {
     let term_width = TermSize::default().width;
     let available_width = term_width - COLUMN_WIDTH;
 
-    // Split into words and build lines up to available width
-    let mut current_line = String::new();
-    let mut first_line = true;
+    // Split into paragraphs by empty lines
+    let paragraphs = p.lines().collect::<Vec<_>>();
+    let paragraphs = paragraphs
+        .split(|line| line.trim().is_empty())
+        .filter(|para| !para.is_empty());
 
-    for word in p.split_whitespace() {
-        if current_line.len() + word.len() < available_width {
-            if !current_line.is_empty() {
-                current_line.push(' ');
+    let mut first_paragraph = true;
+
+    for paragraph in paragraphs {
+        if !first_paragraph {
+            println!(); // Add blank line between paragraphs
+        }
+
+        // Join the lines and split into words for wrapping
+        let text = paragraph.join(" ");
+        let mut current_line = String::new();
+        let mut first_line = true;
+
+        for word in text.split_whitespace() {
+            if current_line.len() + word.len() < available_width {
+                if !current_line.is_empty() {
+                    current_line.push(' ');
+                }
+                current_line.push_str(word);
+            } else {
+                // Print current line
+                if first_line && first_paragraph {
+                    println!("{}", current_line.dim());
+                    first_line = false;
+                } else {
+                    println!("{:width$} {}", " ", current_line.dim(), width = COLUMN_WIDTH);
+                }
+                current_line = word.to_string();
             }
-            current_line.push_str(word);
-        } else {
-            // Print current line
-            if first_line {
+        }
+
+        // Print any remaining content
+        if !current_line.is_empty() {
+            if first_line && first_paragraph {
                 println!("{}", current_line.dim());
-                first_line = false;
             } else {
                 println!("{:width$} {}", " ", current_line.dim(), width = COLUMN_WIDTH);
             }
-            current_line = word.to_string();
         }
-    }
 
-    // Print any remaining content
-    if !current_line.is_empty() {
-        if first_line {
-            println!("{}", current_line);
-        } else {
-            println!("{:width$} {}", " ", current_line.dim(), width = COLUMN_WIDTH);
-        }
+        first_paragraph = false;
     }
 }
 
