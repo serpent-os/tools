@@ -176,24 +176,13 @@ fn packages(builder: &Builder) -> Vec<&str> {
 const BASE_PACKAGES: &[&str] = &[
     "bash",
     "boulder",
-    "coreutils",
+    "uutils-coreutils",
     "dash",
-    "diffutils",
-    "findutils",
-    "gawk",
     "glibc-devel",
     "grep",
     "layout",
-    "libarchive",
-    "linux-headers",
     "pkgconf",
     "sed",
-    "util-linux",
-    // Needed for chroot
-    "binary(git)",
-    "binary(nano)",
-    "binary(vim)",
-    "binary(ps)",
 ];
 const BASE32_PACKAGES: &[&str] = &["glibc-32bit-devel"];
 
