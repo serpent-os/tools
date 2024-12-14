@@ -4,9 +4,6 @@ edition.workspace = true
 version.workspace = true
 rust-version.workspace = true
 
-[build-dependencies]
-varlink_generator.workspace = true
-
 [dependencies]
 config = { path = "../crates/config" }
 container = { path = "../crates/container" }
@@ -44,7 +41,6 @@ tokio.workspace = true
 tokio-util.workspace = true
 thiserror.workspace = true
 url.workspace = true
-varlink.workspace = true
 xxhash-rust.workspace = true
 zbus.workspace = true
 
