@@ -370,16 +370,16 @@ dependencies = [
 [[package]]
 name = "blsforme"
 version = "0.1.0"
-source = "git+https://github.com/serpent-os/blsforme.git?rev=3c1ca74c220b2297338a2c4be8da55dcf3f438e8#3c1ca74c220b2297338a2c4be8da55dcf3f438e8"
+source = "git+https://github.com/serpent-os/blsforme.git?rev=5076b78850231a21431727fefedd16aaa9d87ee9#5076b78850231a21431727fefedd16aaa9d87ee9"
 dependencies = [
  "blake3",
  "gpt",
  "log",
- "nix 0.28.0",
+ "nix 0.29.0",
  "serde",
  "serde_json",
  "superblock",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
  "topology",
 ]
 
@@ -488,12 +488,6 @@ name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
-
-[[package]]
-name = "cfg_aliases"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
 
 [[package]]
 name = "cfg_aliases"
@@ -1920,25 +1914,13 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab2156c4fce2f8df6c499cc1c763e4394b7482525bf2a9701c9d79d215f519e4"
-dependencies = [
- "bitflags",
- "cfg-if 1.0.0",
- "cfg_aliases 0.1.1",
- "libc",
-]
-
-[[package]]
-name = "nix"
 version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71e2746dc3a24dd78b3cfcb7be93368c6de9963d30f43a6a73998a9cf4b17b46"
 dependencies = [
  "bitflags",
  "cfg-if 1.0.0",
- "cfg_aliases 0.2.1",
+ "cfg_aliases",
  "libc",
  "memoffset",
 ]
@@ -2238,7 +2220,7 @@ version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d5a626c6807713b15cac82a6acaccd6043c9a5408c24baae07611fec3f243da"
 dependencies = [
- "cfg_aliases 0.2.1",
+ "cfg_aliases",
  "libc",
  "once_cell",
  "socket2",
@@ -2764,10 +2746,10 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "superblock"
 version = "0.1.0"
-source = "git+https://github.com/serpent-os/blsforme.git?rev=3c1ca74c220b2297338a2c4be8da55dcf3f438e8#3c1ca74c220b2297338a2c4be8da55dcf3f438e8"
+source = "git+https://github.com/serpent-os/blsforme.git?rev=5076b78850231a21431727fefedd16aaa9d87ee9#5076b78850231a21431727fefedd16aaa9d87ee9"
 dependencies = [
  "log",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
  "uuid",
 ]
 
@@ -3036,13 +3018,13 @@ dependencies = [
 [[package]]
 name = "topology"
 version = "0.1.0"
-source = "git+https://github.com/serpent-os/blsforme.git?rev=3c1ca74c220b2297338a2c4be8da55dcf3f438e8#3c1ca74c220b2297338a2c4be8da55dcf3f438e8"
+source = "git+https://github.com/serpent-os/blsforme.git?rev=5076b78850231a21431727fefedd16aaa9d87ee9#5076b78850231a21431727fefedd16aaa9d87ee9"
 dependencies = [
  "gpt",
  "log",
- "nix 0.28.0",
+ "nix 0.29.0",
  "superblock",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
 ]
 
 [[package]]
