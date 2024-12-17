@@ -6,8 +6,8 @@ actions:
             test -x ./configure || ( echo "%%configure: The ./configure script could not be found" ; exit 1 )
             ./configure %(options_configure)
         dependencies:
-            - autoconf
-            - automake
+            - binary(autoconf)
+            - binary(automake)
 
     # TIP: Add V=1 VERBOSE=1 after '%make' in the recipe if you need a more verbose build
     - make:
@@ -15,14 +15,14 @@ actions:
         command: |
             make -j "%(jobs)"
         dependencies:
-            - make
+            - binary(make)
 
     - make_install:
         description: Install results of build to the destination directory
         command: |
             %make install DESTDIR="%(installroot)"
         dependencies:
-            - make
+            - binary(make)
 
     - reconfigure:
         description: Re autotools-configure a project without an autogen.sh script
@@ -30,8 +30,9 @@ actions:
             autoreconf -vfi || ( echo "%%reconfigure: Failed to run autoreconf"; exit 1 )
             %configure
         dependencies:
-            - autoconf
-            - automake
+            - binary(autoconf)
+            - binary(automake)
+            - binary(autopoint)
 
     - autogen:
         description: Run autogen.sh script, attempting to only configure once
@@ -40,8 +41,9 @@ actions:
             sh ./autogen.sh %(options_configure)
             ./configure %(options_configure)
         dependencies:
-            - autoconf
-            - automake
+            - binary(autoconf)
+            - binary(automake)
+            - binary(autopoint)
 
 definitions:
 
