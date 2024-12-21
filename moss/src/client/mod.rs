@@ -706,21 +706,38 @@ impl Client {
 
                 // Link relative from cache to target
                 let fp = directory.join(hash);
-                linkat(
-                    Some(cache),
-                    fp.to_str().unwrap(),
-                    Some(parent),
-                    subpath,
-                    nix::unistd::LinkatFlags::NoSymlinkFollow,
-                )?;
 
-                // Fix permissions
-                fchmodat(
-                    Some(parent),
-                    subpath,
-                    Mode::from_bits_truncate(item.layout.mode),
-                    nix::sys::stat::FchmodatFlags::NoFollowSymlink,
-                )?;
+                match *id {
+                    // Mystery empty-file hash. Do not allow dupes!
+                    // https://github.com/serpent-os/tools/issues/372
+                    0x99aa06d3014798d86001c324468d497f => {
+                        let fd = fcntl::openat(
+                            parent,
+                            subpath,
+                            OFlag::O_CREAT | OFlag::O_WRONLY | OFlag::O_TRUNC,
+                            Mode::from_bits_truncate(item.layout.mode),
+                        )?;
+                        close(fd)?;
+                    }
+                    // Regular file
+                    _ => {
+                        linkat(
+                            Some(cache),
+                            fp.to_str().unwrap(),
+                            Some(parent),
+                            subpath,
+                            nix::unistd::LinkatFlags::NoSymlinkFollow,
+                        )?;
+
+                        // Fix permissions
+                        fchmodat(
+                            Some(parent),
+                            subpath,
+                            Mode::from_bits_truncate(item.layout.mode),
+                            nix::sys::stat::FchmodatFlags::NoFollowSymlink,
+                        )?;
+                    }
+                }
             }
             layout::Entry::Symlink(source, _) => {
                 symlinkat(source.as_str(), Some(parent), subpath)?;
