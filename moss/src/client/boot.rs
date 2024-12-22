@@ -140,11 +140,16 @@ pub fn synchronize(install: &Installation, layouts: &[(Id, Layout)]) -> Result<(
     let discovered = schema.discover_system_kernels(kernels.iter())?;
 
     // pipe all of our entries into blsforme
-    let entries = discovered.iter().map(blsforme::Entry::new);
+    let mut entries = discovered.iter().map(blsforme::Entry::new).collect::<Vec<_>>();
+    for entry in entries.iter_mut() {
+        if let Err(e) = entry.load_cmdline_snippets(&config) {
+            log::warn!("Failed to load cmdline snippets: {}", e);
+        }
+    }
 
     // If we can't get a manager, find, but don't bomb. Its probably a topology failure.
     let manager = match blsforme::Manager::new(&config) {
-        Ok(m) => m.with_entries(entries).with_bootloader_assets(booty_bits),
+        Ok(m) => m.with_entries(entries.into_iter()).with_bootloader_assets(booty_bits),
         Err(_) => return Ok(()),
     };
 
