@@ -13,6 +13,7 @@ use clap_mangen::Man;
 use moss::{installation, runtime, Installation};
 use thiserror::Error;
 
+mod boot;
 mod extract;
 mod index;
 mod info;
@@ -81,6 +82,7 @@ fn command() -> Command {
                 .hide(true),
         )
         .arg_required_else_help(true)
+        .subcommand(boot::command())
         .subcommand(extract::command())
         .subcommand(index::command())
         .subcommand(info::command())
@@ -166,6 +168,7 @@ pub fn process() -> Result<(), Error> {
     let installation = Installation::open(root, cache.cloned())?;
 
     match matches.subcommand() {
+        Some(("boot", args)) => boot::handle(args, installation).map_err(Error::Boot),
         Some(("extract", args)) => extract::handle(args).map_err(Error::Extract),
         Some(("index", args)) => index::handle(args).map_err(Error::Index),
         Some(("info", args)) => info::handle(args, installation).map_err(Error::Info),
@@ -224,6 +227,9 @@ fn replace_aliases(args: env::Args) -> Vec<String> {
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("boot")]
+    Boot(#[from] boot::Error),
+
     #[error("index")]
     Index(#[from] index::Error),
 
