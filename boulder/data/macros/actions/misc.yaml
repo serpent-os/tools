@@ -1,5 +1,16 @@
 actions:
 
+    - gtk_update_icon_cache:
+        description: Pregenerate icon cache at build time
+        example: |
+            %gtk_update_icon_cache
+        command: |
+            for i in %(installroot)%(datadir)/icons/*/; do
+                gtk-update-icon-cache -f $i
+            done
+        dependencies:
+            - binary(gtk-update-icon-cache)
+
     - install_bin:
         description: Install files to %(bindir)
         example: |
