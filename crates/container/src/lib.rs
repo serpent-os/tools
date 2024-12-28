@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright © 2020-2024 Serpent OS Developers
 //
 // SPDX-License-Identifier: MPL-2.0
-use std::env::set_current_dir;
+
 use std::io;
 use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
@@ -356,6 +356,26 @@ fn add_mount<T: AsRef<Path>>(
         err,
     })?;
     Ok(())
+}
+
+fn set_current_dir(path: impl AsRef<Path>) -> io::Result<()> {
+    #[derive(Debug, Error)]
+    #[error("failed to set current directory to `{}`", path.display())]
+    struct SetCurrentDirError {
+        source: io::Error,
+        path: PathBuf,
+    }
+
+    let path = path.as_ref();
+    std::env::set_current_dir(path).map_err(|source| {
+        io::Error::new(
+            source.kind(),
+            SetCurrentDirError {
+                source,
+                path: path.to_owned(),
+            },
+        )
+    })
 }
 
 fn ignore_sigint() -> Result<(), nix::Error> {
