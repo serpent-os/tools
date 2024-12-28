@@ -451,7 +451,7 @@ pub enum Error {
 enum ContainerError {
     #[error(transparent)]
     Run(Box<dyn std::error::Error>),
-    #[error(transparent)]
+    #[error("io")]
     Io(#[from] io::Error),
 
     // Errors from linux system functions
