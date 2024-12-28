@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright © 2020-2024 Serpent OS Developers
 //
 // SPDX-License-Identifier: MPL-2.0
-use std::env::set_current_dir;
+
 use std::io;
 use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
@@ -9,7 +9,7 @@ use std::process::Command;
 use std::ptr::addr_of_mut;
 use std::sync::atomic::{AtomicI32, Ordering};
 
-use fs_err::{self as fs, copy, create_dir_all, remove_dir};
+use fs_err::{self as fs, copy, create_dir_all, remove_dir, PathExt as _};
 use nix::libc::SIGCHLD;
 use nix::mount::{mount, umount2, MntFlags, MsFlags};
 use nix::sched::{clone, CloneFlags};
@@ -265,7 +265,7 @@ fn pivot(root: &Path, binds: &[Bind]) -> Result<(), ContainerError> {
     add_mount(Some(root), root, None, MsFlags::MS_BIND)?;
 
     for bind in binds {
-        let source = bind.source.canonicalize()?;
+        let source = bind.source.fs_err_canonicalize()?;
         let target = root.join(bind.target.strip_prefix("/").unwrap_or(&bind.target));
 
         add_mount(Some(&source), &target, None, MsFlags::MS_BIND)?;
@@ -356,6 +356,26 @@ fn add_mount<T: AsRef<Path>>(
         err,
     })?;
     Ok(())
+}
+
+fn set_current_dir(path: impl AsRef<Path>) -> io::Result<()> {
+    #[derive(Debug, Error)]
+    #[error("failed to set current directory to `{}`", path.display())]
+    struct SetCurrentDirError {
+        source: io::Error,
+        path: PathBuf,
+    }
+
+    let path = path.as_ref();
+    std::env::set_current_dir(path).map_err(|source| {
+        io::Error::new(
+            source.kind(),
+            SetCurrentDirError {
+                source,
+                path: path.to_owned(),
+            },
+        )
+    })
 }
 
 fn ignore_sigint() -> Result<(), nix::Error> {
@@ -450,8 +470,8 @@ pub enum Error {
 #[derive(Debug, Error)]
 enum ContainerError {
     #[error(transparent)]
-    Run(#[from] Box<dyn std::error::Error>),
-    #[error(transparent)]
+    Run(Box<dyn std::error::Error>),
+    #[error("io")]
     Io(#[from] io::Error),
 
     // Errors from linux system functions
