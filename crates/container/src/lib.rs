@@ -450,7 +450,7 @@ pub enum Error {
 #[derive(Debug, Error)]
 enum ContainerError {
     #[error(transparent)]
-    Run(#[from] Box<dyn std::error::Error>),
+    Run(Box<dyn std::error::Error>),
     #[error(transparent)]
     Io(#[from] io::Error),
 
