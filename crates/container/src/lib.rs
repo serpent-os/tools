@@ -9,7 +9,7 @@ use std::process::Command;
 use std::ptr::addr_of_mut;
 use std::sync::atomic::{AtomicI32, Ordering};
 
-use fs_err::{self as fs, copy, create_dir_all, remove_dir};
+use fs_err::{self as fs, copy, create_dir_all, remove_dir, PathExt as _};
 use nix::libc::SIGCHLD;
 use nix::mount::{mount, umount2, MntFlags, MsFlags};
 use nix::sched::{clone, CloneFlags};
@@ -265,7 +265,7 @@ fn pivot(root: &Path, binds: &[Bind]) -> Result<(), ContainerError> {
     add_mount(Some(root), root, None, MsFlags::MS_BIND)?;
 
     for bind in binds {
-        let source = bind.source.canonicalize()?;
+        let source = bind.source.fs_err_canonicalize()?;
         let target = root.join(bind.target.strip_prefix("/").unwrap_or(&bind.target));
 
         add_mount(Some(&source), &target, None, MsFlags::MS_BIND)?;
