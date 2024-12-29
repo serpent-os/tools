@@ -17,7 +17,7 @@ use crate::Installation;
 use container::Container;
 use itertools::Itertools;
 use serde::Deserialize;
-use thiserror::Error;
+use snafu::{ResultExt as _, Snafu};
 use triggers::format::{CompiledHandler, Handler, Trigger};
 
 use super::PendingFile;
@@ -142,10 +142,11 @@ pub(super) fn triggers<'a>(
     };
 
     // Load trigger collection, process all the paths, convert to scoped TriggerRunner vec
-    let mut collection = triggers::Collection::new(triggers.iter())?;
+    let mut collection = triggers::Collection::new(triggers.iter()).context(TriggersSnafu)?;
     collection.process_paths(fstree.iter().map(|m| m.to_string()));
     let computed_commands = collection
-        .bake()?
+        .bake()
+        .context(TriggersSnafu)?
         .into_iter()
         .map(|trigger| TriggerRunner { scope, trigger })
         .collect_vec();
@@ -171,7 +172,9 @@ impl TriggerRunner<'_> {
                     .bind_rw(self.scope.guest_path("usr"), "/usr")
                     .work_dir("/");
 
-                Ok(isolation.run(|| execute_trigger_directly(&self.trigger))?)
+                Ok(isolation
+                    .run(|| execute_trigger_directly(&self.trigger))
+                    .context(ContainerSnafu)?)
             }
             TriggerScope::System(install, _) => {
                 // OK, if the root == `/` then we can run directly, otherwise we need to containerise with RW.
@@ -185,7 +188,9 @@ impl TriggerRunner<'_> {
                         .bind_rw(self.scope.guest_path("usr"), "/usr")
                         .work_dir("/");
 
-                    Ok(isolation.run(|| execute_trigger_directly(&self.trigger))?)
+                    Ok(isolation
+                        .run(|| execute_trigger_directly(&self.trigger))
+                        .context(ContainerSnafu)?)
                 }
             }
         }
@@ -196,7 +201,11 @@ impl TriggerRunner<'_> {
 fn execute_trigger_directly(trigger: &CompiledHandler) -> Result<(), Error> {
     match trigger.handler() {
         Handler::Run { run, args } => {
-            let cmd = process::Command::new(run).args(args).current_dir("/").output()?;
+            let cmd = process::Command::new(run)
+                .args(args)
+                .current_dir("/")
+                .output()
+                .context(IoSnafu)?;
 
             if let Some(code) = cmd.status.code() {
                 if code != 0 {
@@ -218,14 +227,14 @@ fn execute_trigger_directly(trigger: &CompiledHandler) -> Result<(), Error> {
     Ok(())
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Snafu)]
 pub enum Error {
-    #[error("container")]
-    Container(#[from] container::Error),
+    #[snafu(display("container"))]
+    Container { source: container::Error },
 
-    #[error("triggers")]
-    Triggers(#[from] triggers::Error),
+    #[snafu(display("triggers"))]
+    Triggers { source: triggers::Error },
 
-    #[error("io")]
-    IO(#[from] std::io::Error),
+    #[snafu(display("io"))]
+    Io { source: std::io::Error },
 }

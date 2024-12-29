@@ -1856,6 +1856,7 @@ dependencies = [
  "serde_derive",
  "serpent_buildinfo",
  "sha2",
+ "snafu",
  "stone",
  "strum",
  "thiserror 2.0.3",
