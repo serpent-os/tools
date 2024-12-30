@@ -2529,7 +2529,6 @@ name = "serpent_buildinfo"
 version = "0.24.7"
 dependencies = [
  "chrono",
- "thiserror 2.0.3",
 ]
 
 [[package]]
@@ -3151,7 +3150,7 @@ name = "vfs"
 version = "0.1.0"
 dependencies = [
  "indextree",
- "thiserror 2.0.3",
+ "snafu",
 ]
 
 [[package]]
