@@ -355,15 +355,13 @@ fn add_mount<T: AsRef<Path>>(
         flags,
         Option::<&str>::None,
     )
-    .with_context(|_| MountSnafu {
-        target: target.to_owned(),
-    })?;
+    .with_context(|_| MountSnafu { target })?;
     Ok(())
 }
 
 fn set_current_dir(path: impl AsRef<Path>) -> Result<(), ContainerError> {
     let path = path.as_ref();
-    std::env::set_current_dir(path).with_context(|_| SetCurrentDirSnafu { path: path.to_owned() })
+    std::env::set_current_dir(path).with_context(|_| SetCurrentDirSnafu { path })
 }
 
 fn ignore_sigint() -> Result<(), nix::Error> {

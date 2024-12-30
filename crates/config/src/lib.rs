@@ -9,7 +9,7 @@ use std::{
 
 use fs_err as fs;
 use serde::{de::DeserializeOwned, Serialize};
-use thiserror::Error;
+use snafu::{ResultExt as _, Snafu};
 
 const EXTENSION: &str = "yaml";
 
@@ -74,13 +74,13 @@ impl Manager {
 
         let dir = self.scope.save_dir(&domain);
 
-        fs::create_dir_all(&dir).map_err(|io| SaveError::CreateDir(dir.clone(), io))?;
+        fs::create_dir_all(&dir).context(CreateDirSnafu)?;
 
         let path = dir.join(format!("{name}.{EXTENSION}"));
 
-        let serialized = serde_yaml::to_string(config)?;
+        let serialized = serde_yaml::to_string(config).context(SerializeSnafu)?;
 
-        fs::write(&path, serialized).map_err(|io| SaveError::Write(path, io))?;
+        fs::write(&path, serialized).context(WriteSnafu)?;
 
         Ok(())
     }
@@ -97,18 +97,18 @@ impl Manager {
     }
 }
 
-#[derive(Debug, Error)]
-#[error("$HOME or $XDG_CONFIG_HOME env not set")]
+#[derive(Debug, Snafu)]
+#[snafu(display("$HOME or $XDG_CONFIG_HOME env not set"))]
 pub struct CreateUserError;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Snafu)]
 pub enum SaveError {
-    #[error("create config dir {0:?}")]
-    CreateDir(PathBuf, #[source] io::Error),
-    #[error("serialize config")]
-    Yaml(#[from] serde_yaml::Error),
-    #[error("write config file {0:?}")]
-    Write(PathBuf, #[source] io::Error),
+    #[snafu(display("create config dir"))]
+    CreateDir { source: io::Error },
+    #[snafu(display("serialize config"))]
+    Serialize { source: serde_yaml::Error },
+    #[snafu(display("write config file"))]
+    Write { source: io::Error },
 }
 
 fn enumerate_paths(entry: Entry, resolve: Resolve<'_>, domain: &str) -> Vec<PathBuf> {
