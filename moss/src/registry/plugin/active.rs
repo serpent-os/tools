@@ -99,9 +99,9 @@ impl Active {
 
             packages
                 .into_iter()
-                .filter_map(|id| self.installed_package(id))
-                // Filter for explicit only packages, if applicable
-                .filter_map(|(id, package_flags)| {
+                .filter_map(|id| {
+                    let (id, package_flags) = self.installed_package(id)?;
+                    // Filter for explicit only packages, if applicable
                     if flags.explicit {
                         package_flags.explicit.then_some(id)
                     } else {

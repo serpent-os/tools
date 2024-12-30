@@ -118,10 +118,10 @@ impl<T: BlitFile> Tree<T> {
 
         let others = parent_node
             .children(&self.arena)
-            .filter_map(|n| self.arena.get(n))
             .filter_map(|n| {
-                if n.get().file_name == node.get().file_name {
-                    Some(n.get())
+                let n = self.arena.get(n)?.get();
+                if n.file_name == node.get().file_name {
+                    Some(n)
                 } else {
                     None
                 }
