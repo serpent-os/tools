@@ -41,6 +41,6 @@ impl Record for Index {
     }
 
     fn size(&self) -> usize {
-        std::mem::size_of::<Self>()
+        size_of::<Self>()
     }
 }

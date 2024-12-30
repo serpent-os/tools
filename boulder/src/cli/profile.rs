@@ -88,7 +88,7 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
     }
 }
 
-pub fn list(manager: profile::Manager) -> Result<(), Error> {
+pub fn list(manager: profile::Manager<'_>) -> Result<(), Error> {
     if manager.profiles.is_empty() {
         println!("No profiles have been configured yet");
         return Ok(());

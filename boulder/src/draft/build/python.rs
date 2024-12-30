@@ -15,7 +15,7 @@ pub mod pep517 {
         }
     }
 
-    pub fn process(state: &mut State, file: &File) -> Result<(), Error> {
+    pub fn process(state: &mut State<'_>, file: &File<'_>) -> Result<(), Error> {
         match file.file_name() {
             "pyproject.toml" | "setup.cfg" => state.increment_confidence(100),
             _ => {}
@@ -38,7 +38,7 @@ pub mod setup_tools {
         }
     }
 
-    pub fn process(state: &mut State, file: &File) -> Result<(), Error> {
+    pub fn process(state: &mut State<'_>, file: &File<'_>) -> Result<(), Error> {
         if file.file_name() == "setup.py" {
             state.increment_confidence(100);
         }

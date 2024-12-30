@@ -19,7 +19,7 @@ pub fn phases() -> Phases {
     }
 }
 
-pub fn process(state: &mut State, file: &File) -> Result<(), Error> {
+pub fn process(state: &mut State<'_>, file: &File<'_>) -> Result<(), Error> {
     // Depth too great
     if file.depth() > 0 {
         return Ok(());
@@ -39,7 +39,7 @@ pub fn process(state: &mut State, file: &File) -> Result<(), Error> {
     Ok(())
 }
 
-fn scan_autotools(state: &mut State, path: &Path) -> Result<(), Error> {
+fn scan_autotools(state: &mut State<'_>, path: &Path) -> Result<(), Error> {
     let regex_pkgconfig =
         Regex::new(r"PKG_CHECK_MODULES\s?\(\s?\[([A-Za-z_]+)\s?\]\s?,\s?\[\s?(\s?[A-Za-z0-9\-_+]+)\s?]")?;
 

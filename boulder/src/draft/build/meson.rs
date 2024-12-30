@@ -19,7 +19,7 @@ pub fn phases() -> Phases {
     }
 }
 
-pub fn process(state: &mut State, file: &File) -> Result<(), Error> {
+pub fn process(state: &mut State<'_>, file: &File<'_>) -> Result<(), Error> {
     match file.file_name() {
         "meson.build" if file.depth() == 0 => {
             state.increment_confidence(100);
@@ -34,7 +34,7 @@ pub fn process(state: &mut State, file: &File) -> Result<(), Error> {
     Ok(())
 }
 
-fn scan_meson(state: &mut State, path: &Path) -> Result<(), Error> {
+fn scan_meson(state: &mut State<'_>, path: &Path) -> Result<(), Error> {
     let regex_dependency = Regex::new(r"dependency\s?\(\s?'\s?([A-Za-z0-9+-_]+)")?;
     let regex_program = Regex::new(r"find_program\s?\(\s?'\s?([A-Za-z0-9+-_]+)")?;
 

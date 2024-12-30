@@ -261,7 +261,7 @@ impl<'a> From<&'a [Layout]> for Payload<'a> {
 }
 
 fn encode_payload(
-    payload: InnerPayload,
+    payload: InnerPayload<'_>,
     hasher: &mut digest::Hasher,
     encoder: &mut zstd::Encoder,
 ) -> Result<EncodedPayload, Error> {

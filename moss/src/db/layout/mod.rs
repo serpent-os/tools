@@ -149,7 +149,7 @@ fn batch_remove_impl(packages: &[&str], tx: &mut SqliteConnection) -> Result<(),
     Ok(())
 }
 
-fn map_layout(result: diesel::QueryResult<model::Layout>) -> Result<(package::Id, payload::Layout), Error> {
+fn map_layout(result: QueryResult<model::Layout>) -> Result<(package::Id, payload::Layout), Error> {
     let row = result?;
 
     let entry = decode_entry(row.entry_type, row.entry_value1, row.entry_value2).ok_or(Error::LayoutEntryDecode)?;

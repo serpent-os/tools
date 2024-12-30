@@ -170,7 +170,7 @@ impl Scope {
         .dir(domain)
     }
 
-    fn load_with(&self) -> Vec<(Entry, Resolve)> {
+    fn load_with(&self) -> Vec<(Entry, Resolve<'_>)> {
         match &self {
             // System we search / merge all base file / .d files
             // from vendor then admin

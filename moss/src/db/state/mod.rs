@@ -56,8 +56,8 @@ impl Database {
                 .into_iter()
                 .map(|row| {
                     (
-                        state::Id::from(row.state_id),
-                        state::Selection {
+                        Id::from(row.state_id),
+                        Selection {
                             package: row.package_id,
                             explicit: row.explicit,
                             reason: row.reason,
@@ -95,7 +95,7 @@ impl Database {
                 .load_iter(conn)?
                 .map(|result| {
                     let row = result?;
-                    Ok(state::Selection {
+                    Ok(Selection {
                         package: row.package_id,
                         explicit: row.explicit,
                         reason: row.reason,
@@ -154,11 +154,11 @@ impl Database {
             .and_then(|id| self.get(id))
     }
 
-    pub fn remove(&self, state: &state::Id) -> Result<(), Error> {
+    pub fn remove(&self, state: &Id) -> Result<(), Error> {
         self.batch_remove(Some(state))
     }
 
-    pub fn batch_remove<'a>(&self, states: impl IntoIterator<Item = &'a state::Id>) -> Result<(), Error> {
+    pub fn batch_remove<'a>(&self, states: impl IntoIterator<Item = &'a Id>) -> Result<(), Error> {
         self.conn.exclusive_tx(|tx| {
             let states = states.into_iter().map(|id| i32::from(*id)).collect::<Vec<_>>();
 

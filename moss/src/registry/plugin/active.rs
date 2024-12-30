@@ -10,7 +10,7 @@ use crate::{db, package, Package, Provider, State};
 #[derive(Debug, Clone)]
 pub struct Active {
     state: Option<State>,
-    db: crate::db::meta::Database,
+    db: db::meta::Database,
 }
 
 impl PartialEq for Active {
@@ -23,7 +23,7 @@ impl Eq for Active {}
 
 impl Active {
     /// Return a new Active plugin for the given state + install database
-    pub fn new(state: Option<State>, db: crate::db::meta::Database) -> Self {
+    pub fn new(state: Option<State>, db: db::meta::Database) -> Self {
         Self { state, db }
     }
 
@@ -42,7 +42,7 @@ impl Active {
     }
 
     /// Query, restricted to state
-    fn query(&self, flags: package::Flags, filter: Option<db::meta::Filter>) -> Vec<Package> {
+    fn query(&self, flags: package::Flags, filter: Option<db::meta::Filter<'_>>) -> Vec<Package> {
         if flags.installed || flags == package::Flags::default() {
             // TODO: Error handling
             let packages = match self.db.query(filter) {

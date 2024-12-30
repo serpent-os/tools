@@ -64,7 +64,7 @@ pub enum Header {
 
 impl Header {
     /// Size of the encoded header in bytes
-    pub const SIZE: usize = std::mem::size_of::<AgnosticHeader>();
+    pub const SIZE: usize = size_of::<AgnosticHeader>();
 
     pub fn version(&self) -> Version {
         match self {
@@ -113,7 +113,7 @@ impl Header {
 
 #[derive(Debug, Error)]
 pub enum DecodeError {
-    #[error("Header must be {} bytes long", std::mem::size_of::<AgnosticHeader>())]
+    #[error("Header must be {} bytes long", size_of::<AgnosticHeader>())]
     NotEnoughBytes,
     #[error("Invalid magic")]
     InvalidMagic,

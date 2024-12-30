@@ -62,7 +62,7 @@ pub struct Meta {
 }
 
 impl Meta {
-    pub fn from_stone_payload(payload: &[stone::payload::Meta]) -> Result<Self, MissingMetaFieldError> {
+    pub fn from_stone_payload(payload: &[payload::Meta]) -> Result<Self, MissingMetaFieldError> {
         let name = find_meta_string(payload, payload::meta::Tag::Name)?;
         let version_identifier = find_meta_string(payload, payload::meta::Tag::Version)?;
         let source_release = find_meta_u64(payload, payload::meta::Tag::Release)?;

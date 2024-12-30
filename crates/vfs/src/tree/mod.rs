@@ -206,12 +206,12 @@ impl<T: BlitFile> Tree<T> {
     }
 
     /// Return structured view beginning at `/`
-    pub fn structured(&self) -> Option<Element<T>> {
+    pub fn structured(&self) -> Option<Element<'_, T>> {
         self.resolve_node("/").map(|root| self.structured_children(root))
     }
 
     /// For the given node, recursively convert to Element::Directory of Child
-    fn structured_children(&self, start: &NodeId) -> Element<T> {
+    fn structured_children(&self, start: &NodeId) -> Element<'_, T> {
         let node = &self.arena[*start];
         let item = node.get();
         let partial = item.file_name.as_deref().unwrap_or_default();

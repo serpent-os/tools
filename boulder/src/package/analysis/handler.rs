@@ -15,11 +15,11 @@ use super::{BoxError, BucketMut, Decision, Response};
 
 mod elf;
 
-pub fn include_any(_bucket: &mut BucketMut, _info: &mut PathInfo) -> Result<Response, BoxError> {
+pub fn include_any(_bucket: &mut BucketMut<'_>, _info: &mut PathInfo) -> Result<Response, BoxError> {
     Ok(Decision::IncludeFile.into())
 }
 
-pub fn ignore_blocked(_bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Response, BoxError> {
+pub fn ignore_blocked(_bucket: &mut BucketMut<'_>, info: &mut PathInfo) -> Result<Response, BoxError> {
     // non-/usr = bad
     if !info.target_path.starts_with("/usr") {
         return Ok(Decision::IgnoreFile {
@@ -41,7 +41,7 @@ pub fn ignore_blocked(_bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Re
     Ok(Decision::NextHandler.into())
 }
 
-pub fn binary(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Response, BoxError> {
+pub fn binary(bucket: &mut BucketMut<'_>, info: &mut PathInfo) -> Result<Response, BoxError> {
     if info.target_path.starts_with("/usr/bin") {
         let provider = Provider {
             kind: dependency::Kind::Binary,
@@ -59,7 +59,7 @@ pub fn binary(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Response, B
     Ok(Decision::NextHandler.into())
 }
 
-pub fn pkg_config(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Response, BoxError> {
+pub fn pkg_config(bucket: &mut BucketMut<'_>, info: &mut PathInfo) -> Result<Response, BoxError> {
     let file_name = info.file_name();
 
     if !info.has_component("pkgconfig") || !file_name.ends_with(".pc") {
@@ -121,7 +121,7 @@ pub fn pkg_config(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Respons
     Ok(Decision::NextHandler.into())
 }
 
-pub fn python(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Response, BoxError> {
+pub fn python(bucket: &mut BucketMut<'_>, info: &mut PathInfo) -> Result<Response, BoxError> {
     let file_path = info.path.clone().into_os_string().into_string().unwrap_or_default();
     let is_dist_info = file_path.contains(".dist-info") && info.file_name().ends_with("METADATA");
     let is_egg_info = file_path.contains(".egg-info") && info.file_name().ends_with("PKG-INFO");
@@ -181,7 +181,7 @@ pub fn python(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Response, B
     Ok(Decision::NextHandler.into())
 }
 
-pub fn cmake(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Response, BoxError> {
+pub fn cmake(bucket: &mut BucketMut<'_>, info: &mut PathInfo) -> Result<Response, BoxError> {
     let file_name = info.file_name();
 
     if (!file_name.ends_with("Config.cmake") && !file_name.ends_with("-config.cmake"))

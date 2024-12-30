@@ -156,7 +156,7 @@ impl Download {
         }
 
         impl<W: Write> Write for ProgressWriter<'_, W> {
-            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
                 let bytes = self.writer.write(buf)?;
 
                 self.written += bytes as u64;
@@ -170,7 +170,7 @@ impl Download {
                 Ok(bytes)
             }
 
-            fn flush(&mut self) -> std::io::Result<()> {
+            fn flush(&mut self) -> io::Result<()> {
                 self.writer.flush()
             }
         }

@@ -29,7 +29,7 @@ compile_error!(
     "feature \"compat_dlang_emul_both\" and feature \"compat_dlang_emul_flush\" cannot be enabled at the same time"
 );
 
-pub fn elf(bucket: &mut BucketMut, info: &mut PathInfo) -> Result<Response, BoxError> {
+pub fn elf(bucket: &mut BucketMut<'_>, info: &mut PathInfo) -> Result<Response, BoxError> {
     let file_name = info.file_name();
 
     if file_name.ends_with(".debug") && info.has_component("debug") {
@@ -91,7 +91,7 @@ fn parse_elf(path: &Path) -> Result<elf::ElfStream<AnyEndian, File>, BoxError> {
 
 fn parse_dynamic_section(
     elf: &mut elf::ElfStream<AnyEndian, File>,
-    bucket: &mut BucketMut,
+    bucket: &mut BucketMut<'_>,
     machine_isa: &str,
     bit_size: Class,
     info: &PathInfo,
@@ -292,7 +292,7 @@ fn parse_dynamic_section(
     }
 }
 
-fn parse_interp_section(elf: &mut elf::ElfStream<AnyEndian, File>, bucket: &mut BucketMut, machine_isa: &str) {
+fn parse_interp_section(elf: &mut elf::ElfStream<AnyEndian, File>, bucket: &mut BucketMut<'_>, machine_isa: &str) {
     let Some(section) = elf.section_header_by_name(".interp").ok().flatten().copied() else {
         return;
     };
@@ -330,7 +330,7 @@ fn parse_build_id(elf: &mut elf::ElfStream<AnyEndian, File>) -> Option<String> {
 }
 
 fn split_debug(
-    bucket: &BucketMut,
+    bucket: &BucketMut<'_>,
     info: &PathInfo,
     bit_size: Class,
     build_id: &str,
@@ -381,7 +381,7 @@ fn split_debug(
     Ok(Some(debug_info_path))
 }
 
-fn strip(bucket: &BucketMut, info: &PathInfo) -> Result<(), BoxError> {
+fn strip(bucket: &BucketMut<'_>, info: &PathInfo) -> Result<(), BoxError> {
     if !bucket.recipe.parsed.options.strip {
         return Ok(());
     }

@@ -10,3 +10,6 @@ rust-version.workspace = true
 crossterm.workspace = true
 indicatif.workspace = true
 dialoguer.workspace = true
+
+[lints]
+workspace = true

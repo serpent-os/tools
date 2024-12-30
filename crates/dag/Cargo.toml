@@ -8,3 +8,6 @@ rust-version.workspace = true
 
 [dependencies]
 petgraph.workspace = true
+
+[lints]
+workspace = true
