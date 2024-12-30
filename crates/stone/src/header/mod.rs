@@ -40,7 +40,7 @@ pub struct AgnosticHeader {
 }
 
 impl AgnosticHeader {
-    fn decode<R: Read>(mut reader: R) -> Result<Self, io::Error> {
+    fn decode<R: Read>(mut reader: R) -> io::Result<Self> {
         let magic = reader.read_array()?;
         let data = reader.read_array()?;
         let version = reader.read_array()?;
@@ -48,7 +48,7 @@ impl AgnosticHeader {
         Ok(Self { magic, data, version })
     }
 
-    fn encode<W: Write>(&self, writer: &mut W) -> Result<(), io::Error> {
+    fn encode<W: Write>(&self, writer: &mut W) -> io::Result<()> {
         writer.write_array(self.magic)?;
         writer.write_array(self.data)?;
         writer.write_array(self.version)?;
@@ -78,7 +78,7 @@ impl Header {
         }
     }
 
-    pub fn encode<W: Write>(&self, writer: &mut W) -> Result<(), io::Error> {
+    pub fn encode<W: Write>(&self, writer: &mut W) -> io::Result<()> {
         let version = u32::to_be_bytes(self.version() as u32);
 
         let data = match self {

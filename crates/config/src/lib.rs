@@ -85,7 +85,7 @@ impl Manager {
         Ok(())
     }
 
-    pub fn delete<T: Config>(&self, name: impl fmt::Display) -> Result<(), io::Error> {
+    pub fn delete<T: Config>(&self, name: impl fmt::Display) -> io::Result<()> {
         let domain = T::domain();
 
         let dir = self.scope.save_dir(&domain);

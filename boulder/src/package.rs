@@ -211,7 +211,7 @@ fn resolve_packages(
     Ok(packages)
 }
 
-pub fn sync_artefacts(paths: &Paths) -> Result<(), io::Error> {
+pub fn sync_artefacts(paths: &Paths) -> io::Result<()> {
     for path in util::enumerate_files(&paths.artefacts().host, |_| true)? {
         let filename = path.file_name().and_then(|p| p.to_str()).unwrap_or_default();
 

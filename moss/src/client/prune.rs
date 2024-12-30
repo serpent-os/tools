@@ -260,7 +260,7 @@ fn remove_orphaned_files(
 }
 
 /// Returns all nested files under `root` and parses the file name as a hash
-fn enumerate_file_hashes(root: impl AsRef<Path>) -> Result<BTreeSet<String>, io::Error> {
+fn enumerate_file_hashes(root: impl AsRef<Path>) -> io::Result<BTreeSet<String>> {
     let files = enumerate_files(root)?;
 
     let path_to_hash = |path: PathBuf| {
@@ -274,7 +274,7 @@ fn enumerate_file_hashes(root: impl AsRef<Path>) -> Result<BTreeSet<String>, io:
 }
 
 /// Returns all nested files under `root`
-fn enumerate_files(root: impl AsRef<Path>) -> Result<Vec<PathBuf>, io::Error> {
+fn enumerate_files(root: impl AsRef<Path>) -> io::Result<Vec<PathBuf>> {
     use rayon::prelude::*;
 
     fn recurse(dir: impl AsRef<Path>) -> io::Result<Vec<PathBuf>> {
@@ -313,7 +313,7 @@ fn enumerate_files(root: impl AsRef<Path>) -> Result<Vec<PathBuf>, io::Error> {
 /// Remove all empty folders from `starting` and moving up until `root`
 ///
 /// `root` must be a prefix / ancestor of `starting`
-fn remove_empty_dirs(starting: &Path, root: &Path) -> Result<(), io::Error> {
+fn remove_empty_dirs(starting: &Path, root: &Path) -> io::Result<()> {
     if !starting.starts_with(root) || !starting.is_dir() || !root.is_dir() {
         return Ok(());
     }

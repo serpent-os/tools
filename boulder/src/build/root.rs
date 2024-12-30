@@ -77,7 +77,7 @@ pub fn clean(builder: &Builder) -> Result<(), Error> {
             }
         }
 
-        Ok(()) as Result<_, io::Error>
+        Ok(()) as io::Result<_>
     })?;
 
     // Now we can safely recreate the rootfs

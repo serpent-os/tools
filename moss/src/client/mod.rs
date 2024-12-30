@@ -758,7 +758,7 @@ impl Client {
 }
 
 /// Add root symlinks & os-release file
-fn create_root_links(root: &Path) -> Result<(), io::Error> {
+fn create_root_links(root: &Path) -> io::Result<()> {
     let links = vec![
         ("usr/sbin", "sbin"),
         ("usr/bin", "bin"),
