@@ -15,7 +15,7 @@
 //! ```
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::{convert::Infallible, str::FromStr};
+use std::str::FromStr;
 
 use regex::Regex;
 use serde::{de, Deserialize};
@@ -146,10 +146,6 @@ impl Pattern {
 /// [thiserror] compatible Error
 #[derive(Error, Debug)]
 pub enum Error {
-    /// Corrupt string (unicode)
-    #[error("malformed: {0}")]
-    String(#[from] Infallible),
-
     /// Illegal group syntax
     #[error("malformed group")]
     Group,
@@ -178,11 +174,11 @@ fn fragments_from_string(s: &str) -> Result<Vec<Fragment>, Error> {
                     if splits.len() != 2 {
                         return Err(Error::Group);
                     }
-                    let key = splits.first().ok_or(Error::Group)?;
-                    let value = splits.get(1).ok_or(Error::Group)?;
+                    let key = *splits.first().ok_or(Error::Group)?;
+                    let value = *splits.get(1).ok_or(Error::Group)?;
 
                     let subpattern = fragments_from_string(value)?;
-                    builder.push(Fragment::Group(String::from_str(key)?, subpattern));
+                    builder.push(Fragment::Group(key.to_owned(), subpattern));
                 } else {
                     return Err(Error::Group);
                 }
