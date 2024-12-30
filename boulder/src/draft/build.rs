@@ -14,7 +14,7 @@ mod cmake;
 mod meson;
 mod python;
 
-pub type Error = Box<dyn std::error::Error>;
+pub type Error = Box<dyn std::error::Error + Send + Sync>;
 
 /// A build system
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, strum::Display)]

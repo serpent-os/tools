@@ -15,11 +15,11 @@
 //! ```
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::{convert::Infallible, str::FromStr};
+use std::str::FromStr;
 
 use regex::Regex;
 use serde::{de, Deserialize};
-use thiserror::Error;
+use snafu::{ResultExt as _, Snafu};
 
 #[derive(Debug)]
 enum Fragment {
@@ -143,20 +143,15 @@ impl Pattern {
     }
 }
 
-/// [thiserror] compatible Error
-#[derive(Error, Debug)]
+#[derive(Debug, Snafu)]
 pub enum Error {
-    /// Corrupt string (unicode)
-    #[error("malformed: {0}")]
-    String(#[from] Infallible),
-
     /// Illegal group syntax
-    #[error("malformed group")]
+    #[snafu(display("malformed group"))]
     Group,
 
     /// Illegal regex
-    #[error("invalid regex: {0}")]
-    Regex(#[from] regex::Error),
+    #[snafu(display("invalid regex"))]
+    Regex { source: regex::Error },
 }
 
 fn fragments_from_string(s: &str) -> Result<Vec<Fragment>, Error> {
@@ -178,11 +173,11 @@ fn fragments_from_string(s: &str) -> Result<Vec<Fragment>, Error> {
                     if splits.len() != 2 {
                         return Err(Error::Group);
                     }
-                    let key = splits.first().ok_or(Error::Group)?;
-                    let value = splits.get(1).ok_or(Error::Group)?;
+                    let key = *splits.first().ok_or(Error::Group)?;
+                    let value = *splits.get(1).ok_or(Error::Group)?;
 
                     let subpattern = fragments_from_string(value)?;
-                    builder.push(Fragment::Group(String::from_str(key)?, subpattern));
+                    builder.push(Fragment::Group(key.to_owned(), subpattern));
                 } else {
                     return Err(Error::Group);
                 }
@@ -254,7 +249,7 @@ impl FromStr for Pattern {
 
         Ok(Self {
             pattern: s.into(),
-            regex: Regex::new(&format!("^{compiled}$"))?,
+            regex: Regex::new(&format!("^{compiled}$")).context(RegexSnafu)?,
             groups: groups.into_iter().collect(),
         })
     }

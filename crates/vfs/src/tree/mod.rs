@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::vec;
 
 use indextree::{Arena, Descendants, NodeId};
-use thiserror::Error;
+use snafu::Snafu;
 
 use crate::path;
 
@@ -112,44 +112,45 @@ impl<T: BlitFile> Tree<T> {
     /// Add a child to the given parent node
     fn add_child_to_node(&mut self, node_id: NodeId, parent: &str) -> Result<(), Error> {
         let node = self.arena.get(node_id).unwrap();
-        if let Some(parent_node) = self.map.get(parent) {
-            let others = parent_node
-                .children(&self.arena)
-                .filter_map(|n| self.arena.get(n))
-                .filter_map(|n| {
-                    if n.get().file_name == node.get().file_name {
-                        Some(n.get())
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-            if !others.is_empty() {
-                // TODO: Reenable
-                // Err(Error::Duplicate(
-                //     node.get().path(),
-                //     node.get().id(),
-                //     others.first().unwrap().id(),
-                // ))
+        let Some(parent_node) = self.map.get(parent) else {
+            return MissingParentSnafu { parent }.fail();
+        };
 
-                // Report duplicate and skip for now
-                eprintln!(
-                    "error: {}",
-                    Error::Duplicate(
-                        node.get().path.clone(),
-                        node.get().id.clone(),
-                        others.first().unwrap().id.clone()
-                    )
-                );
+        let others = parent_node
+            .children(&self.arena)
+            .filter_map(|n| self.arena.get(n))
+            .filter_map(|n| {
+                if n.get().file_name == node.get().file_name {
+                    Some(n.get())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        if !others.is_empty() {
+            // TODO: Reenable
+            // return DuplicateSnafu {
+            //     node_path: &node.get().path,
+            //     node_id: &node.get().id,
+            //     other_id: &others.first().unwrap().id,
+            // }
+            // .fail();
 
-                Ok(())
-            } else {
-                parent_node.append(node_id, &mut self.arena);
-                Ok(())
-            }
+            // Report duplicate and skip for now
+            eprintln!(
+                "error: {}",
+                DuplicateSnafu {
+                    node_path: &node.get().path,
+                    node_id: &node.get().id,
+                    other_id: &others.first().unwrap().id,
+                }
+                .build()
+            );
         } else {
-            Err(Error::MissingParent(parent.to_string()))
+            parent_node.append(node_id, &mut self.arena);
         }
+
+        Ok(())
     }
 
     pub fn print(&self) {
@@ -254,11 +255,15 @@ impl<'a, T: BlitFile> Iterator for TreeIterator<'a, T> {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Snafu)]
 pub enum Error {
-    #[error("missing parent: {0}")]
-    MissingParent(String),
+    #[snafu(display("missing parent: {parent}"))]
+    MissingParent { parent: String },
 
-    #[error("duplicate entry: {0} {1} attempts to overwrite {2}")]
-    Duplicate(String, String, String),
+    #[snafu(display("duplicate entry: {node_path} {node_id} attempts to overwrite {other_id}"))]
+    Duplicate {
+        node_path: String,
+        node_id: String,
+        other_id: String,
+    },
 }

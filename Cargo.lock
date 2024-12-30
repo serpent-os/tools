@@ -613,7 +613,7 @@ dependencies = [
  "fs-err",
  "serde",
  "serde_yaml",
- "thiserror 2.0.3",
+ "snafu",
 ]
 
 [[package]]
@@ -641,8 +641,8 @@ version = "0.24.7"
 dependencies = [
  "fs-err",
  "nix 0.27.1",
+ "snafu",
  "strum",
- "thiserror 2.0.3",
 ]
 
 [[package]]
@@ -1096,7 +1096,7 @@ version = "0.24.7"
 dependencies = [
  "regex",
  "serde",
- "thiserror 2.0.3",
+ "snafu",
 ]
 
 [[package]]
@@ -1856,6 +1856,7 @@ dependencies = [
  "serde_derive",
  "serpent_buildinfo",
  "sha2",
+ "snafu",
  "stone",
  "strum",
  "thiserror 2.0.3",
@@ -2528,7 +2529,6 @@ name = "serpent_buildinfo"
 version = "0.24.7"
 dependencies = [
  "chrono",
- "thiserror 2.0.3",
 ]
 
 [[package]]
@@ -2598,6 +2598,27 @@ name = "smallvec"
 version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
+
+[[package]]
+name = "snafu"
+version = "0.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "223891c85e2a29c3fe8fb900c1fae5e69c2e42415e3177752e8718475efa5019"
+dependencies = [
+ "snafu-derive",
+]
+
+[[package]]
+name = "snafu-derive"
+version = "0.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03c3c6b7927ffe7ecaa769ee0e3994da3b8cafc8f444578982c83ecb161af917"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "socket2"
@@ -3129,7 +3150,7 @@ name = "vfs"
 version = "0.1.0"
 dependencies = [
  "indextree",
- "thiserror 2.0.3",
+ "snafu",
 ]
 
 [[package]]
