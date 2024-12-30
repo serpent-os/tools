@@ -10,7 +10,7 @@ use std::{
     thread,
 };
 
-use fs_err as fs;
+use fs_err::{self as fs, read_dir};
 use nix::unistd::{linkat, LinkatFlags};
 use url::Url;
 
@@ -58,8 +58,6 @@ pub fn enumerate_files<'a>(
     dir: &'a Path,
     matcher: impl Fn(&Path) -> bool + Send + Copy + 'a,
 ) -> Result<Vec<PathBuf>, io::Error> {
-    use std::fs::read_dir;
-
     let read_dir = read_dir(dir)?;
 
     let mut paths = vec![];
