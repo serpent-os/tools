@@ -122,16 +122,16 @@ impl Manager {
 
     /// Refresh a [`Repository`] by Id
     pub async fn refresh(&self, id: &repository::Id) -> Result<(), Error> {
-        if let Some(repo) = self.repositories.get(id).cloned() {
-            if repo.repository.active {
-                let file = fetch_index(self.source.identifier(), &repo, &self.installation).await?;
-                runtime::unblock(move || update_meta_db(&repo, &file)).await?;
-            }
+        let Some(repo) = self.repositories.get(id).cloned() else {
+            return Err(Error::UnknownRepo(id.clone()));
+        };
 
-            Ok(())
-        } else {
-            Err(Error::UnknownRepo(id.clone()))
+        if repo.repository.active {
+            let file = fetch_index(self.source.identifier(), &repo, &self.installation).await?;
+            runtime::unblock(move || update_meta_db(&repo, &file)).await?;
         }
+
+        Ok(())
     }
 
     /// Refresh all [`Repository`]'s by fetching it's latest index

@@ -167,21 +167,22 @@ fn fragments_from_string(s: &str) -> Result<Vec<Fragment>, Error> {
             '/' => Some(Fragment::ForwardSlash),
             '.' => Some(Fragment::Dot),
             '(' => {
-                if let Some(end) = walker.substring_to(')') {
-                    walker.eat(end.len() + 1);
+                let Some(end) = walker.substring_to(')') else {
+                    return Err(Error::Group);
+                };
 
-                    let splits = end.split(':').collect::<Vec<_>>();
-                    if splits.len() != 2 {
-                        return Err(Error::Group);
-                    }
-                    let key = *splits.first().ok_or(Error::Group)?;
-                    let value = *splits.get(1).ok_or(Error::Group)?;
+                walker.eat(end.len() + 1);
 
-                    let subpattern = fragments_from_string(value)?;
-                    builder.push(Fragment::Group(key.to_owned(), subpattern));
-                } else {
+                let splits = end.split(':').collect::<Vec<_>>();
+                if splits.len() != 2 {
                     return Err(Error::Group);
                 }
+                let key = *splits.first().ok_or(Error::Group)?;
+                let value = *splits.get(1).ok_or(Error::Group)?;
+
+                let subpattern = fragments_from_string(value)?;
+                builder.push(Fragment::Group(key.to_owned(), subpattern));
+
                 None
             }
             ')' => None,
