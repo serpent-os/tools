@@ -14,10 +14,12 @@ use url::Url;
 use crate::util;
 
 use self::metadata::Metadata;
+use self::monitoring::Monitoring;
 use self::upstream::Upstream;
 
 mod build;
 mod metadata;
+mod monitoring;
 mod upstream;
 
 pub struct Drafter {
@@ -39,10 +41,13 @@ impl Drafter {
         // Build metadata from extracted upstreams
         let metadata = Metadata::new(extracted);
 
+        let monitoring = Monitoring::new(metadata.source.name.clone());
+        Monitoring::run(&monitoring)?;
+
         // Enumerate all extracted files
         let files = util::enumerate_files(&extract_root, |_| true)?
             .into_iter()
-            .map(|path| File {
+            .map(|path| DrafterFile {
                 path,
                 extract_root: &extract_root,
             })
@@ -104,12 +109,12 @@ fn builddeps(deps: impl IntoIterator<Item = Dependency>) -> String {
     }
 }
 
-pub struct File<'a> {
+pub struct DrafterFile<'a> {
     pub path: PathBuf,
     pub extract_root: &'a Path,
 }
 
-impl File<'_> {
+impl DrafterFile<'_> {
     // The depth of a file relative to it's extracted archive
     pub fn depth(&self) -> usize {
         let relative = self.path.strip_prefix(self.extract_root).unwrap_or(&self.path);
@@ -131,6 +136,8 @@ pub enum Error {
     AnalyzeBuildSystem(#[source] build::Error),
     #[error("upstream")]
     Upstream(#[from] upstream::Error),
+    #[error("monitoring")]
+    Monitoring(#[from] monitoring::Error),
     #[error("io")]
     Io(#[from] io::Error),
 }
@@ -145,7 +152,7 @@ mod test {
     fn test_file_depth() {
         let extract_root = Path::new("/tmp/test");
 
-        let file = File {
+        let file = DrafterFile {
             path: PathBuf::from("/tmp/test/some_archive/meson.build"),
             extract_root,
         };

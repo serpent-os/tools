@@ -8,7 +8,7 @@ use moss::{dependency, Dependency};
 use regex::Regex;
 
 use crate::draft::build::{Error, Phases, State};
-use crate::draft::File;
+use crate::draft::DrafterFile;
 
 pub fn phases() -> Phases {
     Phases {
@@ -19,7 +19,7 @@ pub fn phases() -> Phases {
     }
 }
 
-pub fn process(state: &mut State, file: &File) -> Result<(), Error> {
+pub fn process(state: &mut State, file: &DrafterFile) -> Result<(), Error> {
     match file.file_name() {
         "meson.build" if file.depth() == 0 => {
             state.increment_confidence(100);
