@@ -9,14 +9,13 @@ use std::process::Command;
 use std::ptr::addr_of_mut;
 use std::sync::atomic::{AtomicI32, Ordering};
 
-use fs_err::{self as fs, copy, create_dir_all, remove_dir, PathExt as _};
+use fs_err::{copy, create_dir_all, remove_dir, PathExt as _};
 use nix::libc::SIGCHLD;
 use nix::mount::{mount, umount2, MntFlags, MsFlags};
 use nix::sched::{clone, CloneFlags};
 use nix::sys::prctl::set_pdeathsig;
 use nix::sys::signal::{kill, sigaction, SaFlags, SigAction, SigHandler, Signal};
 use nix::sys::signalfd::SigSet;
-use nix::sys::stat::{umask, Mode};
 use nix::sys::wait::{waitpid, WaitStatus};
 use nix::unistd::{close, pipe, pivot_root, read, sethostname, tcsetpgrp, write, Pid, Uid};
 use thiserror::Error;
@@ -32,7 +31,6 @@ pub struct Container {
     networking: bool,
     hostname: Option<String>,
     ignore_host_sigint: bool,
-    override_accounts: bool,
 }
 
 impl Container {
@@ -45,7 +43,6 @@ impl Container {
             networking: false,
             hostname: None,
             ignore_host_sigint: false,
-            override_accounts: true,
         }
     }
 
@@ -89,14 +86,6 @@ impl Container {
     pub fn hostname(self, hostname: impl ToString) -> Self {
         Self {
             hostname: Some(hostname.to_string()),
-            ..self
-        }
-    }
-
-    /// Override the system accounts (`/etc/{passwd,group}`) for builders
-    pub fn override_accounts(self, configure: bool) -> Self {
-        Self {
-            override_accounts: configure,
             ..self
         }
     }
@@ -240,10 +229,6 @@ fn setup(container: &Container) -> Result<(), ContainerError> {
 
     pivot(&container.root, &container.binds)?;
 
-    if container.override_accounts {
-        setup_root_user()?;
-    }
-
     if let Some(hostname) = &container.hostname {
         sethostname(hostname).map_err(ContainerError::SetHostname)?;
     }
@@ -307,18 +292,9 @@ fn pivot(root: &Path, binds: &[Bind]) -> Result<(), ContainerError> {
     Ok(())
 }
 
-fn setup_root_user() -> Result<(), ContainerError> {
-    ensure_directory("/etc")?;
-    fs::write("/etc/passwd", "root:x:0:0:root::/bin/bash")?;
-    fs::write("/etc/group", "root:x:0:")?;
-    umask(Mode::S_IWGRP | Mode::S_IWOTH);
-    Ok(())
-}
-
 fn setup_networking(root: &Path) -> Result<(), ContainerError> {
     ensure_directory(root.join("etc"))?;
     copy("/etc/resolv.conf", root.join("etc/resolv.conf"))?;
-    copy("/etc/protocols", root.join("etc/protocols"))?;
     Ok(())
 }
 
