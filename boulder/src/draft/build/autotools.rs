@@ -8,7 +8,7 @@ use regex::Regex;
 //
 // SPDX-License-Identifier: MPL-2.0
 use crate::draft::build::{Error, Phases, State};
-use crate::draft::File;
+use crate::draft::DrafterFile;
 
 pub fn phases() -> Phases {
     Phases {
@@ -19,7 +19,7 @@ pub fn phases() -> Phases {
     }
 }
 
-pub fn process(state: &mut State, file: &File) -> Result<(), Error> {
+pub fn process(state: &mut State, file: &DrafterFile) -> Result<(), Error> {
     // Depth too great
     if file.depth() > 0 {
         return Ok(());

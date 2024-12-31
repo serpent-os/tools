@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 use crate::draft::build::{Error, Phases, State};
-use crate::draft::File;
+use crate::draft::DrafterFile;
 
 pub fn phases() -> Phases {
     Phases {
@@ -13,7 +13,7 @@ pub fn phases() -> Phases {
     }
 }
 
-pub fn process(state: &mut State, file: &File) -> Result<(), Error> {
+pub fn process(state: &mut State, file: &DrafterFile) -> Result<(), Error> {
     if file.file_name() == "Cargo.toml" {
         state.increment_confidence(100);
     }

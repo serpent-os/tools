@@ -4,7 +4,7 @@
 
 pub mod pep517 {
     use crate::draft::build::{Error, Phases, State};
-    use crate::draft::File;
+    use crate::draft::DrafterFile;
 
     pub fn phases() -> Phases {
         Phases {
@@ -15,7 +15,7 @@ pub mod pep517 {
         }
     }
 
-    pub fn process(state: &mut State, file: &File) -> Result<(), Error> {
+    pub fn process(state: &mut State, file: &DrafterFile) -> Result<(), Error> {
         match file.file_name() {
             "pyproject.toml" | "setup.cfg" => state.increment_confidence(100),
             _ => {}
@@ -27,7 +27,7 @@ pub mod pep517 {
 
 pub mod setup_tools {
     use crate::draft::build::{Error, Phases, State};
-    use crate::draft::File;
+    use crate::draft::DrafterFile;
 
     pub fn phases() -> Phases {
         Phases {
@@ -38,7 +38,7 @@ pub mod setup_tools {
         }
     }
 
-    pub fn process(state: &mut State, file: &File) -> Result<(), Error> {
+    pub fn process(state: &mut State, file: &DrafterFile) -> Result<(), Error> {
         if file.file_name() == "setup.py" {
             state.increment_confidence(100);
         }
