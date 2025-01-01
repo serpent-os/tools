@@ -101,6 +101,7 @@ defaultTuningGroups :
     - avxwidth
     - base
     - bindnow
+    - build-id
     - debug
     - fortify
     - frame-pointer
@@ -135,6 +136,11 @@ tuning              :
     - frame-pointer:
         enabled: no-omit-frame-pointer
         disabled: omit-frame-pointer
+
+    # Toggle build-id
+    - build-id:
+        enabled: build-id
+        disabled: build-id-none
 
     # Enable bindnow functionality
     - bindnow:
@@ -419,6 +425,16 @@ flags               :
         llvm:
             c         : "-fwhole-program-vtables"
             cxx       : "-fwhole-program-vtables"
+
+    # Enable build-id (ON)
+    - build-id:
+        ld        : "-Wl,--build-id=sha1"
+        rust      : "-C link-args=-Wl,--build-id=sha1"
+
+    # Disable build-id (OFF)
+    - build-id-none:
+        ld        : "-Wl,--build-id=none"
+        rust      : "-C link-args=-Wl,--build-id=none"
 
     # Enable ALL LLVM ICF optimisations (OFF)
     - icf-all:
