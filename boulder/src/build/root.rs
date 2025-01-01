@@ -103,6 +103,10 @@ fn packages(builder: &Builder) -> Vec<&str> {
         }
     }
 
+    if builder.recipe.parsed.mold {
+        packages.extend(MOLD_PACKAGES);
+    }
+
     if builder.ccache {
         packages.extend(CCACHE_PACKAGES);
     }
@@ -202,6 +206,8 @@ const GNU32_PACKAGES: &[&str] = &["gcc-32bit", "g++-32bit"];
 
 const LLVM_PACKAGES: &[&str] = &["clang"];
 const LLVM32_PACKAGES: &[&str] = &["clang-32bit", "libcxx-32bit-devel"];
+
+const MOLD_PACKAGES: &[&str] = &["binary(mold)"];
 
 const CCACHE_PACKAGES: &[&str] = &["binary(ccache)", "binary(sccache)"];
 
