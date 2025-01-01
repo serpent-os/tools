@@ -102,6 +102,7 @@ defaultTuningGroups :
     - base
     - bindnow
     - build-id
+    - compress-debug
     - debug
     - fat-lto
     - fortify
@@ -134,6 +135,18 @@ tuning              :
             - std:
                 enabled: debug-std
         default: std
+
+    # Debug symbol compression
+    - compress-debug:
+        options:
+            - none:
+                enabled: compress-debug-none
+            - zlib:
+                enabled: compress-debug-zlib
+            - zstd:
+                enabled: compress-debug-zstd
+        disabled: compress-debug-none
+        default: zstd
 
     # Toggle frame-pointer
     - frame-pointer:
@@ -470,6 +483,27 @@ flags               :
     - build-id-none:
         ld        : "-Wl,--build-id=none"
         rust      : "-C link-args=-Wl,--build-id=none"
+
+    # Compress debug symbols with Zstd (ON)
+    - compress-debug-zstd:
+        c         : "-Wa,--compress-debug-sections=zstd"
+        cxx       : "-Wa,--compress-debug-sections=zstd"
+        ld        : "-Wl,--compress-debug-sections=zstd"
+        rust      : "-C link-args=-Wl,--compress-debug-sections=zstd"
+
+    # Compress debug symbols with zlib (OFF)
+    - compress-debug-zlib:
+        c         : "-Wa,--compress-debug-sections=zlib"
+        cxx       : "-Wa,--compress-debug-sections=zlib"
+        ld        : "-Wl,--compress-debug-sections=zlib"
+        rust      : "-C link-args=-Wl,--compress-debug-sections=zlib"
+
+    # Don't compress debug symbols (OFF)
+    - compress-debug-none:
+        c         : "-Wa,--compress-debug-sections=none"
+        cxx       : "-Wa,--compress-debug-sections=none"
+        ld        : "-Wl,--compress-debug-sections=none"
+        rust      : "-C link-args=-Wl,--compress-debug-sections=none"
 
     # Enable ALL LLVM ICF optimisations (OFF)
     - icf-all:
