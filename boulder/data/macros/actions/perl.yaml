@@ -8,5 +8,5 @@ actions:
         command: |
             perl Makefile.PL PREFIX="%(prefix)" NO_PACKLIST=1 NO_PERLLOCAL=1 INSTALLDIRS=vendor DESTDIR="%(installroot)"
         dependencies:
-            - perl
+            - binary(perl)
 

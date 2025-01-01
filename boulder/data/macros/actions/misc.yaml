@@ -47,7 +47,7 @@ actions:
         command: |
             patch -f -p1 -i
         dependencies:
-            - patch
+            - binary(patch)
 
     - tmpfiles:
         description: Create a tmpfiles.d file for the package with given content
