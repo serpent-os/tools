@@ -530,8 +530,8 @@ flags               :
     # Toggle options you want to use with llvm-bolt (OFF)
     - bolt:
         gnu:
-            c         : "-fno-reorder-blocks-and-partition​"
-            cxx       : "-fno-reorder-blocks-and-partition​"
+            c         : "-fno-reorder-blocks-and-partition"
+            cxx       : "-fno-reorder-blocks-and-partition"
             ld        : "-Wl,-q"
         llvm:
             c         : "-fno-split-machine-functions"
