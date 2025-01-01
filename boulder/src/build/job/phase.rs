@@ -178,7 +178,6 @@ impl Phase {
             parser.add_definition("compiler_objcxxcpp", "clang++ -E");
             parser.add_definition("compiler_d", "ldc2");
             parser.add_definition("compiler_ar", "llvm-ar");
-            parser.add_definition("compiler_ld", "ld.lld");
             parser.add_definition("compiler_objcopy", "llvm-objcopy");
             parser.add_definition("compiler_nm", "llvm-nm");
             parser.add_definition("compiler_ranlib", "llvm-ranlib");
@@ -194,12 +193,19 @@ impl Phase {
             parser.add_definition("compiler_objcxxcpp", "g++ -E");
             parser.add_definition("compiler_d", "ldc2"); // FIXME: GDC
             parser.add_definition("compiler_ar", "gcc-ar");
-            parser.add_definition("compiler_ld", "ld.bfd");
             parser.add_definition("compiler_objcopy", "objcopy");
             parser.add_definition("compiler_nm", "gcc-nm");
             parser.add_definition("compiler_ranlib", "gcc-ranlib");
             parser.add_definition("compiler_strip", "strip");
             parser.add_definition("compiler_path", path);
+        }
+
+        if recipe.parsed.mold {
+            parser.add_definition("compiler_ld", "ld.mold");
+        } else if matches!(recipe.parsed.options.toolchain, Toolchain::Llvm) {
+            parser.add_definition("compiler_ld", "ld.lld");
+        } else {
+            parser.add_definition("compiler_ld", "ld.bfd");
         }
 
         /* Allow packagers to do stage specific actions in a pgo build */
@@ -346,12 +352,12 @@ fn add_tuning(
     let toolchain = recipe.parsed.options.toolchain;
     let flags = tuning.build()?;
 
-    let cflags = fmt_flags(
+    let mut cflags = fmt_flags(
         flags
             .iter()
             .filter_map(|flag| flag.get(tuning::CompilerFlag::C, toolchain)),
     );
-    let cxxflags = fmt_flags(
+    let mut cxxflags = fmt_flags(
         flags
             .iter()
             .filter_map(|flag| flag.get(tuning::CompilerFlag::Cxx, toolchain)),
@@ -366,11 +372,17 @@ fn add_tuning(
             .iter()
             .filter_map(|flag| flag.get(tuning::CompilerFlag::D, toolchain)),
     );
-    let rustflags = fmt_flags(
+    let mut rustflags = fmt_flags(
         flags
             .iter()
             .filter_map(|flag| flag.get(tuning::CompilerFlag::Rust, toolchain)),
     );
+
+    if recipe.parsed.mold {
+        cflags.push_str(" -fuse-ld=mold");
+        cxxflags.push_str(" -fuse-ld=mold");
+        rustflags.push_str(" -Clink-arg=-fuse-ld=mold");
+    }
 
     parser.add_definition("cflags", cflags);
     parser.add_definition("cxxflags", cxxflags);
