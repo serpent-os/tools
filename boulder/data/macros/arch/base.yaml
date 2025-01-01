@@ -108,6 +108,7 @@ defaultTuningGroups :
     - frame-pointer
     - harden
     - icf
+    - lto-errors
     - optimize
     - relr
     - symbolic
@@ -206,6 +207,10 @@ tuning              :
             - thin:
                 enabled: ltoextra-thin
         default: full
+
+    # Enable LTO errors
+    - lto-errors:
+        enabled: lto-errors
 
     # Toggle fat LTO objects
     - fat-lto:
@@ -445,6 +450,15 @@ flags               :
     - fat-lto-none:
         c         : "-fno-fat-lto-objects"
         cxx       : "-fno-fat-lto-objects"
+
+    # Toggle LTO warning errors. If these throw an error it is likely that there will be runtime problems with LTO (ON)
+    - lto-errors:
+        gnu:
+            c         : "-Werror=odr -Werror=lto-type-mismatch -Werror=strict-aliasing"
+            cxx       : "-Werror=odr -Werror=lto-type-mismatch -Werror=strict-aliasing"
+        llvm:
+            c         : "-Werror=odr -Werror=strict-aliasing"
+            cxx       : "-Werror=odr -Werror=strict-aliasing"
 
     # Enable build-id (ON)
     - build-id:
