@@ -103,6 +103,7 @@ defaultTuningGroups :
     - bindnow
     - build-id
     - debug
+    - fat-lto
     - fortify
     - frame-pointer
     - harden
@@ -205,6 +206,11 @@ tuning              :
             - thin:
                 enabled: ltoextra-thin
         default: full
+
+    # Toggle fat LTO objects
+    - fat-lto:
+        enabled: fat-lto
+        disabled: fat-lto-none
 
     # Enable ICF
     - icf:
@@ -429,6 +435,16 @@ flags               :
         llvm:
             c         : "-fwhole-program-vtables"
             cxx       : "-fwhole-program-vtables"
+
+    # Enable Fat LTO Objects. Note that this is only necessary when building static objects with LLVM that are used in a GCC build (ON)
+    - fat-lto:
+        c         : "-ffat-lto-objects"
+        cxx       : "-ffat-lto-objects"
+
+    # Disable Fat LTO Objects (OFF)
+    - fat-lto-none:
+        c         : "-fno-fat-lto-objects"
+        cxx       : "-fno-fat-lto-objects"
 
     # Enable build-id (ON)
     - build-id:
