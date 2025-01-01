@@ -108,6 +108,7 @@ defaultTuningGroups :
     - frame-pointer
     - harden
     - icf
+    - lto
     - lto-errors
     - optimize
     - relr
@@ -197,7 +198,7 @@ tuning              :
                 enabled: lto-full
             - thin:
                 enabled: lto-thin
-        default: full
+        default: thin
 
     # Enable LTOextra. Requires the equivalent lto option
     - ltoextra:
@@ -206,7 +207,7 @@ tuning              :
                 enabled: ltoextra-full
             - thin:
                 enabled: ltoextra-thin
-        default: full
+        default: thin
 
     # Enable LTO errors
     - lto-errors:
@@ -413,7 +414,7 @@ flags               :
             d         : "-flto=full"
             ld        : "-flto=full"
 
-    # Enable Thin-LTO optimisations (OFF)
+    # Enable Thin-LTO optimisations (ON)
     - lto-thin:
         rust      : "-C lto=thin -C linker-plugin-lto -C embed-bitcode=yes"
         gnu:
