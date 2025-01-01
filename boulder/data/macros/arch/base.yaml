@@ -393,18 +393,22 @@ flags               :
     - lto-full:
         rust      : "-C lto=fat -C linker-plugin-lto -C embed-bitcode=yes"
         gnu:
-            c         : "-flto=%(jobs)"
-            cxx       : "-flto=%(jobs)"
-            ld        : "-flto=%(jobs)"
+            c         : "-flto=%(jobs) -flto-partition=one"
+            cxx       : "-flto=%(jobs) -flto-partition=one"
+            ld        : "-flto=%(jobs) -flto-partition=one"
         llvm:
-            c         : "-flto"
-            cxx       : "-flto"
+            c         : "-flto=full"
+            cxx       : "-flto=full"
             d         : "-flto=full"
-            ld        : "-flto"
+            ld        : "-flto=full"
 
     # Enable Thin-LTO optimisations (OFF)
     - lto-thin:
         rust      : "-C lto=thin -C linker-plugin-lto -C embed-bitcode=yes"
+        gnu:
+            c         : "-flto=%(jobs)"
+            cxx       : "-flto=%(jobs)"
+            ld        : "-flto=%(jobs)"
         llvm:
             c         : "-flto=thin"
             cxx       : "-flto=thin"
