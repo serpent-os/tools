@@ -10,13 +10,16 @@ use std::{
     str::FromStr,
 };
 
-use blsforme::os_release::{self, OsRelease};
+use blsforme::{
+    os_release::{self, OsRelease},
+    CmdlineEntry, Entry,
+};
 use fnmatch::Pattern;
 use fs_err as fs;
 use stone::payload::{layout, Layout};
 use thiserror::{self, Error};
 
-use crate::{package::Id, Installation};
+use crate::{package::Id, Installation, State};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -104,7 +107,7 @@ fn boot_files_from_state<'a>(
     rets
 }
 
-pub fn synchronize(install: &Installation, layouts: &[(Id, Layout)]) -> Result<(), Error> {
+pub fn synchronize(install: &Installation, state: &State, layouts: &[(Id, Layout)]) -> Result<(), Error> {
     let root = install.root.clone();
     let is_native = root.to_string_lossy() == "/";
     // Create an appropriate configuration
@@ -140,7 +143,18 @@ pub fn synchronize(install: &Installation, layouts: &[(Id, Layout)]) -> Result<(
     let discovered = schema.discover_system_kernels(kernels.iter())?;
 
     // pipe all of our entries into blsforme
-    let mut entries = discovered.iter().map(blsforme::Entry::new).collect::<Vec<_>>();
+    let mut entries = discovered
+        .iter()
+        .map(|d| {
+            let id = i32::from(state.id);
+            Entry::new(d)
+                .with_cmdline(CmdlineEntry {
+                    name: "---fstx---".to_owned(),
+                    snippet: format!("moss.fstx={}", id),
+                })
+                .with_state_id(id)
+        })
+        .collect::<Vec<_>>();
     for entry in entries.iter_mut() {
         if let Err(e) = entry.load_cmdline_snippets(&config) {
             log::warn!("Failed to load cmdline snippets: {}", e);

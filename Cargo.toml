@@ -15,7 +15,7 @@ edition = "2021"
 rust-version = "1.80"
 
 [workspace.dependencies]
-blsforme = { git = "https://github.com/serpent-os/blsforme.git", rev = "ca69d21d41bd437640614de432f47ddb152c05bf" }
+blsforme = { git = "https://github.com/serpent-os/blsforme.git", rev = "989b6afdb345083499ef054b6b4a715b0659fbf1" }
 bytes = "1.6.0"
 chrono = "0.4.38"
 clap = { version = "4.5.8", features = ["derive", "string"] }
