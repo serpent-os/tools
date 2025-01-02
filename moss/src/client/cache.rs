@@ -11,7 +11,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use fs_err::tokio::{self as fs, File};
 use futures_util::StreamExt;
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
@@ -63,6 +62,8 @@ pub async fn fetch(
     installation: &Installation,
     on_progress: impl Fn(Progress),
 ) -> Result<Download, Error> {
+    use fs_err::tokio::{self as fs, File};
+
     let url = meta.uri.as_ref().ok_or(Error::MissingUri)?.parse::<Url>()?;
     let hash = meta.hash.as_ref().ok_or(Error::MissingHash)?;
 
@@ -134,8 +135,8 @@ impl Download {
         unpacking_in_progress: UnpackingInProgress,
         on_progress: impl Fn(Progress) + Send + 'static,
     ) -> Result<UnpackedAsset, Error> {
-        use fs_err::{create_dir_all, remove_file, File, OpenOptions};
-        use std::io::{copy, Read, Seek, SeekFrom, Write};
+        use fs_err::{self as fs, File, OpenOptions};
+        use std::io::{self, Read, Seek, SeekFrom, Write};
 
         struct ProgressWriter<'a, W> {
             writer: W,
@@ -178,7 +179,7 @@ impl Download {
         let content_dir = self.installation.cache_path("content");
         let content_path = content_dir.join(self.id);
 
-        create_dir_all(&content_dir)?;
+        fs::create_dir_all(&content_dir)?;
 
         let mut reader = stone::read(File::open(&self.path)?)?;
 
@@ -231,7 +232,7 @@ impl Download {
 
                 // Create parent dir
                 if let Some(parent) = path.parent() {
-                    create_dir_all(parent)?;
+                    fs::create_dir_all(parent)?;
                 }
 
                 // Split file reader over index range
@@ -241,7 +242,7 @@ impl Download {
 
                 let mut output = File::create(&path)?;
 
-                copy(&mut split_file, &mut output)?;
+                io::copy(&mut split_file, &mut output)?;
 
                 // Remove file from in-progress
                 unpacking_in_progress.remove(&path);
@@ -250,7 +251,7 @@ impl Download {
             })
             .collect::<Result<Vec<_>, Error>>()?;
 
-        remove_file(&content_path)?;
+        fs::remove_file(&content_path)?;
 
         Ok(UnpackedAsset { payloads })
     }
