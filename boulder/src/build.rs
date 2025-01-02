@@ -299,7 +299,7 @@ fn logged(
     is_pgo: bool,
     command: &str,
     f: impl FnOnce(&mut process::Command) -> &mut process::Command,
-) -> Result<process::ExitStatus, io::Error> {
+) -> io::Result<process::ExitStatus> {
     let mut command = process::Command::new(command);
 
     f(&mut command);

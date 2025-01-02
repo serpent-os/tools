@@ -8,7 +8,7 @@ use zstd::zstd_safe::zstd_sys::ZSTD_EndDirective;
 use zstd::zstd_safe::{self, InBuffer, OutBuffer};
 use zstd::zstd_safe::{CParameter, ResetDirective};
 
-type Context = zstd::zstd_safe::CCtx<'static>;
+type Context = zstd_safe::CCtx<'static>;
 
 /// Transparent encapsulation of zstd compression with the purpose
 /// of encoding moss (.stone) payloads to a stream

@@ -18,7 +18,7 @@ use crate::{package::emit, Recipe};
 pub fn write(
     path: &Path,
     recipe: &Recipe,
-    packages: &BTreeSet<&emit::Package>,
+    packages: &BTreeSet<&emit::Package<'_>>,
     build_deps: &BTreeSet<String>,
 ) -> Result<(), Error> {
     let packages = packages

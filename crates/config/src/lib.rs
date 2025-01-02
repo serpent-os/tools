@@ -85,7 +85,7 @@ impl Manager {
         Ok(())
     }
 
-    pub fn delete<T: Config>(&self, name: impl fmt::Display) -> Result<(), io::Error> {
+    pub fn delete<T: Config>(&self, name: impl fmt::Display) -> io::Result<()> {
         let domain = T::domain();
 
         let dir = self.scope.save_dir(&domain);
@@ -170,7 +170,7 @@ impl Scope {
         .dir(domain)
     }
 
-    fn load_with(&self) -> Vec<(Entry, Resolve)> {
+    fn load_with(&self) -> Vec<(Entry, Resolve<'_>)> {
         match &self {
             // System we search / merge all base file / .d files
             // from vendor then admin

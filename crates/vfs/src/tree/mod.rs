@@ -112,43 +112,43 @@ impl<T: BlitFile> Tree<T> {
     /// Add a child to the given parent node
     fn add_child_to_node(&mut self, node_id: NodeId, parent: &str) -> Result<(), Error> {
         let node = self.arena.get(node_id).unwrap();
-        if let Some(parent_node) = self.map.get(parent) {
-            let others = parent_node
-                .children(&self.arena)
-                .filter_map(|n| self.arena.get(n))
-                .filter_map(|n| {
-                    if n.get().file_name == node.get().file_name {
-                        Some(n.get())
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-            if !others.is_empty() {
-                // TODO: Reenable
-                // Err(Error::Duplicate(
-                //     node.get().path(),
-                //     node.get().id(),
-                //     others.first().unwrap().id(),
-                // ))
+        let Some(parent_node) = self.map.get(parent) else {
+            return Err(Error::MissingParent(parent.to_string()));
+        };
 
-                // Report duplicate and skip for now
-                eprintln!(
-                    "error: {}",
-                    Error::Duplicate(
-                        node.get().path.clone(),
-                        node.get().id.clone(),
-                        others.first().unwrap().id.clone()
-                    )
-                );
+        let others = parent_node
+            .children(&self.arena)
+            .filter_map(|n| {
+                let n = self.arena.get(n)?.get();
+                if n.file_name == node.get().file_name {
+                    Some(n)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        if !others.is_empty() {
+            // TODO: Reenable
+            // Err(Error::Duplicate(
+            //     node.get().path(),
+            //     node.get().id(),
+            //     others.first().unwrap().id(),
+            // ))
 
-                Ok(())
-            } else {
-                parent_node.append(node_id, &mut self.arena);
-                Ok(())
-            }
+            // Report duplicate and skip for now
+            eprintln!(
+                "error: {}",
+                Error::Duplicate(
+                    node.get().path.clone(),
+                    node.get().id.clone(),
+                    others.first().unwrap().id.clone()
+                )
+            );
+
+            Ok(())
         } else {
-            Err(Error::MissingParent(parent.to_string()))
+            parent_node.append(node_id, &mut self.arena);
+            Ok(())
         }
     }
 
@@ -206,12 +206,12 @@ impl<T: BlitFile> Tree<T> {
     }
 
     /// Return structured view beginning at `/`
-    pub fn structured(&self) -> Option<Element<T>> {
+    pub fn structured(&self) -> Option<Element<'_, T>> {
         self.resolve_node("/").map(|root| self.structured_children(root))
     }
 
     /// For the given node, recursively convert to Element::Directory of Child
-    fn structured_children(&self, start: &NodeId) -> Element<T> {
+    fn structured_children(&self, start: &NodeId) -> Element<'_, T> {
         let node = &self.arena[*start];
         let item = node.get();
         let partial = item.file_name.as_deref().unwrap_or_default();

@@ -13,3 +13,6 @@ thiserror.workspace = true
 
 [dev-dependencies]
 serde_yaml.workspace = true
+
+[lints]
+workspace = true

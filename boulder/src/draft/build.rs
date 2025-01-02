@@ -60,7 +60,7 @@ impl System {
         }
     }
 
-    fn process(&self, state: &mut State, file: &File) -> Result<(), Error> {
+    fn process(&self, state: &mut State<'_>, file: &File<'_>) -> Result<(), Error> {
         match self {
             System::Autotools => autotools::process(state, file),
             System::Cargo => cargo::process(state, file),
@@ -126,7 +126,7 @@ pub struct Analysis {
 
 /// Analyze the provided paths to determine which build [`System`]
 /// the project uses and any dependencies that are identified
-pub fn analyze(files: &[File]) -> Result<Analysis, Error> {
+pub fn analyze(files: &[File<'_>]) -> Result<Analysis, Error> {
     let mut dependencies = BTreeSet::new();
     let mut confidences = BTreeMap::new();
 

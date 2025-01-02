@@ -233,7 +233,7 @@ enum Token<'a> {
     Break { exit: bool },
 }
 
-fn tokens(input: &str, f: impl FnMut(Token) -> Result<(), Error>) -> Result<(), Error> {
+fn tokens(input: &str, f: impl FnMut(Token<'_>) -> Result<(), Error>) -> Result<(), Error> {
     // A-Za-z0-9_
     let identifier = |input| recognize(many1(alt((alpha1, digit1, tag("_")))))(input);
     // %identifier

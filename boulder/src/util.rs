@@ -10,18 +10,18 @@ use std::{
     thread,
 };
 
-use fs_err as fs;
+use fs_err::{self as fs, read_dir};
 use nix::unistd::{linkat, LinkatFlags};
 use url::Url;
 
-pub fn ensure_dir_exists(path: &Path) -> Result<(), io::Error> {
+pub fn ensure_dir_exists(path: &Path) -> io::Result<()> {
     if !path.exists() {
         fs::create_dir_all(path)?;
     }
     Ok(())
 }
 
-pub fn recreate_dir(path: &Path) -> Result<(), io::Error> {
+pub fn recreate_dir(path: &Path) -> io::Result<()> {
     if path.exists() {
         fs::remove_dir_all(path)?;
     }
@@ -29,10 +29,10 @@ pub fn recreate_dir(path: &Path) -> Result<(), io::Error> {
     Ok(())
 }
 
-pub fn copy_dir(source_dir: &Path, out_dir: &Path) -> Result<(), io::Error> {
+pub fn copy_dir(source_dir: &Path, out_dir: &Path) -> io::Result<()> {
     recreate_dir(out_dir)?;
 
-    let contents = fs::read_dir(source_dir)?;
+    let contents = read_dir(source_dir)?;
 
     for entry in contents.flatten() {
         let path = entry.path();
@@ -57,9 +57,7 @@ pub fn copy_dir(source_dir: &Path, out_dir: &Path) -> Result<(), io::Error> {
 pub fn enumerate_files<'a>(
     dir: &'a Path,
     matcher: impl Fn(&Path) -> bool + Send + Copy + 'a,
-) -> Result<Vec<PathBuf>, io::Error> {
-    use std::fs::read_dir;
-
+) -> io::Result<Vec<PathBuf>> {
     let read_dir = read_dir(dir)?;
 
     let mut paths = vec![];
@@ -79,8 +77,8 @@ pub fn enumerate_files<'a>(
     Ok(paths)
 }
 
-pub fn list_dirs(dir: &Path) -> Result<Vec<PathBuf>, io::Error> {
-    let read_dir = fs::read_dir(dir)?;
+pub fn list_dirs(dir: &Path) -> io::Result<Vec<PathBuf>> {
+    let read_dir = read_dir(dir)?;
 
     let mut paths = vec![];
 
@@ -96,7 +94,7 @@ pub fn list_dirs(dir: &Path) -> Result<Vec<PathBuf>, io::Error> {
     Ok(paths)
 }
 
-pub fn hardlink_or_copy(from: &Path, to: &Path) -> Result<(), io::Error> {
+pub fn hardlink_or_copy(from: &Path, to: &Path) -> io::Result<()> {
     // Attempt hard link
     let link_result = linkat(None, from, None, to, LinkatFlags::NoSymlinkFollow);
 

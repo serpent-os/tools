@@ -117,8 +117,8 @@ pub fn synchronize(install: &Installation, layouts: &[(Id, Layout)]) -> Result<(
         vfs: "/".into(),
     };
 
-    let pattern = fnmatch::Pattern::from_str("lib/kernel/(version:*)/*")?;
-    let systemd = fnmatch::Pattern::from_str("lib*/systemd/boot/efi/*.efi")?;
+    let pattern = Pattern::from_str("lib/kernel/(version:*)/*")?;
+    let systemd = Pattern::from_str("lib*/systemd/boot/efi/*.efi")?;
     let booty_bits = boot_files_from_state(install, layouts, &systemd);
 
     // No kernels? No bother.

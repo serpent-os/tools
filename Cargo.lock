@@ -1853,7 +1853,6 @@ dependencies = [
  "rayon",
  "reqwest",
  "serde",
- "serde_derive",
  "serpent_buildinfo",
  "sha2",
  "stone",

@@ -49,7 +49,7 @@ impl Repository {
         }
     }
 
-    fn query(&self, flags: package::Flags, filter: Option<db::meta::Filter>) -> Vec<Package> {
+    fn query(&self, flags: package::Flags, filter: Option<db::meta::Filter<'_>>) -> Vec<Package> {
         if flags.available || flags == package::Flags::default() {
             // TODO: Error handling
             let packages = match self.active.db.query(filter) {

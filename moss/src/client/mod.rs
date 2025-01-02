@@ -263,8 +263,7 @@ impl Client {
         let fstree = self.vfs(new.selections.iter().map(|selection| &selection.package))?;
 
         // Run system triggers
-        let sys_triggers =
-            postblit::triggers(postblit::TriggerScope::System(&self.installation, &self.scope), &fstree)?;
+        let sys_triggers = postblit::triggers(TriggerScope::System(&self.installation, &self.scope), &fstree)?;
         for trigger in sys_triggers {
             trigger.execute()?;
         }
@@ -308,7 +307,7 @@ impl Client {
     }
 
     /// Apply all triggers with the given scope, wrapping with a progressbar.
-    fn apply_triggers(scope: postblit::TriggerScope, fstree: &vfs::Tree<PendingFile>) -> Result<(), postblit::Error> {
+    fn apply_triggers(scope: TriggerScope<'_>, fstree: &vfs::Tree<PendingFile>) -> Result<(), postblit::Error> {
         let triggers = postblit::triggers(scope, fstree)?;
 
         let progress = ProgressBar::new(triggers.len() as u64).with_style(
@@ -318,8 +317,8 @@ impl Client {
         );
 
         match &scope {
-            postblit::TriggerScope::Transaction(_, _) => progress.set_message("Running transaction-scope triggers"),
-            postblit::TriggerScope::System(_, _) => progress.set_message("Running system-scope triggers"),
+            TriggerScope::Transaction(_, _) => progress.set_message("Running transaction-scope triggers"),
+            TriggerScope::System(_, _) => progress.set_message("Running system-scope triggers"),
         };
 
         for trigger in progress.wrap_iter(triggers.iter()) {
@@ -396,7 +395,7 @@ impl Client {
 
         // Create the target tree
         if !usr_target.try_exists()? {
-            fs::create_dir_all(&usr_target)?;
+            create_dir_all(&usr_target)?;
         }
 
         // Now swap staging with live
@@ -435,7 +434,7 @@ impl Client {
         let usr_source = self.installation.staging_path("usr");
         if let Some(parent) = usr_target.parent() {
             if !parent.exists() {
-                fs::create_dir_all(parent)?;
+                create_dir_all(parent)?;
             }
         }
         // hot swap the staging/usr into the root/$id/usr
@@ -662,7 +661,7 @@ impl Client {
         &self,
         parent: RawFd,
         cache: RawFd,
-        element: Element<PendingFile>,
+        element: Element<'_, PendingFile>,
         progress: &ProgressBar,
     ) -> Result<(), Error> {
         progress.inc(1);
@@ -758,7 +757,7 @@ impl Client {
 }
 
 /// Add root symlinks & os-release file
-fn create_root_links(root: &Path) -> Result<(), io::Error> {
+fn create_root_links(root: &Path) -> io::Result<()> {
     let links = vec![
         ("usr/sbin", "sbin"),
         ("usr/bin", "bin"),
@@ -787,7 +786,7 @@ fn create_root_links(root: &Path) -> Result<(), io::Error> {
 
 fn record_state_id(root: &Path, state: state::Id) -> Result<(), Error> {
     let usr = root.join("usr");
-    fs::create_dir_all(&usr)?;
+    create_dir_all(&usr)?;
     let state_path = usr.join(".stateID");
     fs::write(state_path, state.to_string())?;
     Ok(())

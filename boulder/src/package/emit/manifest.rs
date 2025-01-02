@@ -44,7 +44,7 @@ impl<'a> Manifest<'a> {
         }
     }
 
-    pub fn add_package(&mut self, package: &'a Package) {
+    pub fn add_package(&mut self, package: &'a Package<'_>) {
         self.packages.insert(package);
     }
 

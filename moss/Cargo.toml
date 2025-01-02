@@ -34,7 +34,6 @@ nix.workspace = true
 rayon.workspace = true
 reqwest.workspace = true
 serde.workspace = true
-serde_derive.workspace = true
 sha2.workspace = true
 strum.workspace = true
 tokio.workspace = true
@@ -47,3 +46,6 @@ zbus.workspace = true
 [package.metadata.cargo-machete]
 # Needed for unixepoch() in src/db/state/migrations/2024-03-04-201550_init/up.sql
 ignored = ["libsqlite3-sys"]
+
+[lints]
+workspace = true

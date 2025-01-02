@@ -293,8 +293,8 @@ fn default_true() -> bool {
 /// Deserialize a single value or sequence of values as a vec
 fn single_as_sequence<'de, T, D>(deserializer: D) -> Result<Vec<T>, D::Error>
 where
-    T: serde::Deserialize<'de>,
-    D: serde::de::Deserializer<'de>,
+    T: Deserialize<'de>,
+    D: serde::Deserializer<'de>,
 {
     #[derive(Debug, Deserialize)]
     #[serde(untagged)]
@@ -312,8 +312,8 @@ where
 /// Deserialize a sequence of single entry maps as a vec of [`KeyValue`]
 fn sequence_of_key_value<'de, T, D>(deserializer: D) -> Result<Vec<KeyValue<T>>, D::Error>
 where
-    T: serde::Deserialize<'de>,
-    D: serde::de::Deserializer<'de>,
+    T: Deserialize<'de>,
+    D: serde::Deserializer<'de>,
 {
     let sequence = Vec::<BTreeMap<String, T>>::deserialize(deserializer)?;
 
@@ -326,7 +326,7 @@ where
 
 fn stringy_bool<'de, D>(deserializer: D) -> Result<bool, D::Error>
 where
-    D: serde::de::Deserializer<'de>,
+    D: serde::Deserializer<'de>,
 {
     #[derive(Deserialize)]
     #[serde(untagged)]
@@ -348,7 +348,7 @@ where
 
 fn force_string<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
-    D: serde::de::Deserializer<'de>,
+    D: serde::Deserializer<'de>,
 {
     #[derive(Deserialize)]
     #[serde(untagged)]

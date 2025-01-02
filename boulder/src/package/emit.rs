@@ -115,7 +115,7 @@ impl Ord for Package<'_> {
     }
 }
 
-pub fn emit(paths: &Paths, recipe: &Recipe, packages: &[Package]) -> Result<(), Error> {
+pub fn emit(paths: &Paths, recipe: &Recipe, packages: &[Package<'_>]) -> Result<(), Error> {
     let mut manifest = Manifest::new(paths, recipe, architecture::host());
 
     println!("Packaging");
@@ -136,7 +136,7 @@ pub fn emit(paths: &Paths, recipe: &Recipe, packages: &[Package]) -> Result<(), 
     Ok(())
 }
 
-fn emit_package(paths: &Paths, package: &Package) -> Result<(), Error> {
+fn emit_package(paths: &Paths, package: &Package<'_>) -> Result<(), Error> {
     let filename = package.filename();
 
     // Filter for all files -> dedupe by hash -> sort largest to smallest

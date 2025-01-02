@@ -10,7 +10,7 @@ use clap_complete::{
     shells::{Bash, Fish, Zsh},
 };
 use clap_mangen::Man;
-use std::fs::{self, File};
+use fs_err::{self as fs, File};
 use thiserror::Error;
 
 mod build;

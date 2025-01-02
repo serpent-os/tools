@@ -13,7 +13,7 @@ pub fn phases() -> Phases {
     }
 }
 
-pub fn process(state: &mut State, file: &File) -> Result<(), Error> {
+pub fn process(state: &mut State<'_>, file: &File<'_>) -> Result<(), Error> {
     if file.file_name() == "Cargo.toml" {
         state.increment_confidence(100);
     }

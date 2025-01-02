@@ -8,3 +8,6 @@ edition.workspace = true
 [dependencies]
 indextree.workspace = true
 thiserror.workspace = true
+
+[lints]
+workspace = true

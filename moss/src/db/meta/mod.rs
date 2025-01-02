@@ -112,7 +112,7 @@ impl Database {
         })
     }
 
-    pub fn query(&self, filter: Option<Filter>) -> Result<Vec<(package::Id, Meta)>, Error> {
+    pub fn query(&self, filter: Option<Filter<'_>>) -> Result<Vec<(package::Id, Meta)>, Error> {
         self.conn.exec(|conn| {
             let map_row = |result| {
                 let meta: model::Meta = result?;

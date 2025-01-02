@@ -134,7 +134,7 @@ impl Download {
         unpacking_in_progress: UnpackingInProgress,
         on_progress: impl Fn(Progress) + Send + 'static,
     ) -> Result<UnpackedAsset, Error> {
-        use std::fs::{create_dir_all, remove_file, File};
+        use fs_err::{create_dir_all, remove_file, File, OpenOptions};
         use std::io::{copy, Read, Seek, SeekFrom, Write};
 
         struct ProgressWriter<'a, W> {
@@ -156,7 +156,7 @@ impl Download {
         }
 
         impl<W: Write> Write for ProgressWriter<'_, W> {
-            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
                 let bytes = self.writer.write(buf)?;
 
                 self.written += bytes as u64;
@@ -170,7 +170,7 @@ impl Download {
                 Ok(bytes)
             }
 
-            fn flush(&mut self) -> std::io::Result<()> {
+            fn flush(&mut self) -> io::Result<()> {
                 self.writer.flush()
             }
         }
@@ -200,7 +200,7 @@ impl Download {
             .find_map(PayloadKind::content)
             .ok_or(Error::MissingContent)?;
 
-        let content_file = File::options()
+        let content_file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)

@@ -357,20 +357,20 @@ fn macros(_macro: Option<String>, env: Env) -> Result<(), Error> {
 
     match _macro {
         Some(name) => {
-            if let Some(action) = items
+            let Some(action) = items
                 .into_iter()
                 .find(|a| a.name == format!("%{name}") || a.name == format!("%({name})"))
-            {
-                println!("{} - {}", action.name.bold(), action.description);
-
-                if let Some(example) = action.example {
-                    println!("\n{}", "Example:".bold());
-                    for line in example.lines() {
-                        println!("  {line}");
-                    }
-                }
-            } else {
+            else {
                 return Err(Error::MacroNotFound(name));
+            };
+
+            println!("{} - {}", action.name.bold(), action.description);
+
+            if let Some(example) = action.example {
+                println!("\n{}", "Example:".bold());
+                for line in example.lines() {
+                    println!("  {line}");
+                }
             }
         }
         None => {

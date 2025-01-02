@@ -14,7 +14,7 @@ use stone::{
 use super::Error;
 use crate::package::emit::Package;
 
-pub fn write(path: &Path, packages: &BTreeSet<&Package>, build_deps: &BTreeSet<String>) -> Result<(), Error> {
+pub fn write(path: &Path, packages: &BTreeSet<&Package<'_>>, build_deps: &BTreeSet<String>) -> Result<(), Error> {
     let mut output = File::create(path)?;
 
     let mut writer = stone::Writer::new(&mut output, FileType::BuildManifest)?;

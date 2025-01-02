@@ -40,7 +40,7 @@ pub async fn get(url: Url) -> Result<BoxStream<'static, Result<Bytes, Error>>, E
 
 /// Internal fetch helper (sanity control) for `get`
 async fn fetch(url: Url) -> Result<impl Stream<Item = Result<Bytes, Error>>, Error> {
-    let response = self::get_client().get(url).send().await?;
+    let response = get_client().get(url).send().await?;
 
     response
         .error_for_status()

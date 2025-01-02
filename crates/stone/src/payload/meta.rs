@@ -71,14 +71,14 @@ pub enum Kind {
 impl Kind {
     fn size(&self) -> usize {
         match self {
-            Kind::Int8(_) => std::mem::size_of::<i8>(),
-            Kind::Uint8(_) => std::mem::size_of::<u8>(),
-            Kind::Int16(_) => std::mem::size_of::<i16>(),
-            Kind::Uint16(_) => std::mem::size_of::<u16>(),
-            Kind::Int32(_) => std::mem::size_of::<i32>(),
-            Kind::Uint32(_) => std::mem::size_of::<u32>(),
-            Kind::Int64(_) => std::mem::size_of::<i64>(),
-            Kind::Uint64(_) => std::mem::size_of::<u64>(),
+            Kind::Int8(_) => size_of::<i8>(),
+            Kind::Uint8(_) => size_of::<u8>(),
+            Kind::Int16(_) => size_of::<i16>(),
+            Kind::Uint16(_) => size_of::<u16>(),
+            Kind::Int32(_) => size_of::<i32>(),
+            Kind::Uint32(_) => size_of::<u32>(),
+            Kind::Int64(_) => size_of::<i64>(),
+            Kind::Uint64(_) => size_of::<u64>(),
             // nul terminator
             Kind::String(s) => s.len() + 1,
             // Plus dep size & nul terminator
