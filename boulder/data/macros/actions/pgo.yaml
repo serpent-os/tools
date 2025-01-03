@@ -42,7 +42,7 @@ actions:
             }
             boptim
         dependencies:
-            - llvm-bolt
+            - binary(llvm-bolt)
 
     - bolt_perf:
         description: Collect perf data suitable for the bolt macros
@@ -53,7 +53,7 @@ actions:
             }
             bperf
         dependencies:
-            - perf
+            - binary(perf)
 
     - bolt_perf2bolt:
         description: Convert perf data into bolt equivalent

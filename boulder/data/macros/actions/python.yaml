@@ -6,14 +6,14 @@ actions:
             test -e ./setup.py || ( echo "%%python: The ./setup.py script could not be found" ; exit 1 )
             python3 setup.py build
         dependencies:
-            - python
+            - binary(python3)
 
     - python_install:
         description: Install python package to the destination directory
         command: |
             python3 setup.py install --root="%(installroot)"
         dependencies:
-            - python
+            - binary(python3)
             - python-packaging # auto deps handler
 
     - pyproject_build:
@@ -21,7 +21,7 @@ actions:
         command: |
             python3 -m build --wheel --no-isolation
         dependencies:
-            - python
+            - binary(python3)
             - python-build
             - python-wheel
 
@@ -30,7 +30,7 @@ actions:
         command: |
             python3 -m installer --destdir="%(installroot)" dist/*.whl
         dependencies:
-            - python
+            - binary(python3)
             - python-installer
 
     # TODO: Investigate whether providing additional -opt1.pyc and -opt2.pyc from increasing
@@ -41,11 +41,11 @@ actions:
         command: |
             function python_compile() {
                 if [ -z "$1" ]; then
-                    python -m compileall -q %(installroot) || exit 1
+                    python3 -m compileall -q %(installroot) || exit 1
                 else
-                    python -m compileall -q $* || exit 1
+                    python3 -m compileall -q $* || exit 1
                 fi
             }
             python_compile
         dependencies:
-            - python
+            - binary(python3)

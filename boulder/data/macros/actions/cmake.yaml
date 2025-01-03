@@ -5,36 +5,36 @@ actions:
         command: |
             cmake %(options_cmake)
         dependencies:
-            - cmake
+            - binary(cmake)
 
     - cmake_unity:
         description: Perform cmake with unity build enabled
         command: |
             cmake -DCMAKE_UNITY_BUILD=ON %(options_cmake)
         dependencies:
-            - cmake
+            - binary(cmake)
 
     - cmake_build:
         description: Build the cmake project
         command: |
             ninja -v -j "%(jobs)" -C "%(builddir)"
         dependencies:
-            - ninja
+            - binary(ninja)
 
     - cmake_install:
         description: Install results of the build to the destination directory
         command: |
             DESTDIR="%(installroot)" ninja install -v -j "%(jobs)" -C "%(builddir)"
         dependencies:
-            - ninja
+            - binary(ninja)
 
     - cmake_test:
         description: Run testsuite with ctest
         command: |
             ninja test -v -j "%(jobs)" -C "%(builddir)"
         dependencies:
-            - cmake
-            - ninja
+            - binary(cmake)
+            - binary(ninja)
 
 definitions:
 
