@@ -300,7 +300,11 @@ fn setup_networking(root: &Path) -> Result<(), ContainerError> {
 
 fn setup_localhost() -> Result<(), ContainerError> {
     // TODO: maybe it's better to hunt down the API to do this instead?
-    Command::new("ip").args(["link", "set", "lo", "up"]).output()?;
+    if PathBuf::from("/usr/sbin/ip").exists() {
+        Command::new("/usr/sbin/ip")
+            .args(["link", "set", "lo", "up"])
+            .output()?;
+    }
     Ok(())
 }
 
