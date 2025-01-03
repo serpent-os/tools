@@ -76,7 +76,7 @@ impl<'a> StringWalker<'a> {
     }
 
     pub fn eat(&mut self, much: usize) {
-        self.index += much
+        self.index += much;
     }
 
     /// Find next occurrence of the character, and substring up to it
@@ -127,7 +127,7 @@ impl Pattern {
                 let kv = self
                     .groups
                     .iter()
-                    .map(|k| (k.clone(), m.name(k).unwrap().as_str().to_string()));
+                    .map(|k| (k.clone(), m.name(k).unwrap().as_str().to_owned()));
                 Some(Match {
                     path: path.into(),
                     variables: kv.collect(),
@@ -197,7 +197,7 @@ fn fragments_from_string(s: &str) -> Result<Vec<Fragment>, Error> {
                 builder.push(Fragment::Text(text.clone()));
                 text.clear();
             }
-            builder.push(token)
+            builder.push(token);
         }
     }
 

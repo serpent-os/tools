@@ -120,7 +120,7 @@ fn get_meta(
 
     let (size, hash) = stat_file(path, &relative_path, &progress)?;
 
-    progress.set_message(format!("{} {}", "Indexing".yellow(), relative_path.clone().bold(),));
+    progress.set_message(format!("{} {}", "Indexing".yellow(), relative_path.clone().bold()));
     progress.set_style(
         ProgressStyle::with_template(" {spinner} {wide_msg}")
             .unwrap()

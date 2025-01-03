@@ -37,7 +37,7 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
     let content_store = PathBuf::from(".stoneStore");
 
     for path in paths {
-        println!("Extract: {:?}", path);
+        println!("Extract: {path:?}");
 
         let rdr = File::open(path).map_err(Error::IO)?;
         let mut reader = stone::read(rdr).map_err(Error::Format)?;
@@ -96,7 +96,7 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
             for layout in &layouts.body {
                 match &layout.entry {
                     layout::Entry::Regular(id, target) => {
-                        let store_path = content_store.join(format!("{:02x}", id));
+                        let store_path = content_store.join(format!("{id:02x}"));
                         let target_disk = extraction_root.join("usr").join(target);
 
                         // drop it into a valid dir

@@ -99,7 +99,7 @@ impl<'a> Chain<'a> {
                                 "│ ×".yellow(),
                                 format!("{}", path.target_path.display()).dim(),
                                 format!("({reason})").yellow()
-                            )
+                            );
                         });
                         pb.inc(1);
                         continue 'paths;

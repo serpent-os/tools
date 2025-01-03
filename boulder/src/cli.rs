@@ -145,7 +145,7 @@ fn replace_aliases(args: std::env::Args) -> Vec<String> {
             continue;
         }
 
-        args.splice(pos..pos + 1, replacements.iter().map(|arg| arg.to_string()));
+        args.splice(pos..pos + 1, replacements.iter().map(|&arg| arg.to_owned()));
 
         break;
     }

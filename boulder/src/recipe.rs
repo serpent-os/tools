@@ -43,19 +43,14 @@ impl Recipe {
         let host = architecture::host();
         let host_string = host.to_string();
 
+        let mut targets = vec![];
         if self.parsed.architectures.is_empty() {
-            let mut targets = vec![];
-
             if self.parsed.emul32 {
                 targets.push(BuildTarget::Emul32(host));
             }
 
             targets.push(BuildTarget::Native(host));
-
-            targets
         } else {
-            let mut targets = vec![];
-
             let emul32 = BuildTarget::Emul32(host);
             let emul32_string = emul32.to_string();
 
@@ -69,9 +64,9 @@ impl Recipe {
             {
                 targets.push(BuildTarget::Native(host));
             }
-
-            targets
         }
+
+        targets
     }
 
     pub fn build_target_profile_key(&self, target: BuildTarget) -> Option<String> {
@@ -80,7 +75,7 @@ impl Recipe {
         if self.parsed.profiles.iter().any(|kv| kv.key == target_string) {
             Some(target_string)
         } else if target.emul32() && self.parsed.profiles.iter().any(|kv| &kv.key == "emul32") {
-            Some("emul32".to_string())
+            Some("emul32".to_owned())
         } else {
             None
         }

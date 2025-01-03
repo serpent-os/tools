@@ -19,7 +19,7 @@ use crate::Env;
 pub struct Id(String);
 
 impl Id {
-    pub fn new(identifier: String) -> Self {
+    pub fn new(identifier: &str) -> Self {
         Self(
             identifier
                 .chars()
@@ -31,7 +31,7 @@ impl Id {
 
 impl From<String> for Id {
     fn from(value: String) -> Self {
-        Self::new(value)
+        Self::new(&value)
     }
 }
 

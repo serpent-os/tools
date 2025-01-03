@@ -156,7 +156,7 @@ impl Database {
                     .filter(model::meta::name.eq(name.to_string()))
                     .load_iter::<model::Meta, _>(conn)?,
                 Some(Filter::Keyword(keyword)) => {
-                    let pattern = format!("%{}%", keyword);
+                    let pattern = format!("%{keyword}%");
                     model::meta::table
                         .select(model::Meta::as_select())
                         .filter(
@@ -485,16 +485,16 @@ mod test {
         let meta_payload = payloads.iter().find_map(PayloadKind::meta).unwrap();
         let meta = Meta::from_stone_payload(&meta_payload.body).unwrap();
 
-        let id = package::Id::from("test".to_string());
+        let id = package::Id::from("test".to_owned());
 
         db.add(id.clone(), meta.clone()).unwrap();
 
-        assert_eq!(&meta.name, &"bash-completion".to_string().into());
+        assert_eq!(&meta.name, &"bash-completion".to_owned().into());
 
         // Now retrieve by provider.
         let lookup = Filter::Provider(Provider {
             kind: Kind::PackageName,
-            name: "bash-completion".to_string(),
+            name: "bash-completion".to_owned(),
         });
         let fetched = db.query(Some(lookup)).unwrap();
         assert_eq!(fetched.len(), 1);
@@ -521,7 +521,7 @@ mod test {
         let italian_pizza = include_bytes!("../../../../test/conflicts/italian-pizza-1-1-1-x86_64.stone");
         let pineapple_provider = Provider {
             kind: Kind::PackageName,
-            name: "pineapple".to_string(),
+            name: "pineapple".to_owned(),
         };
 
         let mut stone = stone::read_bytes(italian_pizza).unwrap();
@@ -532,7 +532,7 @@ mod test {
         db.add(package::Id::from(meta.id()), meta.clone()).unwrap();
 
         // Ensure we're parsing the correct package!
-        assert_eq!(&meta.name, &"italian-pizza".to_string().into());
+        assert_eq!(&meta.name, &"italian-pizza".to_owned().into());
         // Ensure that the conflict info already exists in the binary package.
         assert_eq!(
             meta.conflicts.iter().collect::<Vec<&Provider>>(),
@@ -542,7 +542,7 @@ mod test {
         // Now retrieve by provider.
         let lookup = Filter::Provider(Provider {
             kind: Kind::PackageName,
-            name: "italian-pizza".to_string(),
+            name: "italian-pizza".to_owned(),
         });
         let fetched = db.query(Some(lookup)).unwrap();
         assert_eq!(fetched.len(), 1);

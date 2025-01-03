@@ -130,7 +130,7 @@ fn add(
 ) -> Result<(), Error> {
     let mut manager = repository::Manager::system(config, installation)?;
 
-    let id = repository::Id::new(name);
+    let id = repository::Id::new(&name);
 
     manager.add_repository(
         id.clone(),
@@ -166,7 +166,7 @@ fn list(installation: Installation, config: config::Manager) -> Result<(), Error
             String::new()
         };
 
-        println!(" - {} = {} [{}]{}", id, repo.uri, repo.priority, disabled);
+        println!(" - {id} = {} [{}]{disabled}", repo.uri, repo.priority);
     }
 
     Ok(())
@@ -178,7 +178,7 @@ fn update(installation: Installation, config: config::Manager, which: Option<Str
 
     runtime::block_on(async {
         match which {
-            Some(repo) => manager.refresh(&repository::Id::new(repo)).await,
+            Some(repo) => manager.refresh(&repository::Id::new(&repo)).await,
             None => manager.refresh_all().await,
         }
     })?;
@@ -188,7 +188,7 @@ fn update(installation: Installation, config: config::Manager, which: Option<Str
 
 /// Remove repo
 fn remove(installation: Installation, config: config::Manager, repo: String) -> Result<(), Error> {
-    let id = repository::Id::new(repo);
+    let id = repository::Id::new(&repo);
 
     let mut manager = repository::Manager::system(config, installation)?;
 
@@ -212,7 +212,7 @@ fn remove(installation: Installation, config: config::Manager, repo: String) -> 
 }
 
 fn enable(installation: Installation, config: config::Manager, repo: String) -> Result<(), Error> {
-    let id = repository::Id::new(repo);
+    let id = repository::Id::new(&repo);
     let mut manager = repository::Manager::system(config, installation)?;
 
     runtime::block_on(manager.enable(&id))?;
@@ -223,7 +223,7 @@ fn enable(installation: Installation, config: config::Manager, repo: String) -> 
 }
 
 fn disable(installation: Installation, config: config::Manager, repo: String) -> Result<(), Error> {
-    let id = repository::Id::new(repo);
+    let id = repository::Id::new(&repo);
     let mut manager = repository::Manager::system(config, installation)?;
 
     runtime::block_on(manager.disable(&id))?;

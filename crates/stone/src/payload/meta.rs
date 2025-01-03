@@ -183,7 +183,7 @@ impl Record for Meta {
         let _padding = reader.read_array::<1>()?;
 
         // Remove null terminated byte from string
-        let sanitize = |s: String| s.trim_end_matches('\0').to_string();
+        let sanitize = |s: String| s.trim_end_matches('\0').to_owned();
 
         let kind = match kind {
             1 => Kind::Int8(reader.read_u8()? as i8),

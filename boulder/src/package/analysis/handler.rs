@@ -45,13 +45,13 @@ pub fn binary(bucket: &mut BucketMut<'_>, info: &mut PathInfo) -> Result<Respons
     if info.target_path.starts_with("/usr/bin") {
         let provider = Provider {
             kind: dependency::Kind::Binary,
-            name: info.file_name().to_string(),
+            name: info.file_name().to_owned(),
         };
         bucket.providers.insert(provider);
     } else if info.target_path.starts_with("/usr/sbin") {
         let provider = Provider {
             kind: dependency::Kind::SystemBinary,
-            name: info.file_name().to_string(),
+            name: info.file_name().to_owned(),
         };
         bucket.providers.insert(provider);
     }
@@ -75,7 +75,7 @@ pub fn pkg_config(bucket: &mut BucketMut<'_>, info: &mut PathInfo) -> Result<Res
         } else {
             dependency::Kind::PkgConfig
         },
-        name: provider_name.to_string(),
+        name: provider_name.to_owned(),
     };
 
     bucket.providers.insert(provider);
@@ -114,7 +114,7 @@ pub fn pkg_config(bucket: &mut BucketMut<'_>, info: &mut PathInfo) -> Result<Res
 
         bucket.dependencies.insert(Dependency {
             kind,
-            name: dep.to_string(),
+            name: dep.to_owned(),
         });
     }
 
@@ -153,7 +153,7 @@ pub fn python(bucket: &mut BucketMut<'_>, info: &mut PathInfo) -> Result<Respons
     /* Insert versioned provider for auto deps */
     bucket.providers.insert(Provider {
         kind: dependency::Kind::Python,
-        name: format!("{}({})", python_name, &python_version.to_string().trim_end()),
+        name: format!("{python_name}({})", &python_version.to_string().trim_end()),
     });
 
     /* Now parse dependencies */
@@ -197,7 +197,7 @@ pub fn cmake(bucket: &mut BucketMut<'_>, info: &mut PathInfo) -> Result<Response
 
     bucket.providers.insert(Provider {
         kind: dependency::Kind::CMake,
-        name: provider_name.to_string(),
+        name: provider_name.to_owned(),
     });
 
     Ok(Decision::NextHandler.into())

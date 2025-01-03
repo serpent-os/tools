@@ -60,7 +60,7 @@ impl<'a> Package<'a> {
 
     pub fn meta(&self) -> Meta {
         Meta {
-            name: self.name.to_string().into(),
+            name: self.name.to_owned().into(),
             version_identifier: self.source.version.clone(),
             source_release: self.source.release,
             build_release: self.build_release.get(),

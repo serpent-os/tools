@@ -24,7 +24,7 @@ pub fn write(
     let packages = packages
         .iter()
         .map(|package| {
-            let name = package.name.to_string();
+            let name = package.name.to_owned();
 
             let build_depends = build_deps.iter().cloned().collect();
             let mut depends = package
@@ -59,7 +59,7 @@ pub fn write(
         .collect();
 
     let content = Content {
-        manifest_version: "0.2".to_string(),
+        manifest_version: "0.2".to_owned(),
         packages,
         source_name: recipe.parsed.source.name.clone(),
         source_release: recipe.parsed.source.release.to_string(),

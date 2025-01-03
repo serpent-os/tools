@@ -113,7 +113,7 @@ impl<T: BlitFile> Tree<T> {
     fn add_child_to_node(&mut self, node_id: NodeId, parent: &str) -> Result<(), Error> {
         let node = self.arena.get(node_id).unwrap();
         let Some(parent_node) = self.map.get(parent) else {
-            return Err(Error::MissingParent(parent.to_string()));
+            return Err(Error::MissingParent(parent.to_owned()));
         };
 
         let others = parent_node
@@ -144,12 +144,11 @@ impl<T: BlitFile> Tree<T> {
                     others.first().unwrap().id.clone()
                 )
             );
-
-            Ok(())
         } else {
             parent_node.append(node_id, &mut self.arena);
-            Ok(())
         }
+
+        Ok(())
     }
 
     pub fn print(&self) {
@@ -178,7 +177,7 @@ impl<T: BlitFile> Tree<T> {
             // Remove descendents
             let children = source.children(&self.arena).collect::<Vec<_>>();
             for child in children.iter() {
-                child.remove_subtree(&mut self.arena)
+                child.remove_subtree(&mut self.arena);
             }
         }
 

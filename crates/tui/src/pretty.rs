@@ -31,7 +31,7 @@ pub trait ColumnDisplay: Sized {
 }
 
 pub fn print_columns<T: ColumnDisplay>(items: &[T], colnum: usize) {
-    column_printer(items, Some(colnum))
+    column_printer(items, Some(colnum));
 }
 
 /// Prints a vec of items that implement the ColumnDisplay trait.
@@ -39,7 +39,7 @@ pub fn print_columns<T: ColumnDisplay>(items: &[T], colnum: usize) {
 /// These will be printed in individual columns assuming that the input order is
 /// alphabetically sorted, to give each column an ascending alpha sort.
 pub fn autoprint_columns<T: ColumnDisplay>(items: &[T]) {
-    column_printer(items, None)
+    column_printer(items, None);
 }
 
 fn column_printer<T: ColumnDisplay>(items: &[T], colnum: Option<usize>) {

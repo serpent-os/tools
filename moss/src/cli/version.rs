@@ -14,9 +14,9 @@ pub fn command() -> Command {
 pub fn handle(args: &ArgMatches) {
     let show_full = args.get_flag("full");
     if show_full {
-        print_full()
+        print_full();
     } else {
-        print()
+        print();
     }
 }
 

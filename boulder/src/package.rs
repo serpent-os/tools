@@ -41,7 +41,7 @@ impl<'a> Packager<'a> {
         // Arch names used to parse [`Macros`] for package templates
         //
         // We always use "base" plus whatever build targets we've built
-        let arches = Some("base".to_string())
+        let arches = Some("base".to_owned())
             .into_iter()
             .chain(targets.iter().map(|target| target.build_target.to_string()));
 

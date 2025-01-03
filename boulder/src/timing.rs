@@ -118,11 +118,11 @@ impl Timing {
         );
 
         for (target, stages) in &self.build {
-            println!("│{}", build::build_target_prefix(*target, 0),);
+            println!("│{}", build::build_target_prefix(*target, 0));
 
             for (stage, phases) in stages {
                 if let Some(stage) = stage {
-                    println!("│{}", build::pgo_stage_prefix(*stage, 0),);
+                    println!("│{}", build::pgo_stage_prefix(*stage, 0));
                 }
 
                 for (phase, entry) in phases {

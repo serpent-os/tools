@@ -193,9 +193,8 @@ impl Builder {
                                     .unwrap_or_default();
 
                                 println!(
-                                    "\n{}{} {}",
+                                    "\n{}{line_num} {}",
                                     "Breakpoint".bold(),
-                                    line_num,
                                     if breakpoint.exit {
                                         "(exit)".dim()
                                     } else {
@@ -274,7 +273,7 @@ impl Builder {
 pub fn build_target_prefix(target: BuildTarget, i: usize) -> String {
     let newline = if i > 0 { "\n".into() } else { String::default() };
 
-    format!("{}{}", newline, target.to_string().dim())
+    format!("{newline}{}", target.to_string().dim())
 }
 
 pub fn pgo_stage_prefix(stage: pgo::Stage, i: usize) -> String {
@@ -284,14 +283,14 @@ pub fn pgo_stage_prefix(stage: pgo::Stage, i: usize) -> String {
         String::default()
     };
 
-    format!("{}{}", newline, format!("│pgo-{stage}").dim())
+    format!("{newline}{}", format!("│pgo-{stage}").dim())
 }
 
 pub fn phase_prefix(phase: job::Phase, is_pgo: bool, i: usize) -> String {
     let pipes = if is_pgo { "││".dim() } else { "│".dim() };
     let newline = if i > 0 { format!("{pipes}\n") } else { String::default() };
 
-    format!("{}{pipes}{}", newline, phase.styled(phase))
+    format!("{newline}{pipes}{}", phase.styled(phase))
 }
 
 fn logged(

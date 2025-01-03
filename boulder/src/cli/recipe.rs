@@ -104,7 +104,7 @@ pub enum Upstream {
 
 fn parse_upstream(s: &str) -> Result<Upstream, String> {
     match s.strip_prefix("git|") {
-        Some(rev) => Ok(Upstream::Git(rev.to_string())),
+        Some(rev) => Ok(Upstream::Git(rev.to_owned())),
         None => Ok(Upstream::Plain(s.parse::<Url>().map_err(|e| e.to_string())?)),
     }
 }
@@ -142,11 +142,9 @@ fn bump(recipe: PathBuf, release: Option<u64>) -> Result<(), Error> {
 
     fs::write(&recipe, updated.as_bytes()).map_err(Error::Write)?;
     println!(
-        "{}: {} release updated from {} to {}",
+        "{}: {} release updated from {prev} to {next}",
         recipe.display(),
         parsed.source.name,
-        prev,
-        next
     );
 
     Ok(())
@@ -228,7 +226,7 @@ fn update(
                     .and_then(|map| map.keys().next())
                     .cloned();
                 if let Some(key) = key {
-                    updates.push(Update::GitUpstream(i, key, new_ref))
+                    updates.push(Update::GitUpstream(i, key, new_ref));
                 }
             }
         }
@@ -278,7 +276,7 @@ fn update(
     if overwrite {
         let recipe = recipe.expect("checked above");
         fs::write(&recipe, updated.as_bytes()).map_err(Error::Write)?;
-        println!("{} updated", recipe.display())
+        println!("{} updated", recipe.display());
     } else {
         print!("{updated}");
     }
@@ -289,7 +287,7 @@ fn update(
 async fn fetch_hash(uri: Url, mpb: &MultiProgress) -> Result<String, Error> {
     let pb = mpb.add(
         ProgressBar::new(u64::MAX)
-            .with_message(format!("{} {}", "Fetching".blue(), uri.to_string().bold(),))
+            .with_message(format!("{} {}", "Fetching".blue(), uri.to_string().bold()))
             .with_style(
                 ProgressStyle::with_template(" {spinner} {wide_msg} {binary_bytes_per_sec:>.dim} ")
                     .unwrap()

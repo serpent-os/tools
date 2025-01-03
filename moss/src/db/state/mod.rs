@@ -250,9 +250,9 @@ mod test {
         let database = Database::new(":memory:").unwrap();
 
         let selections = vec![
-            Selection::explicit(package::Id::from("pkg a".to_string())),
-            Selection::explicit(package::Id::from("pkg b".to_string())),
-            Selection::explicit(package::Id::from("pkg c".to_string())),
+            Selection::explicit(package::Id::from("pkg a".to_owned())),
+            Selection::explicit(package::Id::from("pkg b".to_owned())),
+            Selection::explicit(package::Id::from("pkg c".to_owned())),
         ];
 
         let state = database.add(&selections, Some("test"), Some("test")).unwrap();

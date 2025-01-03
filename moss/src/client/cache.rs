@@ -268,7 +268,7 @@ fn check_assets_exist(indices: &[&payload::Index], installation: &Installation) 
 /// Returns a fully qualified filesystem path to download the given hash ID into
 pub fn download_path(installation: &Installation, hash: &str) -> Result<PathBuf, Error> {
     if hash.len() < 5 {
-        return Err(Error::MalformedHash(hash.to_string()));
+        return Err(Error::MalformedHash(hash.to_owned()));
     }
 
     let directory = installation

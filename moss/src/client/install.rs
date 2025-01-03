@@ -137,7 +137,7 @@ fn resolve_input(pkgs: &[&str], client: &Client) -> Result<Vec<package::Id>, Err
 
     for (id, pkg) in queried {
         if let Some(pkg) = pkg {
-            results.push(pkg.id)
+            results.push(pkg.id);
         } else {
             return Err(Error::NoPackage(id));
         }

@@ -24,7 +24,7 @@ pub fn source(upstream: &Url) -> Option<Source> {
 
         let owner = captures.get(1)?.as_str();
         let project = captures.get(2)?.as_str();
-        let version = captures.get(3)?.as_str().to_string();
+        let version = captures.get(3)?.as_str().to_owned();
 
         return Some(Source {
             name: project.to_lowercase(),

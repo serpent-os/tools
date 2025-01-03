@@ -156,7 +156,7 @@ fn parse(
             env.as_ref().map(|env| format!("{env}\n")).unwrap_or_default()
         )
         .trim()
-        .to_string()
+        .to_owned()
     };
 
     tokens(input, |token| {
@@ -164,7 +164,7 @@ fn parse(
             Token::Action(identifier) => {
                 let action = actions
                     .get(identifier)
-                    .ok_or(Error::UnknownAction(identifier.to_string()))?;
+                    .ok_or(Error::UnknownAction(identifier.to_owned()))?;
                 dependencies.extend(action.dependencies.clone());
 
                 if let Some(nested) = parse_content_only(&action.command, actions, definitions, dependencies)? {
@@ -174,7 +174,7 @@ fn parse(
             Token::Definition(identifier) => {
                 let definition = definitions
                     .get(identifier)
-                    .ok_or(Error::UnknownDefinition(identifier.to_string()))?;
+                    .ok_or(Error::UnknownDefinition(identifier.to_owned()))?;
 
                 if let Some(nested) = parse_content_only(definition, actions, definitions, dependencies)? {
                     content.push_str(&nested);
@@ -183,7 +183,7 @@ fn parse(
             Token::Plain(plain) => content.push_str(plain),
             Token::Newline => {
                 line_num += 1;
-                content.push('\n')
+                content.push('\n');
             }
             Token::Break { exit } => {
                 let content = prepend_env(&std::mem::take(&mut content));
@@ -321,7 +321,7 @@ mod test {
         assert_eq!(
             script.commands,
             vec![
-                Command::Content("patch -v --args=a,b,c %escaped %{".to_string()),
+                Command::Content("patch -v --args=a,b,c %escaped %{".to_owned()),
                 Command::Break(Breakpoint {
                     exit: false,
                     line_num: 2,
@@ -331,11 +331,11 @@ mod test {
                     line_num: 3,
                 }),
                 Command::Content(
-                    "/mason/pkg/0001-deps-analysis-elves-In-absence-of-soname.-make-one-u.patch".to_string()
+                    "/mason/pkg/0001-deps-analysis-elves-In-absence-of-soname.-make-one-u.patch".to_owned()
                 ),
             ]
         );
-        assert_eq!(script.dependencies, vec!["patch".to_string()])
+        assert_eq!(script.dependencies, vec!["patch".to_owned()]);
     }
 
     #[test]

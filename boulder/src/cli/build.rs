@@ -96,7 +96,7 @@ pub fn handle(command: Command, env: Env) -> Result<(), Error> {
     let _fd = inhibit(
         vec!["shutdown", "sleep", "idle", "handle-lid-switch"],
         "boulder".into(),
-        format!("Build in-progress: {}", pkg_name),
+        format!("Build in-progress: {pkg_name}"),
         "block".into(),
     );
 

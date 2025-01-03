@@ -59,23 +59,25 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
 
                         match &record.kind {
                             meta::Kind::Provider(k, p) if record.tag == meta::Tag::Provides => {
-                                provs.push(format!("{}({})", k, p))
+                                provs.push(format!("{k}({p})"));
                             }
                             meta::Kind::Provider(k, p) if record.tag == meta::Tag::Conflicts => {
-                                cnfls.push(format!("{}({})", k, p))
+                                cnfls.push(format!("{k}({p})"));
                             }
-                            meta::Kind::Dependency(k, d) => deps.push(format!("{}({})", k, d)),
+                            meta::Kind::Dependency(k, d) => {
+                                deps.push(format!("{k}({d})"));
+                            }
                             meta::Kind::String(s) => {
-                                println!("{:width$} : {}", name, s, width = COLUMN_WIDTH)
+                                println!("{name:COLUMN_WIDTH$} : {s}");
                             }
                             meta::Kind::Int64(i) => {
-                                println!("{:width$} : {}", name, i, width = COLUMN_WIDTH)
+                                println!("{name:COLUMN_WIDTH$} : {i}");
                             }
                             meta::Kind::Uint64(i) => {
-                                println!("{:width$} : {}", name, i, width = COLUMN_WIDTH)
+                                println!("{name:COLUMN_WIDTH$} : {i}");
                             }
                             _ => {
-                                println!("{:width$} : {:?}", name, record, width = COLUMN_WIDTH)
+                                println!("{name:COLUMN_WIDTH$} : {record:?}");
                             }
                         }
                     }
@@ -84,36 +86,36 @@ pub fn handle(args: &ArgMatches) -> Result<(), Error> {
             }
 
             if !deps.is_empty() {
-                println!("\n{:width$} :", "Dependencies", width = COLUMN_WIDTH);
+                println!("\n{:COLUMN_WIDTH$} :", "Dependencies");
                 for dep in deps {
                     println!("    - {dep}");
                 }
             }
             if !provs.is_empty() {
-                println!("\n{:width$} :", "Providers", width = COLUMN_WIDTH);
+                println!("\n{:COLUMN_WIDTH$} :", "Providers");
                 for prov in provs {
                     println!("    - {prov}");
                 }
             }
             if !cnfls.is_empty() {
-                println!("\n{:width$} :", "Conflicts", width = COLUMN_WIDTH);
+                println!("\n{:COLUMN_WIDTH$} :", "Conflicts");
                 for cnfl in cnfls {
                     println!("    - {cnfl}");
                 }
             }
 
             if !layouts.is_empty() {
-                println!("\n{:width$} :", "Layout entries", width = COLUMN_WIDTH);
+                println!("\n{:COLUMN_WIDTH$} :", "Layout entries");
                 for layout in layouts {
                     match layout.entry {
                         layout::Entry::Regular(hash, target) => {
-                            println!("    - /usr/{} - [Regular] {:032x}", target, hash)
+                            println!("    - /usr/{target} - [Regular] {hash:032x}");
                         }
                         layout::Entry::Directory(target) => {
-                            println!("    - /usr/{} [Directory]", target)
+                            println!("    - /usr/{target} [Directory]");
                         }
                         layout::Entry::Symlink(source, target) => {
-                            println!("    - /usr/{} -> {} [Symlink]", target, source)
+                            println!("    - /usr/{target} -> {source} [Symlink]");
                         }
                         _ => unreachable!(),
                     };

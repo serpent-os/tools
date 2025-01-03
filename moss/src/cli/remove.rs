@@ -57,7 +57,7 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
     // Bail if there's packages not installed
     // TODO: Add error hookups
     if !not_installed.is_empty() {
-        println!("Missing packages in lookup: {:?}", not_installed);
+        println!("Missing packages in lookup: {not_installed:?}");
         return Err(Error::NoSuchPackage);
     }
 
@@ -94,7 +94,7 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
 
     // Print each package to stdout
     for package in removed {
-        println!("{} {}", "Removed".red(), package.meta.name.to_string().bold(),);
+        println!("{} {}", "Removed".red(), package.meta.name.to_string().bold());
     }
 
     // Map finalized state to a [`Selection`] by referencing

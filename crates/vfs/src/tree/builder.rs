@@ -55,7 +55,7 @@ impl<T: BlitFile> TreeBuilder<T> {
             for component in path::components(parent) {
                 let full_path = match leading_path {
                     Some(fp) => path::join(&fp, component),
-                    None => component.to_string(),
+                    None => component.to_owned(),
                 };
                 leading_path = Some(full_path.clone());
                 self.implicit_dirs
@@ -191,7 +191,7 @@ mod tests {
             },
             CustomFile {
                 path: "/usr/bin/rnano".into(),
-                kind: Kind::Symlink("nano".to_string()),
+                kind: Kind::Symlink("nano".to_owned()),
                 id: "nano".into(),
             },
             CustomFile {

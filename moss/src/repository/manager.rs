@@ -293,7 +293,7 @@ impl Manager {
 
 /// Directory for the repo cached data (db & stone index), hashed by identifier & repo URI
 fn cache_dir(identifier: &str, repo: &Repository, installation: &Installation) -> PathBuf {
-    let hash = format!("{:02x}", xxh3_64(format!("{}-{}", identifier, repo.uri).as_bytes()));
+    let hash = format!("{:02x}", xxh3_64(format!("{identifier}-{}", repo.uri).as_bytes()));
     installation.repo_path(hash)
 }
 

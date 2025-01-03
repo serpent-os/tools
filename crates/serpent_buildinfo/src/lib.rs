@@ -24,7 +24,7 @@ pub fn get_build_time() -> String {
             return build_time.to_rfc3339();
         }
     }
-    "unknown".to_string()
+    "unknown".to_owned()
 }
 
 /// Returns `true` if the project was built from a git source, `false` otherwise
@@ -100,9 +100,9 @@ pub fn get_simple_version() -> String {
     let git = if cfg!(BUILDINFO_IS_GIT_BUILD) {
         format!(" (Git ref {}{})", get_git_full_hash(), get_git_dirty())
     } else {
-        "".to_string()
+        "".to_owned()
     };
-    format!("v{}{}", values::VERSION, git)
+    format!("v{}{git}", values::VERSION)
 }
 
 /// For git builds this returns a string like `v0.1.0 (git 4ecad5d7e70c2cdc81350dc6b46fb55b1ccb18f5-dirty)`
@@ -112,7 +112,7 @@ pub fn get_full_version() -> String {
     let git = if cfg!(BUILDINFO_IS_GIT_BUILD) {
         format!(" (Git ref {}{})", get_git_full_hash(), get_git_dirty())
     } else {
-        "".to_string()
+        "".to_owned()
     };
-    format!("version v{}{} (Built at {})", values::VERSION, git, get_build_time())
+    format!("version v{}{git} (Built at {})", values::VERSION, get_build_time())
 }
