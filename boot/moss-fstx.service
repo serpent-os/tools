@@ -1,5 +1,5 @@
 [Unit]
-Description=Moss ste rollback
+Description=Moss state rollback
 DefaultDependencies=no
 ConditionKernelCommandLine=moss.fstx
 ConditionPathExists=/etc/initrd-release
