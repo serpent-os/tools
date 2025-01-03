@@ -1,0 +1,18 @@
+[Unit]
+Description=Moss ste rollback
+DefaultDependencies=no
+ConditionKernelCommandLine=moss.fstx
+ConditionPathExists=/etc/initrd-release
+After=sysroot.mount
+Requires=sysroot.mount
+Before=initrd-root-fs.target
+OnFailure=emergency.target
+OnFailureJobMode=isolate
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/moss/moss-fstx.sh /sysroot
+StandardInput=null
+StandardOutput=journal
+StandardError=journal+console
+RemainAfterExit=yes
