@@ -19,4 +19,4 @@ current_fstx=$(cat "$sysroot/usr/.stateID" 2>/dev/null)
 
 # Set the new fstx
 # TODO: Ask the user if they want to perform the rollback using plymouth.
-moss -D "$sysroot" state activate "$fstx_id"
+moss -D "$sysroot" state activate -y "$fstx_id"
