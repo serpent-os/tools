@@ -52,7 +52,7 @@ fn parse_repository(s: &str) -> Result<(repository::Id, Repository), String> {
         .filter_map(|kv| kv.split_once('='))
         .collect::<BTreeMap<_, _>>();
 
-    let id = repository::Id::new(key_values.get("name").ok_or("missing name")?.to_string());
+    let id = repository::Id::new(key_values.get("name").ok_or("missing name")?);
     let uri = key_values
         .get("uri")
         .ok_or("missing uri")?
@@ -115,7 +115,7 @@ pub fn add<'a>(
     name: String,
     repos: Vec<(repository::Id, Repository)>,
 ) -> Result<(), Error> {
-    let id = profile::Id::new(name);
+    let id = profile::Id::new(&name);
 
     manager.save_profile(
         id.clone(),
