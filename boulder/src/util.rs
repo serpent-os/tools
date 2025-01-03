@@ -10,7 +10,7 @@ use std::{
     thread,
 };
 
-use fs_err::{self as fs, read_dir};
+use fs_err as fs;
 use nix::unistd::{linkat, LinkatFlags};
 use url::Url;
 
@@ -32,7 +32,7 @@ pub fn recreate_dir(path: &Path) -> io::Result<()> {
 pub fn copy_dir(source_dir: &Path, out_dir: &Path) -> io::Result<()> {
     recreate_dir(out_dir)?;
 
-    let contents = read_dir(source_dir)?;
+    let contents = fs::read_dir(source_dir)?;
 
     for entry in contents.flatten() {
         let path = entry.path();
@@ -58,7 +58,7 @@ pub fn enumerate_files<'a>(
     dir: &'a Path,
     matcher: impl Fn(&Path) -> bool + Send + Copy + 'a,
 ) -> io::Result<Vec<PathBuf>> {
-    let read_dir = read_dir(dir)?;
+    let read_dir = fs::read_dir(dir)?;
 
     let mut paths = vec![];
 
@@ -78,7 +78,7 @@ pub fn enumerate_files<'a>(
 }
 
 pub fn list_dirs(dir: &Path) -> io::Result<Vec<PathBuf>> {
-    let read_dir = read_dir(dir)?;
+    let read_dir = fs::read_dir(dir)?;
 
     let mut paths = vec![];
 

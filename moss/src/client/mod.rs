@@ -16,7 +16,7 @@ use std::{
     time::Duration,
 };
 
-use fs_err::{self as fs, create_dir_all};
+use fs_err as fs;
 use futures_util::{stream, StreamExt, TryStreamExt};
 use nix::{
     errno::Errno,
@@ -368,7 +368,7 @@ impl Client {
         create_root_links(&self.installation.isolation_dir())?;
 
         let etc = blit_root.join("etc");
-        create_dir_all(etc)?;
+        fs::create_dir_all(etc)?;
 
         // ephemeral tx triggers
         Self::apply_triggers(TriggerScope::Transaction(&self.installation, &self.scope), &fstree)?;
@@ -395,7 +395,7 @@ impl Client {
 
         // Create the target tree
         if !usr_target.try_exists()? {
-            create_dir_all(&usr_target)?;
+            fs::create_dir_all(&usr_target)?;
         }
 
         // Now swap staging with live
@@ -434,7 +434,7 @@ impl Client {
         let usr_source = self.installation.staging_path("usr");
         if let Some(parent) = usr_target.parent() {
             if !parent.exists() {
-                create_dir_all(parent)?;
+                fs::create_dir_all(parent)?;
             }
         }
         // hot swap the staging/usr into the root/$id/usr
@@ -786,7 +786,7 @@ fn create_root_links(root: &Path) -> io::Result<()> {
 
 fn record_state_id(root: &Path, state: state::Id) -> Result<(), Error> {
     let usr = root.join("usr");
-    create_dir_all(&usr)?;
+    fs::create_dir_all(&usr)?;
     let state_path = usr.join(".stateID");
     fs::write(state_path, state.to_string())?;
     Ok(())

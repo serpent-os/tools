@@ -9,7 +9,7 @@ use std::process::Command;
 use std::ptr::addr_of_mut;
 use std::sync::atomic::{AtomicI32, Ordering};
 
-use fs_err::{copy, create_dir_all, remove_dir, PathExt as _};
+use fs_err::{self as fs, PathExt as _};
 use nix::libc::SIGCHLD;
 use nix::mount::{mount, umount2, MntFlags, MsFlags};
 use nix::sched::{clone, CloneFlags};
@@ -287,14 +287,14 @@ fn pivot(root: &Path, binds: &[Bind]) -> Result<(), ContainerError> {
     )?;
 
     umount2(OLD_PATH, MntFlags::MNT_DETACH).map_err(ContainerError::UnmountOldRoot)?;
-    remove_dir(OLD_PATH)?;
+    fs::remove_dir(OLD_PATH)?;
 
     Ok(())
 }
 
 fn setup_networking(root: &Path) -> Result<(), ContainerError> {
     ensure_directory(root.join("etc"))?;
-    copy("/etc/resolv.conf", root.join("etc/resolv.conf"))?;
+    fs::copy("/etc/resolv.conf", root.join("etc/resolv.conf"))?;
     Ok(())
 }
 
@@ -307,7 +307,7 @@ fn setup_localhost() -> Result<(), ContainerError> {
 fn ensure_directory(path: impl AsRef<Path>) -> Result<(), ContainerError> {
     let path = path.as_ref();
     if !path.exists() {
-        create_dir_all(path)?;
+        fs::create_dir_all(path)?;
     }
     Ok(())
 }
