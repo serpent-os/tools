@@ -48,7 +48,7 @@ fn scan_autotools(state: &mut State<'_>, path: &Path) -> Result<(), Error> {
     // Check all meson dependency() calls
     for captures in regex_pkgconfig.captures_iter(&contents) {
         if let Some(capture) = captures.get(2) {
-            let name = capture.as_str().to_string();
+            let name = capture.as_str().to_owned();
 
             state.add_dependency(Dependency {
                 kind: dependency::Kind::PkgConfig,

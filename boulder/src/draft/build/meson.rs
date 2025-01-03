@@ -43,7 +43,7 @@ fn scan_meson(state: &mut State<'_>, path: &Path) -> Result<(), Error> {
     // Check all meson dependency() calls
     for captures in regex_dependency.captures_iter(&contents) {
         if let Some(capture) = captures.get(1) {
-            let name = capture.as_str().to_string();
+            let name = capture.as_str().to_owned();
 
             state.add_dependency(Dependency {
                 kind: dependency::Kind::PkgConfig,
@@ -55,7 +55,7 @@ fn scan_meson(state: &mut State<'_>, path: &Path) -> Result<(), Error> {
     // Check all meson find_program() calls
     for captures in regex_program.captures_iter(&contents) {
         if let Some(capture) = captures.get(1) {
-            let name = capture.as_str().to_string();
+            let name = capture.as_str().to_owned();
 
             // Relative programs are a no go
             if name.contains('/') {

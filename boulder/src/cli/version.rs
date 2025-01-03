@@ -17,9 +17,9 @@ pub struct Command {
 
 pub fn handle(command: Command) {
     if command.full {
-        print_full()
+        print_full();
     } else {
-        print()
+        print();
     }
 }
 

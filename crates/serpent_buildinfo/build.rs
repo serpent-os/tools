@@ -8,8 +8,8 @@ use chrono::{DateTime, Utc};
 /// This also outputs necessary ‘cargo:rerun-if-env-changed’ tag to make sure
 /// build script is rerun if the environment variable changes.
 fn env(key: &str) -> Result<std::ffi::OsString, Box<dyn std::error::Error>> {
-    println!("cargo:rerun-if-env-changed={}", key);
-    std::env::var_os(key).ok_or_else(|| Box::from(format!("Missing `{}` environmental variable", key)))
+    println!("cargo:rerun-if-env-changed={key}");
+    std::env::var_os(key).ok_or_else(|| Box::from(format!("Missing `{key}` environmental variable")))
 }
 
 /// Calls program with given arguments and returns its standard output.  If
@@ -34,9 +34,9 @@ fn command(prog: &str, args: &[&str], cwd: Option<std::path::PathBuf>) -> Result
         }
         Ok(stdout)
     } else if let Some(code) = out.status.code() {
-        Err(Box::from(format!("{}: terminated with {}", prog, code)))
+        Err(Box::from(format!("{prog}: terminated with {code}")))
     } else {
-        Err(Box::from(format!("{}: killed by signal", prog)))
+        Err(Box::from(format!("{prog}: killed by signal")))
     }
 }
 
@@ -57,7 +57,7 @@ fn get_git_info() -> Result<(), Box<dyn std::error::Error>> {
         Err(msg) => {
             // We're not in a git repo, most likely we're building from a source archive
             println!("cargo:warning=unable to determine git version (not in git repository?)");
-            println!("cargo:warning={}", msg);
+            println!("cargo:warning={msg}");
 
             // It's unlikely, but possible that someone could run git init. Might as well catch that.
             println!("cargo::rerun-if-changed={}/.git", pkg_dir.display());
@@ -81,7 +81,7 @@ fn get_git_info() -> Result<(), Box<dyn std::error::Error>> {
         std::borrow::Cow::Borrowed(full_hash) => {
             println!("cargo:rustc-env=BUILDINFO_GIT_FULL_HASH={}", full_hash.trim());
         }
-        std::borrow::Cow::Owned(full_hash) => return Err(Box::from(format!("git: Invalid output: {}", full_hash))),
+        std::borrow::Cow::Owned(full_hash) => return Err(Box::from(format!("git: Invalid output: {full_hash}"))),
     }
 
     // Get the short git hash
@@ -91,7 +91,7 @@ fn get_git_info() -> Result<(), Box<dyn std::error::Error>> {
         std::borrow::Cow::Borrowed(short_hash) => {
             println!("cargo:rustc-env=BUILDINFO_GIT_SHORT_HASH={}", short_hash.trim());
         }
-        std::borrow::Cow::Owned(short_hash) => return Err(Box::from(format!("git: Invalid output: {}", short_hash))),
+        std::borrow::Cow::Owned(short_hash) => return Err(Box::from(format!("git: Invalid output: {short_hash}"))),
     }
 
     // Get whether this is built from a dirty tree
@@ -102,7 +102,7 @@ fn get_git_info() -> Result<(), Box<dyn std::error::Error>> {
             0 => {}
             _ => println!("cargo:rustc-cfg=BUILDINFO_IS_DIRTY"),
         },
-        std::borrow::Cow::Owned(output) => return Err(Box::from(format!("git: Invalid output: {}", output))),
+        std::borrow::Cow::Owned(output) => return Err(Box::from(format!("git: Invalid output: {output}"))),
     }
 
     // Get the commit summary
@@ -112,7 +112,7 @@ fn get_git_info() -> Result<(), Box<dyn std::error::Error>> {
         std::borrow::Cow::Borrowed(summary) => {
             println!("cargo:rustc-env=BUILDINFO_GIT_SUMMARY={}", summary.trim());
         }
-        std::borrow::Cow::Owned(summary) => return Err(Box::from(format!("git: Invalid output: {}", summary))),
+        std::borrow::Cow::Owned(summary) => return Err(Box::from(format!("git: Invalid output: {summary}"))),
     }
 
     Ok(())

@@ -52,7 +52,7 @@ impl Database {
                         .load_iter(conn)?
                         .map(map_layout)
                         .collect::<Result<Vec<_>, _>>()?,
-                )
+                );
             }
 
             Ok(output)
@@ -258,7 +258,7 @@ mod test {
             .iter()
             .filter_map(PayloadKind::layout)
             .flat_map(|p| &p.body)
-            .map(|layout| (package::Id::from("test".to_string()), layout))
+            .map(|layout| (package::Id::from("test".to_owned()), layout))
             .collect::<Vec<_>>();
 
         let count = layouts.len();

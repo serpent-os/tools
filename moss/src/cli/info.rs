@@ -64,7 +64,7 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
 /// Print the title for each metadata section
 fn print_titled(title: &'static str) {
     let display_width = COLUMN_WIDTH - title.len();
-    print!("{}{:width$} ", title.bold(), " ", width = display_width);
+    print!("{}{:display_width$} ", title.bold(), " ");
 }
 
 /// Print paragraph with breaks
@@ -102,9 +102,9 @@ fn print_paragraph(p: &str) {
                     println!("{}", current_line.dim());
                     first_line = false;
                 } else {
-                    println!("{:width$} {}", " ", current_line.dim(), width = COLUMN_WIDTH);
+                    println!("{:COLUMN_WIDTH$} {}", " ", current_line.dim());
                 }
-                current_line = word.to_string();
+                current_line = word.to_owned();
             }
         }
 
@@ -113,7 +113,7 @@ fn print_paragraph(p: &str) {
             if first_line && first_paragraph {
                 println!("{}", current_line.dim());
             } else {
-                println!("{:width$} {}", " ", current_line.dim(), width = COLUMN_WIDTH);
+                println!("{:COLUMN_WIDTH$} {}", " ", current_line.dim());
             }
         }
 
@@ -128,7 +128,7 @@ where
     for (idx, item) in items.into_iter().enumerate() {
         match idx {
             0 => println!("• {}", item.to_string()),
-            _ => println!("{:width$} • {}", " ", item.to_string(), width = COLUMN_WIDTH),
+            _ => println!("{:COLUMN_WIDTH$} • {}", " ", item.to_string()),
         }
     }
 }

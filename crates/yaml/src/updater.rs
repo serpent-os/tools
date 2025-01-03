@@ -21,7 +21,7 @@ impl Updater {
         self.operations.push(Operation {
             path,
             update: Update::Key(key.to_string()),
-        })
+        });
     }
 
     pub fn update_value(&mut self, value: impl ToString, f: impl FnOnce(Path) -> Path) {
@@ -30,7 +30,7 @@ impl Updater {
         self.operations.push(Operation {
             path,
             update: Update::Value(value.to_string()),
-        })
+        });
     }
 
     pub fn apply(&self, input: impl ToString) -> String {
@@ -66,7 +66,7 @@ impl<'a> ops::Div<&'a str> for Path {
     type Output = Self;
 
     fn div(self, rhs: &'a str) -> Self::Output {
-        Self(self.0.into_iter().chain(Some(Segment::Map(rhs.to_string()))).collect())
+        Self(self.0.into_iter().chain(Some(Segment::Map(rhs.to_owned()))).collect())
     }
 }
 

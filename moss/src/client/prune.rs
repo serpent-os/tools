@@ -263,12 +263,7 @@ fn remove_orphaned_files(
 fn enumerate_file_hashes(root: impl AsRef<Path>) -> io::Result<BTreeSet<String>> {
     let files = enumerate_files(root)?;
 
-    let path_to_hash = |path: PathBuf| {
-        path.file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or_default()
-            .to_string()
-    };
+    let path_to_hash = |path: PathBuf| path.file_name().and_then(|s| s.to_str()).unwrap_or_default().to_owned();
 
     Ok(files.into_iter().map(path_to_hash).collect())
 }

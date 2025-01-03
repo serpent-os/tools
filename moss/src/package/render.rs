@@ -21,7 +21,7 @@ impl ColumnDisplay for Package {
     }
 
     fn display_column(&self, writer: &mut impl Write, col: Column, width: usize) {
-        ColumnDisplay::display_column(&self, writer, col, width)
+        ColumnDisplay::display_column(&self, writer, col, width);
     }
 }
 

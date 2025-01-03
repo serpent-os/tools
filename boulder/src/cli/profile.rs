@@ -102,7 +102,7 @@ pub fn list(manager: profile::Manager<'_>) -> Result<(), Error> {
             .iter()
             .sorted_by(|(_, a), (_, b)| a.priority.cmp(&b.priority).reverse())
         {
-            println!(" - {} = {} [{}]", id, repo.uri, repo.priority);
+            println!(" - {id} = {} [{}]", repo.uri, repo.priority);
         }
     }
 

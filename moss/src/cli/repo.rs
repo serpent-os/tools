@@ -166,7 +166,7 @@ fn list(installation: Installation, config: config::Manager) -> Result<(), Error
             String::new()
         };
 
-        println!(" - {} = {} [{}]{}", id, repo.uri, repo.priority, disabled);
+        println!(" - {id} = {} [{}]{disabled}", repo.uri, repo.priority);
     }
 
     Ok(())

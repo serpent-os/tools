@@ -78,7 +78,7 @@ impl Collector {
             .matching_package(target_path.to_str().unwrap_or_default())
             .ok_or(Error::NoMatchingRule)?;
 
-        PathInfo::new(path, target_path, metadata, hasher, package.to_string())
+        PathInfo::new(path, target_path, metadata, hasher, package.to_owned())
     }
 
     /// Enumerates all paths from the filesystem starting at root or subdir of root, if provided

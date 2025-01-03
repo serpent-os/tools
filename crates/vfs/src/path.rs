@@ -1,6 +1,6 @@
 pub fn join(a: &str, b: &str) -> String {
     if b.starts_with('/') {
-        b.to_string()
+        b.to_owned()
     } else if a.ends_with('/') {
         format!("{a}{b}")
     } else {

@@ -51,4 +51,4 @@ diesel::joinable!(meta_dependencies -> meta (package));
 diesel::joinable!(meta_licenses -> meta (package));
 diesel::joinable!(meta_providers -> meta (package));
 
-diesel::allow_tables_to_appear_in_same_query!(meta, meta_conflicts, meta_dependencies, meta_licenses, meta_providers,);
+diesel::allow_tables_to_appear_in_same_query!(meta, meta_conflicts, meta_dependencies, meta_licenses, meta_providers);

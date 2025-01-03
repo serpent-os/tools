@@ -104,7 +104,7 @@ impl Record for Layout {
 
         let source_length = reader.read_u16()?;
         let target_length = reader.read_u16()?;
-        let sanitize = |s: String| s.trim_end_matches('\0').to_string();
+        let sanitize = |s: String| s.trim_end_matches('\0').to_owned();
 
         let file_type = match reader.read_u8()? {
             1 => FileType::Regular,
