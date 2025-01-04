@@ -229,7 +229,7 @@ impl Client {
     ///
     /// The current state gets archived.\
     /// Returns the old state that was archived.
-    pub fn activate_state(&self, id: state::Id) -> Result<state::Id, Error> {
+    pub fn activate_state(&self, id: state::Id, skip_triggers: bool) -> Result<state::Id, Error> {
         // Fetch the new state
         let new = self.state_db.get(id).map_err(|_| Error::StateDoesntExist(id))?;
 
@@ -261,6 +261,10 @@ impl Client {
         // Build VFS from new state selections
         // to build triggers from
         let fstree = self.vfs(new.selections.iter().map(|selection| &selection.package))?;
+
+        if skip_triggers {
+            return Ok(old);
+        }
 
         // Run system triggers
         let sys_triggers = postblit::triggers(TriggerScope::System(&self.installation, &self.scope), &fstree)?;
