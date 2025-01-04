@@ -341,7 +341,7 @@ impl Client {
         old_state: Option<state::Id>,
     ) -> Result<(), Error> {
         record_state_id(&self.installation.staging_dir(), state.id)?;
-        record_os_release(&self.installation.staging_dir(), Some(state.id))?;
+        record_os_release(&self.installation.staging_dir())?;
 
         create_root_links(&self.installation.isolation_dir())?;
         Self::apply_triggers(TriggerScope::Transaction(&self.installation, &self.scope), &fstree)?;
@@ -367,7 +367,7 @@ impl Client {
     }
 
     pub fn apply_ephemeral_blit(&self, fstree: vfs::Tree<PendingFile>, blit_root: &Path) -> Result<(), Error> {
-        record_os_release(blit_root, None)?;
+        record_os_release(blit_root)?;
         create_root_links(blit_root)?;
         create_root_links(&self.installation.isolation_dir())?;
 
@@ -797,20 +797,18 @@ fn record_state_id(root: &Path, state: state::Id) -> Result<(), Error> {
 }
 
 /// Record the operating system release info
-fn record_os_release(root: &Path, state_id: Option<state::Id>) -> Result<(), Error> {
+fn record_os_release(root: &Path) -> Result<(), Error> {
     let os_release = format!(
         r#"NAME="Serpent OS"
 VERSION="{version}"
 ID="serpentos"
 VERSION_CODENAME={version}
 VERSION_ID="{version}"
-PRETTY_NAME="Serpent OS {version} (fstx #{tx})"
+PRETTY_NAME="Serpent OS {version}"
 ANSI_COLOR="1;35"
 HOME_URL="https://serpentos.com"
 BUG_REPORT_URL="https://github.com/serpent-os""#,
-        version = "0.24.6",
-        // TODO: Better id for ephemeral transactions
-        tx = state_id.unwrap_or_default()
+        version = "0.24.6"
     );
 
     // It's possible this doesn't exist if
