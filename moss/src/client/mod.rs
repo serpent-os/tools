@@ -359,9 +359,7 @@ impl Client {
         // At this point we're allowed to run system triggers
         Self::apply_triggers(TriggerScope::System(&self.installation, &self.scope), &fstree)?;
 
-        // Last but not least, let us see some boot management on the current state
-        let layouts = self.layout_db.query(state.selections.iter().map(|s| &s.package))?;
-        boot::synchronize(&self.installation, state, &layouts)?;
+        boot::synchronize(self, state)?;
 
         Ok(())
     }
