@@ -150,7 +150,7 @@ pub fn synchronize(install: &Installation, state: &State, layouts: &[(Id, Layout
             Entry::new(d)
                 .with_cmdline(CmdlineEntry {
                     name: "---fstx---".to_owned(),
-                    snippet: format!("moss.fstx={}", id),
+                    snippet: format!("moss.fstx={id}"),
                 })
                 .with_sysroot(&install.root)
                 .with_state_id(id)

@@ -27,7 +27,7 @@ pub mod manager;
 pub struct Id(String);
 
 impl Id {
-    pub fn new(identifier: String) -> Self {
+    pub fn new(identifier: &str) -> Self {
         Self(
             identifier
                 .chars()

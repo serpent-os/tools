@@ -63,7 +63,7 @@ pub fn sync(recipe: &Recipe, paths: &Paths) -> Result<(), Error> {
 
                 let install = upstream.fetch(paths, &pb).await?;
 
-                pb.set_message(format!("{} {}", "Copying".yellow(), upstream.name().bold(),));
+                pb.set_message(format!("{} {}", "Copying".yellow(), upstream.name().bold()));
                 pb.set_style(
                     ProgressStyle::with_template(" {spinner} {wide_msg} ")
                         .unwrap()
@@ -84,7 +84,7 @@ pub fn sync(recipe: &Recipe, paths: &Paths) -> Result<(), Error> {
 
                 pb.finish();
                 mp.remove(&pb);
-                mp.suspend(|| println!("{} {}{}", "Shared".green(), upstream.name().bold(), cached_tag,));
+                mp.suspend(|| println!("{} {}{cached_tag}", "Shared".green(), upstream.name().bold()));
                 tp.inc(1);
 
                 Ok(()) as Result<_, Error>
@@ -187,10 +187,10 @@ impl FromStr for Hash {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.len() < 5 {
-            return Err(ParseHashError::TooShort(s.to_string()));
+            return Err(ParseHashError::TooShort(s.to_owned()));
         }
 
-        Ok(Self(s.to_string()))
+        Ok(Self(s.to_owned()))
     }
 }
 
@@ -258,7 +258,7 @@ impl Plain {
 
         if path.exists() {
             return Ok(Installed::Plain {
-                name: name.to_string(),
+                name: name.to_owned(),
                 path,
                 was_cached: true,
             });
@@ -284,7 +284,7 @@ impl Plain {
             fs::remove_file(&partial_path).await?;
 
             return Err(Error::HashMismatch {
-                name: name.to_string(),
+                name: name.to_owned(),
                 expected: self.hash.0.clone(),
                 got: hash,
             });
@@ -293,7 +293,7 @@ impl Plain {
         fs::rename(partial_path, &path).await?;
 
         Ok(Installed::Plain {
-            name: name.to_string(),
+            name: name.to_owned(),
             path,
             was_cached: false,
         })
@@ -358,7 +358,7 @@ impl Git {
         if self.ref_exists(&final_path).await? {
             self.reset_to_ref(&final_path).await?;
             return Ok(Installed::Git {
-                name: self.name().to_string(),
+                name: self.name().to_owned(),
                 path: final_path,
                 was_cached: true,
             });
@@ -385,7 +385,7 @@ impl Git {
         self.reset_to_ref(&final_path).await?;
 
         Ok(Installed::Git {
-            name: self.name().to_string(),
+            name: self.name().to_owned(),
             path: final_path,
             was_cached: false,
         })

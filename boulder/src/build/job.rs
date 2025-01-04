@@ -78,7 +78,7 @@ fn work_dir(build_dir: &Path, upstreams: &[Upstream]) -> PathBuf {
                 let unpack_dir = unpack_dir
                     .as_ref()
                     .map(|dir| dir.display().to_string())
-                    .unwrap_or_else(|| rename.to_string());
+                    .unwrap_or_else(|| rename.to_owned());
 
                 work_dir = build_dir.join(unpack_dir);
             }
@@ -87,7 +87,7 @@ fn work_dir(build_dir: &Path, upstreams: &[Upstream]) -> PathBuf {
                 let target = clone_dir
                     .as_ref()
                     .map(|dir| dir.display().to_string())
-                    .unwrap_or_else(|| source.to_string());
+                    .unwrap_or_else(|| source.to_owned());
 
                 work_dir = build_dir.join(target);
             }

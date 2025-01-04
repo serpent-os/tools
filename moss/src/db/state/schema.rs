@@ -22,4 +22,4 @@ diesel::table! {
 
 diesel::joinable!(state_selections -> state (state_id));
 
-diesel::allow_tables_to_appear_in_same_query!(state, state_selections,);
+diesel::allow_tables_to_appear_in_same_query!(state, state_selections);

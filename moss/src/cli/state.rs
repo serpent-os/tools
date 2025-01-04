@@ -154,9 +154,9 @@ fn print_state(state: state::State) {
         state.id.to_string().bold(),
         state.summary.unwrap_or_else(|| String::from("system transaction"))
     );
-    println!("{} {}", "Created:".bold(), formatted_time);
+    println!("{} {formatted_time}", "Created:".bold());
     if let Some(desc) = &state.description {
-        println!("{} {}", "Description:".bold(), desc);
+        println!("{} {desc}", "Description:".bold());
     }
     println!("{} {}", "Packages:".bold(), state.selections.len());
     println!();

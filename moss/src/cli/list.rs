@@ -137,7 +137,7 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
         } else {
             item.name.dim()
         };
-        print!("{} {:width$} ", name, " ", width = width);
+        print!("{name} {:width$} ", " ");
 
         let print_revision = |rev: Revision, is_sync| {
             let version = if is_sync {
@@ -145,7 +145,7 @@ pub fn handle(args: &ArgMatches, installation: Installation) -> Result<(), Error
             } else {
                 rev.version.magenta()
             };
-            print!("{}-{}", version, rev.release.dim());
+            print!("{version}-{}", rev.release.dim());
         };
 
         // Print revision

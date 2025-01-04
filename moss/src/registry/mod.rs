@@ -118,9 +118,9 @@ mod test {
         let mut registry = Registry::default();
 
         let package = |id: &str, release| Package {
-            id: package::Id::from(id.to_string()),
+            id: package::Id::from(id.to_owned()),
             meta: package::Meta {
-                name: package::Name::from(id.to_string()),
+                name: package::Name::from(id.to_owned()),
                 version_identifier: Default::default(),
                 source_release: release,
                 build_release: Default::default(),
@@ -156,7 +156,7 @@ mod test {
 
         // Packages are sorted by plugin priority, desc -> release number, desc
         for (idx, package) in query.enumerate() {
-            let id = |id: &str| package::Id::from(id.to_string());
+            let id = |id: &str| package::Id::from(id.to_owned());
 
             match idx {
                 0 => assert_eq!(package.id, id("c")),
@@ -173,9 +173,9 @@ mod test {
         let mut registry = Registry::default();
 
         let package = |id: &str, flags| Package {
-            id: package::Id::from(id.to_string()),
+            id: package::Id::from(id.to_owned()),
             meta: package::Meta {
-                name: package::Name::from(id.to_string()),
+                name: package::Name::from(id.to_owned()),
                 version_identifier: Default::default(),
                 source_release: Default::default(),
                 build_release: Default::default(),
@@ -216,7 +216,7 @@ mod test {
                 .into_iter()
                 .map(|p| String::from(p.meta.name))
                 .collect::<BTreeSet<_>>();
-            let expected = expected.iter().map(|s| s.to_string()).collect::<BTreeSet<_>>();
+            let expected = expected.iter().map(|&s| s.to_owned()).collect::<BTreeSet<_>>();
 
             actual == expected
         }

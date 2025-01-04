@@ -39,7 +39,7 @@ pub struct Guard;
 
 impl Drop for Guard {
     fn drop(&mut self) {
-        destroy()
+        destroy();
     }
 }
 

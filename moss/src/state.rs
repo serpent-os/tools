@@ -103,6 +103,6 @@ impl pretty::ColumnDisplay for ColumnDisplay<'_> {
     }
 
     fn display_column(&self, writer: &mut impl Write, _col: pretty::Column, width: usize) {
-        let _ = write!(writer, "State {}{:width$}", self.0.id.to_string().bold(), " ",);
+        let _ = write!(writer, "State {}{:width$}", self.0.id.to_string().bold(), " ");
     }
 }

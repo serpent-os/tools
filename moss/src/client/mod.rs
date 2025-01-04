@@ -170,7 +170,7 @@ impl Client {
         // Reload manager if not explicit to pickup config changes
         // then refresh indexes
         if !self.repositories.is_explicit() {
-            self.repositories = repository::Manager::system(self.config.clone(), self.installation.clone())?
+            self.repositories = repository::Manager::system(self.config.clone(), self.installation.clone())?;
         };
         self.repositories.refresh_all().await?;
 
@@ -508,7 +508,7 @@ impl Client {
                     let package_name = package.meta.name.to_string();
 
                     // Set progress to unpacking
-                    progress_bar.set_message(format!("{} {}", "Unpacking".yellow(), package_name.clone().bold(),));
+                    progress_bar.set_message(format!("{} {}", "Unpacking".yellow(), package_name.clone().bold()));
                     progress_bar.set_length(1000);
                     progress_bar.set_position(0);
 
@@ -531,7 +531,7 @@ impl Client {
 
                     // Write installed line
                     multi_progress
-                        .suspend(|| println!("{} {}{}", "Installed".green(), package_name.clone().bold(), cached_tag,));
+                        .suspend(|| println!("{} {}{cached_tag}", "Installed".green(), package_name.clone().bold()));
 
                     // Inc total progress by 1
                     total_progress.inc(1);
@@ -700,7 +700,7 @@ impl Client {
     fn blit_element_item(&self, parent: RawFd, cache: RawFd, subpath: &str, item: &PendingFile) -> Result<(), Error> {
         match &item.layout.entry {
             layout::Entry::Regular(id, _) => {
-                let hash = format!("{:02x}", id);
+                let hash = format!("{id:02x}");
                 let directory = if hash.len() >= 10 {
                     PathBuf::from(&hash[..2]).join(&hash[2..4]).join(&hash[4..6])
                 } else {
@@ -713,7 +713,7 @@ impl Client {
                 match *id {
                     // Mystery empty-file hash. Do not allow dupes!
                     // https://github.com/serpent-os/tools/issues/372
-                    0x99aa06d3014798d86001c324468d497f => {
+                    0x99aa_06d3_0147_98d8_6001_c324_468d_497f => {
                         let fd = fcntl::openat(
                             parent,
                             subpath,

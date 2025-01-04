@@ -112,7 +112,7 @@ impl Phase {
             .or(root_build.environment.as_deref())
             .filter(|env| *env != "(null)" && !env.is_empty() && !matches!(self, Phase::Prepare))
             .unwrap_or_default()
-            .to_string();
+            .to_owned();
         env = format!("%scriptBase\n{env}\n");
 
         let mut parser = script::Parser::new().env(env);
@@ -131,7 +131,7 @@ impl Phase {
                 .arch
                 .get(arch)
                 .cloned()
-                .ok_or_else(|| Error::MissingArchMacros(arch.to_string()))?;
+                .ok_or_else(|| Error::MissingArchMacros(arch.to_owned()))?;
 
             parser.add_macros(macros.clone());
         }
@@ -183,7 +183,6 @@ impl Phase {
             parser.add_definition("compiler_nm", "llvm-nm");
             parser.add_definition("compiler_ranlib", "llvm-ranlib");
             parser.add_definition("compiler_strip", "llvm-strip");
-            parser.add_definition("compiler_path", path);
         } else {
             parser.add_definition("compiler_c", "gcc");
             parser.add_definition("compiler_cxx", "g++");
@@ -199,8 +198,8 @@ impl Phase {
             parser.add_definition("compiler_nm", "gcc-nm");
             parser.add_definition("compiler_ranlib", "gcc-ranlib");
             parser.add_definition("compiler_strip", "strip");
-            parser.add_definition("compiler_path", path);
         }
+        parser.add_definition("compiler_path", path);
 
         /* Allow packagers to do stage specific actions in a pgo build */
         if matches!(pgo_stage, Some(pgo::Stage::One)) {
@@ -244,7 +243,7 @@ fn prepare_script(upstreams: &[stone_recipe::Upstream]) -> String {
                 let unpack_dir = unpack_dir
                     .as_ref()
                     .map(|dir| dir.display().to_string())
-                    .unwrap_or_else(|| rename.to_string());
+                    .unwrap_or_else(|| rename.to_owned());
                 let strip_dirs = strip_dirs.unwrap_or(1);
 
                 let _ = writeln!(&mut content, "mkdir -p {unpack_dir}");
@@ -265,7 +264,7 @@ fn prepare_script(upstreams: &[stone_recipe::Upstream]) -> String {
                 let target = clone_dir
                     .as_ref()
                     .map(|dir| dir.display().to_string())
-                    .unwrap_or_else(|| source.to_string());
+                    .unwrap_or_else(|| source.to_owned());
 
                 let _ = writeln!(&mut content, "mkdir -p {target}");
                 let _ = writeln!(
@@ -295,7 +294,7 @@ fn add_tuning(
             .arch
             .get(arch)
             .cloned()
-            .ok_or_else(|| Error::MissingArchMacros(arch.to_string()))?;
+            .ok_or_else(|| Error::MissingArchMacros(arch.to_owned()))?;
 
         tuning.add_macros(macros);
     }

@@ -229,10 +229,10 @@ impl TryFrom<String> for Provider {
 
 /// Parse the [`Kind`] of dependency or provider from the string
 fn parse(s: &str) -> Result<(Kind, String), ParseError> {
-    let (kind, rest) = s.split_once('(').ok_or(ParseError(s.to_string()))?;
+    let (kind, rest) = s.split_once('(').ok_or(ParseError(s.to_owned()))?;
 
     if !rest.ends_with(')') {
-        return Err(ParseError(s.to_string()));
+        return Err(ParseError(s.to_owned()));
     }
 
     let kind = kind.parse::<Kind>().map_err(|e| ParseError(e.to_string()))?;

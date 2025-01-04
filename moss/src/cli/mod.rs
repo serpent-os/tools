@@ -105,18 +105,18 @@ fn generate_manpages(cmd: &Command, dir: &Path, prefix: Option<&str>) -> io::Res
     man.render(&mut buffer)?;
 
     let filename = if let Some(prefix) = prefix {
-        format!("{}-{}.1", prefix, name)
+        format!("{prefix}-{name}.1")
     } else {
-        format!("{}.1", name)
+        format!("{name}.1")
     };
 
     fs::write(dir.join(filename), buffer)?;
 
     for subcmd in cmd.get_subcommands() {
         let new_prefix = if let Some(p) = prefix {
-            format!("{}-{}", p, name)
+            format!("{p}-{name}")
         } else {
-            name.to_string()
+            name.to_owned()
         };
         generate_manpages(subcmd, dir, Some(&new_prefix))?;
     }
@@ -217,7 +217,7 @@ fn replace_aliases(args: env::Args) -> Vec<String> {
             continue;
         };
 
-        args.splice(pos..pos + 1, replacements.iter().map(|arg| arg.to_string()));
+        args.splice(pos..pos + 1, replacements.iter().map(|&arg| arg.to_owned()));
 
         break;
     }
