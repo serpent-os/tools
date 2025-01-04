@@ -16,6 +16,7 @@ use nix::sched::{clone, CloneFlags};
 use nix::sys::prctl::set_pdeathsig;
 use nix::sys::signal::{kill, sigaction, SaFlags, SigAction, SigHandler, Signal};
 use nix::sys::signalfd::SigSet;
+use nix::sys::stat::{umask, Mode};
 use nix::sys::wait::{waitpid, WaitStatus};
 use nix::unistd::{close, pipe, pivot_root, read, sethostname, tcsetpgrp, write, Pid, Uid};
 use thiserror::Error;
@@ -288,6 +289,8 @@ fn pivot(root: &Path, binds: &[Bind]) -> Result<(), ContainerError> {
 
     umount2(OLD_PATH, MntFlags::MNT_DETACH).map_err(ContainerError::UnmountOldRoot)?;
     fs::remove_dir(OLD_PATH)?;
+
+    umask(Mode::S_IWGRP | Mode::S_IWOTH);
 
     Ok(())
 }
