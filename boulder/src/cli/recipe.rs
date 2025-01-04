@@ -54,12 +54,7 @@ pub enum Subcommand {
     },
     #[command(about = "Create skeletal stone.yaml recipe from source archive URIs")]
     New {
-        #[arg(
-            short,
-            long,
-            default_value = "./stone.yaml",
-            help = "Location to output generated build recipe"
-        )]
+        #[arg(short, long, default_value = ".", help = "Location to output generated files")]
         output: PathBuf,
         #[arg(required = true, value_name = "URI", help = "Source archive URIs")]
         upstreams: Vec<Url>,
@@ -154,12 +149,20 @@ fn new(output: PathBuf, upstreams: Vec<Url>) -> Result<(), Error> {
     // We use async to fetch upstreams
     let _guard = runtime::init();
 
+    const RECIPE_FILE: &str = "stone.yaml";
+    const MONITORING_FILE: &str = "monitoring.yaml";
+
     let drafter = Drafter::new(upstreams);
-    let recipe = drafter.run()?;
+    let draft = drafter.run()?;
 
-    fs::write(&output, recipe).map_err(Error::Write)?;
+    if !output.is_dir() {
+        fs::create_dir_all(&output).map_err(Error::CreateDir)?;
+    }
 
-    println!("Saved recipe to {output:?}");
+    fs::write(PathBuf::from(&output).join(RECIPE_FILE), draft.stone).map_err(Error::Write)?;
+    fs::write(PathBuf::from(&output).join(MONITORING_FILE), draft.monitoring).map_err(Error::Write)?;
+
+    println!("Saved {RECIPE_FILE} & {MONITORING_FILE} to {output:?}");
 
     Ok(())
 }
@@ -418,6 +421,8 @@ pub enum Error {
     Read(#[source] io::Error),
     #[error("writing recipe")]
     Write(#[source] io::Error),
+    #[error("creating output directory")]
+    CreateDir(#[source] io::Error),
     #[error("deserializing recipe")]
     Deser(#[from] serde_yaml::Error),
     #[error("fetch upstream")]
