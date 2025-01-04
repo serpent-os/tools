@@ -54,10 +54,9 @@ impl AsRef<Path> for KernelCandidate<'_> {
 }
 
 /// From a given set of input paths, produce a set of match pairs
-/// NOTE: This only works for a *new* blit and doesn't retroactively
-/// sync old kernels!
+/// This is applied against the given system root
 fn kernel_files_from_state<'a>(
-    install: &Installation,
+    root: &Path,
     layouts: &'a [(Id, Layout)],
     pattern: &'a Pattern,
 ) -> Vec<KernelCandidate<'a>> {
@@ -68,7 +67,7 @@ fn kernel_files_from_state<'a>(
             layout::Entry::Regular(_, target) => {
                 if pattern.match_path(target).is_some() {
                     kernel_entries.push(KernelCandidate {
-                        path: install.root.join("usr").join(target),
+                        path: root.join("usr").join(target),
                         _layout: path,
                     });
                 }
@@ -76,7 +75,7 @@ fn kernel_files_from_state<'a>(
             layout::Entry::Symlink(_, target) => {
                 if pattern.match_path(target).is_some() {
                     kernel_entries.push(KernelCandidate {
-                        path: install.root.join("usr").join(target),
+                        path: root.join("usr").join(target),
                         _layout: path,
                     });
                 }
@@ -88,8 +87,8 @@ fn kernel_files_from_state<'a>(
     kernel_entries
 }
 
-/// Find bootloader assets
-fn boot_files_from_state<'a>(
+/// Find bootloader assets in the new state
+fn boot_files_from_new_state<'a>(
     install: &Installation,
     layouts: &'a [(Id, Layout)],
     pattern: &'a Pattern,
@@ -122,10 +121,10 @@ pub fn synchronize(install: &Installation, state: &State, layouts: &[(Id, Layout
 
     let pattern = Pattern::from_str("lib/kernel/(version:*)/*")?;
     let systemd = Pattern::from_str("lib*/systemd/boot/efi/*.efi")?;
-    let booty_bits = boot_files_from_state(install, layouts, &systemd);
+    let booty_bits = boot_files_from_new_state(install, layouts, &systemd);
 
     // No kernels? No bother.
-    let kernels = kernel_files_from_state(install, layouts, &pattern);
+    let kernels = kernel_files_from_state(&install.root, layouts, &pattern);
     if kernels.is_empty() {
         return Ok(());
     }
@@ -135,6 +134,7 @@ pub fn synchronize(install: &Installation, state: &State, layouts: &[(Id, Layout
     }
 
     // Read the os-release file we created
+    // TODO: This needs per-state generation for the VERSION bits!
     let fp = fs::read_to_string(install.root.join("usr").join("lib").join("os-release"))?;
     let os_release = OsRelease::from_str(&fp)?;
     let schema = blsforme::Schema::Blsforme {
@@ -152,6 +152,7 @@ pub fn synchronize(install: &Installation, state: &State, layouts: &[(Id, Layout
                     name: "---fstx---".to_owned(),
                     snippet: format!("moss.fstx={}", id),
                 })
+                .with_sysroot(&install.root)
                 .with_state_id(id)
         })
         .collect::<Vec<_>>();
