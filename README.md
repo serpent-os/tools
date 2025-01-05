@@ -1,15 +1,34 @@
 # `moss` and `boulder`
 
-A rewrite of the [Serpent OS](https://serpentos.com) tooling in Rust, enabling a robust implementation befitting Serpent and [Solus](https://getsol.us)
+This repository provides the `moss` and `boulder` tools for managing `.stone` packages, the native package format for Serpent OS.
+In a nutshell, a `.stone` is a structured binary package format with well defined payloads and headers, including explicit versioning
+information to ensure breaking format changes will succeed and be trivially managed for rolling release
+operating systems (i.e Serpent OS).
 
-The Rust re-implementations of `moss` and `boulder` have now exceeded the capabilities of the original PoC code bases.
+The `v1` format in use defaults to `zstd` compression (per payload) and relies on a split payload model to enable the
+deduplication features:
+
+ - Metadata payload: Package metadata, license, with strongly defined types and keys.
+ - Layout payload: Describes the filesystem layout of the package when installed.
+ - Index payload: Contains the offsets to access the content payload by hash
+ - Content payload: Compressed concatanation of all *unique* files in a package, accessible when decompressed via the Index Payload.
+
+Internally `xxhash` is used for empowering content addressable storage as well as integrity checks within the `.stone` format
+on a per-payload basis. This deduplication is carried across the entire OS, which is required to be a `usr-merge` system.
+This allows for `/usr` as CAS, with `/.moss` containing the private store and roots. For every transaction in `moss`, a new root
+is generated in a staging area. Once fully prepared (such as running transaction triggers in containers), the staging tree is swapped with
+the `/usr` tree using `renameat2` with `RENAME_EXCHANGE` to ensure atomicity.
+
+`boulder` is the accompanying tool for *generating* `.stone` files, featuring an approach recipe format (`stone.yaml`), whilst also
+housing powerful utilities such as automatic subpackage splitting by patterns, emission of package providers (ie `soname()`), and first-class
+support for building packages in rootless containers for a clean build environment.
+
+Note that a repository index, a binary build manifest, and a binary package, are *all* stone-format files and can be
+correctly identified by a recent version of the `file` utility.
 
 It is recommended to use an up to date version of Rust via `rustup`.
 
-
 ## Status
-
-Current Milestone target: [oxide-prealpha1](https://github.com/serpent-os/moss/milestone/1)
 
  - [x] Read support for `.stone`
  - [x] Repository manipulation
@@ -21,8 +40,8 @@ Current Milestone target: [oxide-prealpha1](https://github.com/serpent-os/moss/m
  - [x] `sync` support (See: https://github.com/serpent-os/moss-rs/pull/73#issuecomment-1802672634)
  - [x] Triggers
  - [x] GC / cleanups of latent states
- - [x] boulder ported
- - [ ] Features (previously: Subscriptions)
+ - [ ] System model
+ - [ ] Subscriptions (named dependency paths and providers to augment the model)
 
 
 ## Onboarding
