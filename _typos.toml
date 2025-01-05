@@ -2,6 +2,7 @@
 
 [default.extend-words]
 restat = "restat"
+wronly = "wronly" # write-only
 
 # thanks to base yamls
 idae = "idae"
