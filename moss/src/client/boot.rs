@@ -186,18 +186,26 @@ pub fn synchronize(client: &Client, state: &State) -> Result<(), Error> {
         .flat_map(|(kernels, state_id)| {
             kernels
                 .iter()
-                .map(|k| {
-                    Entry::new(k)
-                        .with_cmdline(CmdlineEntry {
-                            name: "---fstx---".to_owned(),
-                            snippet: format!("moss.fstx={state_id}"),
-                        })
-                        .with_state_id(i32::from(*state_id))
-                        .with_sysroot(if state.id == *state_id {
-                            root.clone()
-                        } else {
-                            client.installation.root_path(state_id.to_string()).to_owned()
-                        })
+                .filter_map(|k| {
+                    let sysroot = if state.id == *state_id {
+                        root.clone()
+                    } else {
+                        client.installation.root_path(state_id.to_string()).to_owned()
+                    };
+
+                    if !sysroot.exists() {
+                        return None;
+                    }
+
+                    Some(
+                        Entry::new(k)
+                            .with_cmdline(CmdlineEntry {
+                                name: "---fstx---".to_owned(),
+                                snippet: format!("moss.fstx={state_id}"),
+                            })
+                            .with_state_id(i32::from(*state_id))
+                            .with_sysroot(sysroot),
+                    )
                 })
                 .collect::<Vec<_>>()
         })
