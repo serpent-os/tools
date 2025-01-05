@@ -11,21 +11,22 @@
 use std::{
     borrow::Borrow,
     fmt, io,
-    os::{fd::RawFd, unix::fs::symlink},
+    os::{
+        fd::{AsFd as _, AsRawFd, BorrowedFd},
+        unix::fs::symlink,
+    },
     path::{Path, PathBuf},
     time::Duration,
 };
 
 use fs_err as fs;
 use futures_util::{stream, StreamExt, TryStreamExt};
-use nix::{
-    errno::Errno,
-    fcntl::{self, OFlag},
-    libc::{syscall, SYS_renameat2, AT_FDCWD, RENAME_EXCHANGE},
-    sys::stat::{fchmodat, mkdirat, Mode},
-    unistd::{close, linkat, mkdir, symlinkat},
-};
+use nix::libc::{syscall, SYS_renameat2, AT_FDCWD, RENAME_EXCHANGE};
 use postblit::TriggerScope;
+use rustix::{
+    fs::{AtFlags, Mode as FsMode, OFlags},
+    io::Errno,
+};
 use stone::{payload::layout, read::PayloadKind};
 use thiserror::Error;
 use tui::{MultiProgress, ProgressBar, ProgressStyle, Styled};
@@ -408,21 +409,28 @@ impl Client {
 
     /// syscall based wrapper for renameat2 so we can support musl libc which
     /// unfortunately does not expose the API.
-    /// largely modelled on existing renameat2 API in nix crae
-    fn atomic_swap<A: ?Sized + nix::NixPath, B: ?Sized + nix::NixPath>(old_path: &A, new_path: &B) -> nix::Result<()> {
-        let result = old_path.with_nix_path(|old| {
-            new_path.with_nix_path(|new| unsafe {
-                syscall(
-                    SYS_renameat2,
-                    AT_FDCWD,
-                    old.as_ptr(),
-                    AT_FDCWD,
-                    new.as_ptr(),
-                    RENAME_EXCHANGE,
-                )
+    /// largely modelled on existing renameat2 API in nix crate
+    fn atomic_swap<A: ?Sized + nix::NixPath, B: ?Sized + nix::NixPath>(
+        old_path: &A,
+        new_path: &B,
+    ) -> Result<(), Error> {
+        let result = old_path
+            .with_nix_path(|old| {
+                new_path.with_nix_path(|new| unsafe {
+                    syscall(
+                        SYS_renameat2,
+                        AT_FDCWD,
+                        old.as_ptr(),
+                        AT_FDCWD,
+                        new.as_ptr(),
+                        RENAME_EXCHANGE,
+                    )
+                })
             })
-        })?? as i32;
-        Errno::result(result).map(drop)
+            .map_err(nix_to_blit_error)?
+            .map_err(nix_to_blit_error)? as i32;
+        nix::errno::Errno::result(result).map_err(nix_to_blit_error)?;
+        Ok(())
     }
 
     /// Archive old states (currently not "activated") into their respective tree
@@ -630,7 +638,8 @@ impl Client {
         progress.set_position(0_u64);
 
         let cache_dir = self.installation.assets_path("v2");
-        let cache_fd = fcntl::open(&cache_dir, OFlag::O_DIRECTORY | OFlag::O_RDONLY, Mode::empty())?;
+        let cache_fd = rustix::fs::open(&cache_dir, OFlags::DIRECTORY | OFlags::RDONLY, FsMode::empty())?;
+        let cache_fd = cache_fd.as_fd();
 
         let blit_target = match &self.scope {
             Scope::Stateful => self.installation.staging_dir(),
@@ -641,16 +650,15 @@ impl Client {
         fs::remove_dir_all(&blit_target)?;
 
         if let Some(root) = tree.structured() {
-            let _ = mkdir(&blit_target, Mode::from_bits_truncate(0o755));
-            let root_dir = fcntl::open(&blit_target, OFlag::O_DIRECTORY | OFlag::O_RDONLY, Mode::empty())?;
+            let _ = rustix::fs::mkdir(&blit_target, FsMode::from_bits_truncate(0o755));
+            let root_dir = rustix::fs::open(&blit_target, OFlags::DIRECTORY | OFlags::RDONLY, FsMode::empty())?;
+            let root_dir = root_dir.as_fd();
 
             if let Element::Directory(_, _, children) = root {
                 for child in children {
                     self.blit_element(root_dir, cache_fd, child, &progress)?;
                 }
             }
-
-            close(root_dir)?;
         }
 
         Ok(tree)
@@ -661,8 +669,8 @@ impl Client {
     /// resolution at runtime.
     fn blit_element(
         &self,
-        parent: RawFd,
-        cache: RawFd,
+        parent: BorrowedFd<'_>,
+        cache: BorrowedFd<'_>,
         element: Element<'_, PendingFile>,
         progress: &ProgressBar,
     ) -> Result<(), Error> {
@@ -673,11 +681,11 @@ impl Client {
                 self.blit_element_item(parent, cache, name, item)?;
 
                 // open the new dir
-                let newdir = fcntl::openat(parent, name, OFlag::O_RDONLY | OFlag::O_DIRECTORY, Mode::empty())?;
+                let newdir = rustix::fs::openat(parent, name, OFlags::RDONLY | OFlags::DIRECTORY, FsMode::empty())?;
+                let newdir = newdir.as_fd();
                 for child in children.into_iter() {
                     self.blit_element(newdir, cache, child, progress)?;
                 }
-                close(newdir)?;
                 Ok(())
             }
             Element::Child(name, item) => {
@@ -695,7 +703,13 @@ impl Client {
     /// * `cache`   - raw file descriptor for the system asset pool tree
     /// * `subpath` - the base name of the new inode
     /// * `item`    - New inode being recorded
-    fn blit_element_item(&self, parent: RawFd, cache: RawFd, subpath: &str, item: &PendingFile) -> Result<(), Error> {
+    fn blit_element_item(
+        &self,
+        parent: BorrowedFd<'_>,
+        cache: BorrowedFd<'_>,
+        subpath: &str,
+        item: &PendingFile,
+    ) -> Result<(), Error> {
         match &item.layout.entry {
             layout::Entry::Regular(id, _) => {
                 let hash = format!("{id:02x}");
@@ -716,39 +730,33 @@ impl Client {
                     // Mystery empty-file hash. Do not allow dupes!
                     // https://github.com/serpent-os/tools/issues/372
                     0x99aa_06d3_0147_98d8_6001_c324_468d_497f => {
-                        let fd = fcntl::openat(
+                        rustix::fs::openat(
                             parent,
                             subpath,
-                            OFlag::O_CREAT | OFlag::O_WRONLY | OFlag::O_TRUNC,
-                            Mode::from_bits_truncate(item.layout.mode),
+                            OFlags::CREATE | OFlags::WRONLY | OFlags::TRUNC,
+                            FsMode::from_bits_truncate(item.layout.mode),
                         )?;
-                        close(fd)?;
                     }
                     // Regular file
                     _ => {
-                        linkat(
-                            Some(cache),
-                            fp.to_str().unwrap(),
-                            Some(parent),
-                            subpath,
-                            nix::unistd::LinkatFlags::NoSymlinkFollow,
-                        )?;
+                        rustix::fs::linkat(cache, fp, parent, subpath, AtFlags::SYMLINK_NOFOLLOW)?;
 
-                        // Fix permissions
-                        fchmodat(
-                            Some(parent),
+                        // Fix permissions - not yet supported by rustix
+                        nix::sys::stat::fchmodat(
+                            Some(parent.as_raw_fd()),
                             subpath,
-                            Mode::from_bits_truncate(item.layout.mode),
+                            nix::sys::stat::Mode::from_bits_truncate(item.layout.mode),
                             nix::sys::stat::FchmodatFlags::NoFollowSymlink,
-                        )?;
+                        )
+                        .map_err(nix_to_blit_error)?;
                     }
                 }
             }
             layout::Entry::Symlink(source, _) => {
-                symlinkat(source.as_str(), Some(parent), subpath)?;
+                rustix::fs::symlinkat(source, parent, subpath)?;
             }
             layout::Entry::Directory(_) => {
-                mkdirat(parent, subpath, Mode::from_bits_truncate(item.layout.mode))?;
+                rustix::fs::mkdirat(parent, subpath, FsMode::from_bits_truncate(item.layout.mode))?;
             }
 
             // unimplemented
@@ -988,4 +996,8 @@ pub enum Error {
     Cancelled,
     #[error("ignore signals during blit")]
     BlitSignalIgnore(#[from] signal::Error),
+}
+
+fn nix_to_blit_error(e: nix::errno::Errno) -> Error {
+    Error::Blit(Errno::from_raw_os_error(e as i32))
 }
