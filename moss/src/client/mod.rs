@@ -700,9 +700,13 @@ impl Client {
             layout::Entry::Regular(id, _) => {
                 let hash = format!("{id:02x}");
                 let directory = if hash.len() >= 10 {
-                    PathBuf::from(&hash[..2]).join(&hash[2..4]).join(&hash[4..6])
+                    let mut buf = PathBuf::with_capacity(8); // `xx/yy/zz`
+                    buf.push(&hash[..2]);
+                    buf.push(&hash[2..4]);
+                    buf.push(&hash[4..6]);
+                    buf
                 } else {
-                    "".into()
+                    PathBuf::new()
                 };
 
                 // Link relative from cache to target
