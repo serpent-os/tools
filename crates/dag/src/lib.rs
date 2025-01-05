@@ -89,7 +89,7 @@ where
         dfs.iter(&self.0).map(|i| &self.0[i])
     }
 
-    /// Perform a toplogical sort
+    /// Perform a topological sort
     pub fn topo(&self) -> impl Iterator<Item = &'_ N> {
         let topo = Topo::new(&self.0);
 
