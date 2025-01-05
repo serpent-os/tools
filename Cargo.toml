@@ -83,6 +83,9 @@ uninlined_format_args = "warn"
 unreadable_literal = "warn"
 wildcard_imports = "warn"
 
+# has false positives in indicatif usage
+literal_string_with_formatting_args = "allow"
+
 [profile.release]
 lto = "thin"
 

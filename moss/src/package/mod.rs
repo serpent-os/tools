@@ -102,7 +102,10 @@ impl Flags {
     }
 
     fn bits(&self) -> u32 {
-        (self.available as u32) | (self.installed as u32) << 1 | (self.source as u32) << 2 | (self.explicit as u32) << 3
+        (self.available as u32)
+            | ((self.installed as u32) << 1)
+            | ((self.source as u32) << 2)
+            | ((self.explicit as u32) << 3)
     }
 }
 
