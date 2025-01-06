@@ -10,6 +10,7 @@ use std::{
 use fs_err::{self as fs, File};
 use itertools::Itertools;
 use moss::{package::Meta, Dependency, Provider};
+use stone::{StoneHeaderV1FileType, StoneWriteError, StoneWriter};
 use thiserror::Error;
 use tui::{ProgressBar, ProgressStyle, Styled};
 
@@ -172,7 +173,7 @@ fn emit_package(paths: &Paths, package: &Package<'_>) -> Result<(), Error> {
     let mut out_file = File::create(out_path)?;
 
     // Create stone binary writer
-    let mut writer = stone::Writer::new(&mut out_file, stone::header::v1::FileType::Binary)?;
+    let mut writer = StoneWriter::new(&mut out_file, StoneHeaderV1FileType::Binary)?;
 
     // Add metadata
     {
@@ -233,7 +234,7 @@ fn emit_package(paths: &Paths, package: &Package<'_>) -> Result<(), Error> {
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("stone binary writer")]
-    StoneBinaryWriter(#[from] stone::write::Error),
+    StoneBinaryWriter(#[from] StoneWriteError),
     #[error("manifest")]
     Manifest(#[from] manifest::Error),
     #[error("io")]

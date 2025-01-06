@@ -26,7 +26,7 @@ use nix::{
     unistd::{close, linkat, mkdir, symlinkat},
 };
 use postblit::TriggerScope;
-use stone::{payload::layout, read::PayloadKind};
+use stone::{StoneDecodedPayload, StonePayloadLayoutFile, StonePayloadLayoutRecord};
 use thiserror::Error;
 use tui::{MultiProgress, ProgressBar, ProgressStyle, Styled};
 use vfs::tree::{builder::TreeBuilder, BlitFile, Element};
@@ -557,7 +557,7 @@ impl Client {
                 layout_db.batch_add(cached.iter().flat_map(|(p, u)| {
                     u.payloads
                         .iter()
-                        .flat_map(PayloadKind::layout)
+                        .flat_map(StoneDecodedPayload::layout)
                         .flat_map(|p| p.body.as_slice())
                         .map(|layout| (&p.id, layout))
                 }))?;
@@ -603,7 +603,7 @@ impl Client {
     ///
     /// This functionality is core to all moss filesystem transactions, forming the entire
     /// staging logic. For all the [`crate::package::Id`] present in the staging state,
-    /// query their stored [`stone::payload::Layout`] and cache into a [`vfs::Tree`].
+    /// query their stored [`StonePayloadLayoutBody`] and cache into a [`vfs::Tree`].
     ///
     /// The new `/usr` filesystem is written in optimal order to a staging tree by making
     /// use of the "at" family of functions (`mkdirat`, `linkat`, etc) with relative directory
@@ -696,8 +696,8 @@ impl Client {
     /// * `subpath` - the base name of the new inode
     /// * `item`    - New inode being recorded
     fn blit_element_item(&self, parent: RawFd, cache: RawFd, subpath: &str, item: &PendingFile) -> Result<(), Error> {
-        match &item.layout.entry {
-            layout::Entry::Regular(id, _) => {
+        match &item.layout.file {
+            StonePayloadLayoutFile::Regular(id, _) => {
                 let hash = format!("{id:02x}");
                 let directory = if hash.len() >= 10 {
                     PathBuf::from(&hash[..2]).join(&hash[2..4]).join(&hash[4..6])
@@ -740,18 +740,18 @@ impl Client {
                     }
                 }
             }
-            layout::Entry::Symlink(source, _) => {
+            StonePayloadLayoutFile::Symlink(source, _) => {
                 symlinkat(source.as_str(), Some(parent), subpath)?;
             }
-            layout::Entry::Directory(_) => {
+            StonePayloadLayoutFile::Directory(_) => {
                 mkdirat(parent, subpath, Mode::from_bits_truncate(item.layout.mode))?;
             }
 
             // unimplemented
-            layout::Entry::CharacterDevice(_) => todo!(),
-            layout::Entry::BlockDevice(_) => todo!(),
-            layout::Entry::Fifo(_) => todo!(),
-            layout::Entry::Socket(_) => todo!(),
+            StonePayloadLayoutFile::CharacterDevice(_) => todo!(),
+            StonePayloadLayoutFile::BlockDevice(_) => todo!(),
+            StonePayloadLayoutFile::Fifo(_) => todo!(),
+            StonePayloadLayoutFile::Socket(_) => todo!(),
         };
 
         Ok(())
@@ -840,15 +840,15 @@ pub struct PendingFile {
     pub id: package::Id,
 
     /// Corresponding layout entry, describing the inode
-    pub layout: layout::Layout,
+    pub layout: StonePayloadLayoutRecord,
 }
 
 impl BlitFile for PendingFile {
     /// Match internal kind to minimalist vfs kind
     fn kind(&self) -> vfs::tree::Kind {
-        match &self.layout.entry {
-            layout::Entry::Symlink(source, _) => vfs::tree::Kind::Symlink(source.clone()),
-            layout::Entry::Directory(_) => vfs::tree::Kind::Directory,
+        match &self.layout.file {
+            StonePayloadLayoutFile::Symlink(source, _) => vfs::tree::Kind::Symlink(source.clone()),
+            StonePayloadLayoutFile::Directory(_) => vfs::tree::Kind::Directory,
             _ => vfs::tree::Kind::Regular,
         }
     }
@@ -860,14 +860,14 @@ impl BlitFile for PendingFile {
 
     /// Resolve the target path, including the missing `/usr` prefix
     fn path(&self) -> String {
-        let result = match &self.layout.entry {
-            layout::Entry::Regular(_, target) => target.clone(),
-            layout::Entry::Symlink(_, target) => target.clone(),
-            layout::Entry::Directory(target) => target.clone(),
-            layout::Entry::CharacterDevice(target) => target.clone(),
-            layout::Entry::BlockDevice(target) => target.clone(),
-            layout::Entry::Fifo(target) => target.clone(),
-            layout::Entry::Socket(target) => target.clone(),
+        let result = match &self.layout.file {
+            StonePayloadLayoutFile::Regular(_, target) => target.clone(),
+            StonePayloadLayoutFile::Symlink(_, target) => target.clone(),
+            StonePayloadLayoutFile::Directory(target) => target.clone(),
+            StonePayloadLayoutFile::CharacterDevice(target) => target.clone(),
+            StonePayloadLayoutFile::BlockDevice(target) => target.clone(),
+            StonePayloadLayoutFile::Fifo(target) => target.clone(),
+            StonePayloadLayoutFile::Socket(target) => target.clone(),
         };
 
         vfs::path::join("/usr", &result)
@@ -876,14 +876,14 @@ impl BlitFile for PendingFile {
     /// Clone the node to a reparented path, for symlink resolution
     fn cloned_to(&self, path: String) -> Self {
         let mut new = self.clone();
-        new.layout.entry = match &self.layout.entry {
-            layout::Entry::Regular(source, _) => layout::Entry::Regular(*source, path),
-            layout::Entry::Symlink(source, _) => layout::Entry::Symlink(source.clone(), path),
-            layout::Entry::Directory(_) => layout::Entry::Directory(path),
-            layout::Entry::CharacterDevice(_) => layout::Entry::CharacterDevice(path),
-            layout::Entry::BlockDevice(_) => layout::Entry::BlockDevice(path),
-            layout::Entry::Fifo(_) => layout::Entry::Fifo(path),
-            layout::Entry::Socket(_) => layout::Entry::Socket(path),
+        new.layout.file = match &self.layout.file {
+            StonePayloadLayoutFile::Regular(source, _) => StonePayloadLayoutFile::Regular(*source, path),
+            StonePayloadLayoutFile::Symlink(source, _) => StonePayloadLayoutFile::Symlink(source.clone(), path),
+            StonePayloadLayoutFile::Directory(_) => StonePayloadLayoutFile::Directory(path),
+            StonePayloadLayoutFile::CharacterDevice(_) => StonePayloadLayoutFile::CharacterDevice(path),
+            StonePayloadLayoutFile::BlockDevice(_) => StonePayloadLayoutFile::BlockDevice(path),
+            StonePayloadLayoutFile::Fifo(_) => StonePayloadLayoutFile::Fifo(path),
+            StonePayloadLayoutFile::Socket(_) => StonePayloadLayoutFile::Socket(path),
         };
         new
     }
@@ -893,12 +893,12 @@ impl From<String> for PendingFile {
     fn from(value: String) -> Self {
         PendingFile {
             id: Default::default(),
-            layout: layout::Layout {
+            layout: StonePayloadLayoutRecord {
                 uid: 0,
                 gid: 0,
                 mode: 0o755,
                 tag: 0,
-                entry: layout::Entry::Directory(value),
+                file: StonePayloadLayoutFile::Directory(value),
             },
         }
     }

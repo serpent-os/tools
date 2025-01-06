@@ -4,14 +4,15 @@
 
 use std::io::{Read, Write};
 
-use super::{DecodeError, EncodeError, Record};
-use crate::{ReadExt, WriteExt};
+use super::{Record, StonePayloadDecodeError, StonePayloadEncodeError};
+use crate::ext::{ReadExt, WriteExt};
 
 /// Layout entries record their target file type so they can be rebuilt on
 /// the target installation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display)]
+#[strum(serialize_all = "kebab-case")]
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FileType {
+pub enum StonePayloadLayoutFileType {
     /// Regular file
     Regular = 1,
 
@@ -35,7 +36,7 @@ pub enum FileType {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Entry {
+pub enum StonePayloadLayoutFile {
     Regular(u128, String),
     Symlink(String, String),
     Directory(String),
@@ -47,56 +48,55 @@ pub enum Entry {
     Socket(String),
 }
 
-impl Entry {
+impl StonePayloadLayoutFile {
     fn source(&self) -> Vec<u8> {
         match self {
-            Entry::Regular(hash, _) => hash.to_be_bytes().to_vec(),
-            Entry::Symlink(source, _) => source.as_bytes().to_vec(),
-            Entry::Directory(_) => vec![],
-            Entry::CharacterDevice(_) => vec![],
-            Entry::BlockDevice(_) => vec![],
-            Entry::Fifo(_) => vec![],
-            Entry::Socket(_) => vec![],
+            StonePayloadLayoutFile::Regular(hash, _) => hash.to_be_bytes().to_vec(),
+            StonePayloadLayoutFile::Symlink(source, _) => source.as_bytes().to_vec(),
+            StonePayloadLayoutFile::Directory(_) => vec![],
+            StonePayloadLayoutFile::CharacterDevice(_) => vec![],
+            StonePayloadLayoutFile::BlockDevice(_) => vec![],
+            StonePayloadLayoutFile::Fifo(_) => vec![],
+            StonePayloadLayoutFile::Socket(_) => vec![],
         }
     }
 
     pub fn target(&self) -> &str {
         match self {
-            Entry::Regular(_, target) => target,
-            Entry::Symlink(_, target) => target,
-            Entry::Directory(target) => target,
-            Entry::CharacterDevice(target) => target,
-            Entry::BlockDevice(target) => target,
-            Entry::Fifo(target) => target,
-            Entry::Socket(target) => target,
+            StonePayloadLayoutFile::Regular(_, target) => target,
+            StonePayloadLayoutFile::Symlink(_, target) => target,
+            StonePayloadLayoutFile::Directory(target) => target,
+            StonePayloadLayoutFile::CharacterDevice(target) => target,
+            StonePayloadLayoutFile::BlockDevice(target) => target,
+            StonePayloadLayoutFile::Fifo(target) => target,
+            StonePayloadLayoutFile::Socket(target) => target,
         }
     }
 
-    fn file_type(&self) -> u8 {
+    pub fn file_type(&self) -> StonePayloadLayoutFileType {
         match self {
-            Entry::Regular(..) => 1,
-            Entry::Symlink(..) => 2,
-            Entry::Directory(_) => 3,
-            Entry::CharacterDevice(_) => 4,
-            Entry::BlockDevice(_) => 5,
-            Entry::Fifo(_) => 6,
-            Entry::Socket(_) => 7,
+            StonePayloadLayoutFile::Regular(..) => StonePayloadLayoutFileType::Regular,
+            StonePayloadLayoutFile::Symlink(..) => StonePayloadLayoutFileType::Symlink,
+            StonePayloadLayoutFile::Directory(_) => StonePayloadLayoutFileType::Directory,
+            StonePayloadLayoutFile::CharacterDevice(_) => StonePayloadLayoutFileType::CharacterDevice,
+            StonePayloadLayoutFile::BlockDevice(_) => StonePayloadLayoutFileType::BlockDevice,
+            StonePayloadLayoutFile::Fifo(_) => StonePayloadLayoutFileType::Fifo,
+            StonePayloadLayoutFile::Socket(_) => StonePayloadLayoutFileType::Socket,
         }
     }
 }
 
-// TODO: Strong types these fields
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Layout {
+pub struct StonePayloadLayoutRecord {
     pub uid: u32,
     pub gid: u32,
     pub mode: u32,
     pub tag: u32,
-    pub entry: Entry,
+    pub file: StonePayloadLayoutFile,
 }
 
-impl Record for Layout {
-    fn decode<R: Read>(mut reader: R) -> Result<Self, DecodeError> {
+impl Record for StonePayloadLayoutRecord {
+    fn decode<R: Read>(mut reader: R) -> Result<Self, StonePayloadDecodeError> {
         let uid = reader.read_u32()?;
         let gid = reader.read_u32()?;
         let mode = reader.read_u32()?;
@@ -107,14 +107,14 @@ impl Record for Layout {
         let sanitize = |s: String| s.trim_end_matches('\0').to_owned();
 
         let file_type = match reader.read_u8()? {
-            1 => FileType::Regular,
-            2 => FileType::Symlink,
-            3 => FileType::Directory,
-            4 => FileType::CharacterDevice,
-            5 => FileType::BlockDevice,
-            6 => FileType::Fifo,
-            7 => FileType::Socket,
-            t => return Err(DecodeError::UnknownFileType(t)),
+            1 => StonePayloadLayoutFileType::Regular,
+            2 => StonePayloadLayoutFileType::Symlink,
+            3 => StonePayloadLayoutFileType::Directory,
+            4 => StonePayloadLayoutFileType::CharacterDevice,
+            5 => StonePayloadLayoutFileType::BlockDevice,
+            6 => StonePayloadLayoutFileType::Fifo,
+            7 => StonePayloadLayoutFileType::Socket,
+            t => return Err(StonePayloadDecodeError::UnknownFileType(t)),
         };
 
         let _padding = reader.read_array::<11>()?;
@@ -122,16 +122,18 @@ impl Record for Layout {
         // Make the layout entry *usable*
         let entry = match file_type {
             // BUG: boulder stores xxh128 as le bytes not be
-            FileType::Regular => {
+            StonePayloadLayoutFileType::Regular => {
                 let source = reader.read_vec(source_length as usize)?;
                 let hash = u128::from_be_bytes(source.try_into().unwrap());
-                Entry::Regular(hash, sanitize(reader.read_string(target_length as u64)?))
+                StonePayloadLayoutFile::Regular(hash, sanitize(reader.read_string(target_length as u64)?))
             }
-            FileType::Symlink => Entry::Symlink(
+            StonePayloadLayoutFileType::Symlink => StonePayloadLayoutFile::Symlink(
                 sanitize(reader.read_string(source_length as u64)?),
                 sanitize(reader.read_string(target_length as u64)?),
             ),
-            FileType::Directory => Entry::Directory(sanitize(reader.read_string(target_length as u64)?)),
+            StonePayloadLayoutFileType::Directory => {
+                StonePayloadLayoutFile::Directory(sanitize(reader.read_string(target_length as u64)?))
+            }
             _ => {
                 if source_length > 0 {
                     let _ = reader.read_vec(source_length as usize);
@@ -145,22 +147,22 @@ impl Record for Layout {
             gid,
             mode,
             tag,
-            entry,
+            file: entry,
         })
     }
 
-    fn encode<W: Write>(&self, writer: &mut W) -> Result<(), EncodeError> {
+    fn encode<W: Write>(&self, writer: &mut W) -> Result<(), StonePayloadEncodeError> {
         writer.write_u32(self.uid)?;
         writer.write_u32(self.gid)?;
         writer.write_u32(self.mode)?;
         writer.write_u32(self.tag)?;
 
-        let source = self.entry.source();
-        let target = self.entry.target();
+        let source = self.file.source();
+        let target = self.file.target();
 
         writer.write_u16(source.len() as u16)?;
         writer.write_u16(target.len() as u16)?;
-        writer.write_u8(self.entry.file_type())?;
+        writer.write_u8(self.file.file_type() as u8)?;
         writer.write_array([0; 11])?;
         writer.write_all(&source)?;
         writer.write_all(target.as_bytes())?;
@@ -169,6 +171,6 @@ impl Record for Layout {
     }
 
     fn size(&self) -> usize {
-        4 + 4 + 4 + 4 + 2 + 2 + 1 + 11 + self.entry.source().len() + self.entry.target().len()
+        4 + 4 + 4 + 4 + 2 + 2 + 1 + 11 + self.file.source().len() + self.file.target().len()
     }
 }

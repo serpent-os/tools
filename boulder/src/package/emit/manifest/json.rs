@@ -42,7 +42,7 @@ pub fn write(
                 .analysis
                 .paths
                 .iter()
-                .map(|p| format!("/usr/{}", p.layout.entry.target()))
+                .map(|p| format!("/usr/{}", p.layout.file.target()))
                 .sorted()
                 .collect();
 
