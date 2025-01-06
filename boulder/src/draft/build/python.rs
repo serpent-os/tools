@@ -32,7 +32,7 @@ pub mod setup_tools {
     pub fn phases() -> Phases {
         Phases {
             setup: None,
-            build: Some("%python_build"),
+            build: Some("%python_setup"),
             install: Some("%python_install"),
             check: None,
         }
