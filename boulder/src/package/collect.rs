@@ -24,10 +24,20 @@ pub struct Rule {
 
 impl Rule {
     pub fn matches(&self, path: &str) -> bool {
-        self.pattern == path
-            || path.starts_with(&self.pattern)
-            || Pattern::new(&self.pattern)
-                .map(|pattern| pattern.matches(path))
+        if self.pattern == path {
+            return true;
+        }
+
+        // Escape the directory in case it contains characters that have special
+        // meaning in glob patterns (e.g., `[` or `]`).
+        let escaped_path = Pattern::escape(path);
+        Pattern::new(&self.pattern)
+                .map(|pattern| pattern.matches(&escaped_path))
+                .unwrap_or_default()
+            // If the supplied pattern is for a directory we want to match anything that's inside said directory, 
+            // Do this by creating a recursive glob pattern by appending `**` if the pattern already ends in a `/` or `/**` if not
+            || Pattern::new(format!("{}/**", &self.pattern.strip_suffix("/").unwrap_or(&self.pattern)).as_str())
+                .map(|pattern| pattern.matches(&escaped_path))
                 .unwrap_or_default()
     }
 }
