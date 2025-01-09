@@ -56,5 +56,5 @@ enum Matcher {
 }
 
 impl Matcher {
-    const ALL: &'static [Self] = &[Self::Basic, Self::Github];
+    const ALL: &'static [Self] = &[Self::Github, Self::Basic];
 }
