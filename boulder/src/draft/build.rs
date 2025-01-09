@@ -60,6 +60,14 @@ impl System {
         }
     }
 
+    /// return specific options for a build system
+    pub fn options(&self) -> Options {
+        match self {
+            System::Cargo => Options { networking: true },
+            _ => Options { networking: false },
+        }
+    }
+
     fn process(&self, state: &mut State<'_>, file: &File<'_>) -> Result<(), Error> {
         match self {
             System::Autotools => autotools::process(state, file),
@@ -93,6 +101,24 @@ impl fmt::Display for Phases {
         fmt("build", self.build)?;
         fmt("install", self.install)?;
         fmt("check", self.check)
+    }
+}
+
+pub struct Options {
+    // Enforced networking for the build
+    pub networking: bool,
+}
+
+impl fmt::Display for Options {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut fmt = |name, value| {
+            if let Some(value) = value {
+                writeln!(f, "{name:<12}: {value}")
+            } else {
+                Ok(())
+            }
+        };
+        fmt("networking", self.networking.then(|| true))
     }
 }
 

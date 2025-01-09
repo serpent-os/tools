@@ -69,6 +69,7 @@ impl Drafter {
             .map(|env| format!("environment : |\n    {env}\n"))
             .unwrap_or_default();
         let phases = build_system.phases();
+        let options = build_system.options();
 
         #[rustfmt::skip]
         let template = format!(
@@ -87,7 +88,7 @@ summary     : UPDATE SUMMARY
 description : |
     UPDATE DESCRIPTION
 license     : UPDATE LICENSE
-{builddeps}{environment}{phases}
+{options}{builddeps}{environment}{phases}
 ",
             metadata.source.name,
             metadata.source.version,
