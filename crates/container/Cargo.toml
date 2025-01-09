@@ -9,6 +9,7 @@ rust-version.workspace = true
 [dependencies]
 fs-err.workspace = true
 nix.workspace = true
+rustix.workspace = true
 strum.workspace = true
 thiserror.workspace = true
 

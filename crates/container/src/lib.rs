@@ -11,7 +11,6 @@ use std::sync::atomic::{AtomicI32, Ordering};
 
 use fs_err::{self as fs, PathExt as _};
 use nix::libc::SIGCHLD;
-use nix::mount::{mount, umount2, MntFlags, MsFlags};
 use nix::sched::{clone, CloneFlags};
 use nix::sys::prctl::set_pdeathsig;
 use nix::sys::signal::{kill, sigaction, SaFlags, SigAction, SigHandler, Signal};
@@ -19,6 +18,10 @@ use nix::sys::signalfd::SigSet;
 use nix::sys::stat::{umask, Mode};
 use nix::sys::wait::{waitpid, WaitStatus};
 use nix::unistd::{close, pipe, pivot_root, read, sethostname, tcsetpgrp, write, Pid, Uid};
+use rustix::{
+    fs::MountPropagationFlags,
+    mount::{mount, mount_bind, mount_change, mount_remount, unmount, MountFlags, UnmountFlags},
+};
 use thiserror::Error;
 
 use self::idmap::idmap;
@@ -247,23 +250,29 @@ fn pivot(root: &Path, binds: &[Bind]) -> Result<(), ContainerError> {
 
     let old_root = root.join(OLD_PATH);
 
-    add_mount(None, "/", None, MsFlags::MS_REC | MsFlags::MS_PRIVATE)?;
-    add_mount(Some(root), root, None, MsFlags::MS_BIND)?;
+    mount_change("/", MountPropagationFlags::REC | MountPropagationFlags::PRIVATE)
+        .map_err(|source| ContainerError::MountSetPrivate { source })?;
+    mount_bind(root, root).map_err(|source| ContainerError::BindMountRoot { source })?;
 
     for bind in binds {
         let source = bind.source.fs_err_canonicalize()?;
         let target = root.join(bind.target.strip_prefix("/").unwrap_or(&bind.target));
 
-        add_mount(Some(&source), &target, None, MsFlags::MS_BIND)?;
+        ensure_directory(&target)?;
+        mount_bind(&source, &target).map_err(|err| ContainerError::BindMount {
+            source: source.clone(),
+            target: target.clone(),
+            err,
+        })?;
 
         // Remount to enforce readonly flag
         if bind.read_only {
-            add_mount(
-                Some(source),
-                target,
-                None,
-                MsFlags::MS_BIND | MsFlags::MS_REMOUNT | MsFlags::MS_RDONLY,
-            )?;
+            mount_remount(&target, MountFlags::BIND | MountFlags::RDONLY, "").map_err(|source| {
+                ContainerError::MountSetReadOnly {
+                    target: target.clone(),
+                    source,
+                }
+            })?;
         }
     }
 
@@ -272,22 +281,12 @@ fn pivot(root: &Path, binds: &[Bind]) -> Result<(), ContainerError> {
 
     set_current_dir("/")?;
 
-    add_mount(Some("proc"), "proc", Some("proc"), MsFlags::empty())?;
-    add_mount(Some("tmpfs"), "tmp", Some("tmpfs"), MsFlags::empty())?;
-    add_mount(
-        Some(format!("/{OLD_PATH}/sys").as_str()),
-        "sys",
-        None,
-        MsFlags::MS_BIND | MsFlags::MS_REC | MsFlags::MS_SLAVE,
-    )?;
-    add_mount(
-        Some(format!("/{OLD_PATH}/dev").as_str()),
-        "dev",
-        None,
-        MsFlags::MS_BIND | MsFlags::MS_REC | MsFlags::MS_SLAVE,
-    )?;
+    add_mount("proc", "proc", "proc")?;
+    add_mount("tmpfs", "tmp", "tmpfs")?;
+    bind_mount_downstream(&format!("/{OLD_PATH}/sys"), "sys")?;
+    bind_mount_downstream(&format!("/{OLD_PATH}/dev"), "dev")?;
 
-    umount2(OLD_PATH, MntFlags::MNT_DETACH).map_err(ContainerError::UnmountOldRoot)?;
+    unmount(OLD_PATH, UnmountFlags::DETACH).map_err(ContainerError::UnmountOldRoot)?;
     fs::remove_dir(OLD_PATH)?;
 
     umask(Mode::S_IWGRP | Mode::S_IWOTH);
@@ -319,24 +318,29 @@ fn ensure_directory(path: impl AsRef<Path>) -> Result<(), ContainerError> {
     Ok(())
 }
 
-fn add_mount<T: AsRef<Path>>(
-    source: Option<T>,
-    target: T,
-    fs_type: Option<&str>,
-    flags: MsFlags,
-) -> Result<(), ContainerError> {
+fn add_mount(source: impl AsRef<Path>, target: impl AsRef<Path>, fs_type: &str) -> Result<(), ContainerError> {
+    let source = source.as_ref();
     let target = target.as_ref();
     ensure_directory(target)?;
-    mount(
-        source.as_ref().map(AsRef::as_ref),
-        target,
-        fs_type,
-        flags,
-        Option::<&str>::None,
-    )
-    .map_err(|err| ContainerError::Mount {
+    mount(source, target, fs_type, MountFlags::empty(), "").map_err(|err| ContainerError::Mount {
         target: target.to_owned(),
         err,
+    })?;
+    Ok(())
+}
+
+fn bind_mount_downstream(source: &str, target: &str) -> Result<(), ContainerError> {
+    ensure_directory(target)?;
+    mount_bind(source, target).map_err(|err| ContainerError::BindMount {
+        source: source.into(),
+        target: target.into(),
+        err,
+    })?;
+    mount_change(target, MountPropagationFlags::REC | MountPropagationFlags::SLAVE).map_err(|source| {
+        ContainerError::MountSetDownstream {
+            target: target.into(),
+            source,
+        }
     })?;
     Ok(())
 }
@@ -469,13 +473,28 @@ enum ContainerError {
     #[error("pivot_root")]
     PivotRoot(#[source] nix::Error),
     #[error("unmount old root")]
-    UnmountOldRoot(#[source] nix::Error),
-    #[error("mount {}", target.display())]
+    UnmountOldRoot(#[source] rustix::io::Errno),
+    #[error("failed to change existing mounts to private")]
+    MountSetPrivate { source: rustix::io::Errno },
+    #[error("failed to rebind root")]
+    BindMountRoot { source: rustix::io::Errno },
+    #[error("failed to bind-mount {source} to {target}")]
+    BindMount {
+        source: PathBuf,
+        target: PathBuf,
+        #[source]
+        err: rustix::io::Errno,
+    },
+    #[error("failed to mount {}", target.display())]
     Mount {
         target: PathBuf,
         #[source]
-        err: nix::Error,
+        err: rustix::io::Errno,
     },
+    #[error("failed to set mount to read-only")]
+    MountSetReadOnly { target: PathBuf, source: rustix::io::Errno },
+    #[error("failed to set mount to downstream mode")]
+    MountSetDownstream { target: PathBuf, source: rustix::io::Errno },
 }
 
 #[repr(u8)]
