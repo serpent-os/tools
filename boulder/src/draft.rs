@@ -9,6 +9,7 @@ use fs_err as fs;
 use itertools::Itertools;
 use moss::Dependency;
 use thiserror::Error;
+use tui::Styled;
 use url::Url;
 
 use crate::util;
@@ -54,9 +55,13 @@ impl Drafter {
         // Remove temp extract dir
         fs::remove_dir_all(extract_root)?;
 
-        let Some(build_system) = build.detected_system else {
-            return Err(Error::UnhandledBuildSystem);
-        };
+        let build_system = build.detected_system.unwrap_or_else(|| {
+            println!(
+                "{} | Unhandled build system! - Defaulting to autotools",
+                "Warning".yellow()
+            );
+            build::System::Autotools
+        });
 
         let builddeps = builddeps(build.dependencies);
         let environment = build_system
@@ -125,8 +130,6 @@ impl File<'_> {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("Unhandled build system")]
-    UnhandledBuildSystem,
     #[error("analyzing build system")]
     AnalyzeBuildSystem(#[source] build::Error),
     #[error("upstream")]
