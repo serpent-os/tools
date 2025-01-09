@@ -15,14 +15,21 @@ use url::Url;
 use crate::util;
 
 use self::metadata::Metadata;
+use self::monitoring::Monitoring;
 use self::upstream::Upstream;
 
 mod build;
 mod metadata;
+mod monitoring;
 mod upstream;
 
 pub struct Drafter {
     upstreams: Vec<Url>,
+}
+
+pub struct Draft {
+    pub stone: String,
+    pub monitoring: String,
 }
 
 impl Drafter {
@@ -30,7 +37,7 @@ impl Drafter {
         Self { upstreams }
     }
 
-    pub fn run(&self) -> Result<String, Error> {
+    pub fn run(&self) -> Result<Draft, Error> {
         // TODO: Use tempdir
         let extract_root = PathBuf::from("/tmp/boulder-new");
 
@@ -39,6 +46,9 @@ impl Drafter {
 
         // Build metadata from extracted upstreams
         let metadata = Metadata::new(extracted);
+
+        let monitoring = Monitoring::new(&metadata.source.name, &metadata.source.homepage);
+        let monitoring_result = monitoring.run()?;
 
         // Enumerate all extracted files
         let files = util::enumerate_files(&extract_root, |_| true)?
@@ -96,7 +106,10 @@ license     : UPDATE LICENSE
             metadata.upstreams(),
         );
 
-        Ok(template)
+        Ok(Draft {
+            stone: template,
+            monitoring: monitoring_result,
+        })
     }
 }
 
@@ -135,6 +148,8 @@ pub enum Error {
     AnalyzeBuildSystem(#[source] build::Error),
     #[error("upstream")]
     Upstream(#[from] upstream::Error),
+    #[error("monitoring")]
+    Monitoring(#[from] monitoring::Error),
     #[error("io")]
     Io(#[from] io::Error),
 }
