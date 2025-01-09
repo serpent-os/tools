@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright © 2020-2024 Serpent OS Developers
+// SPDX-FileCopyrightText: Copyright © 2020-2025 Serpent OS Developers
 //
 // SPDX-License-Identifier: MPL-2.0
 
@@ -17,7 +17,7 @@ pub const fn get_version() -> &'static str {
 ///
 /// If SOURCE_DATE_EPOCH is set during the build then that will be the timestamp returned
 ///
-/// This will look like "2024-07-09T19:20:40+00:00"
+/// This will look like "2025-07-09T19:20:40+00:00"
 pub fn get_build_time() -> String {
     if let Ok(time) = values::BUILD_TIME.parse::<i64>() {
         if let Some(build_time) = DateTime::from_timestamp(time, 0) {
