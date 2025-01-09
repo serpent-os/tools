@@ -118,7 +118,7 @@ impl fmt::Display for Options {
                 Ok(())
             }
         };
-        fmt("networking", self.networking.then(|| true))
+        fmt("networking", self.networking.then_some(true))
     }
 }
 
