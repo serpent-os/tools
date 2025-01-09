@@ -135,7 +135,8 @@ pub fn python(bucket: &mut BucketMut<'_>, info: &mut PathInfo) -> Result<Respons
     let python_name = mail
         .get_headers()
         .get_first_value("Name")
-        .unwrap_or_else(|| panic!("Failed to parse {}", info.file_name()));
+        .unwrap_or_else(|| panic!("Failed to parse {}", info.file_name()))
+        .to_lowercase();
 
     /* Insert generic provider */
     bucket.providers.insert(Provider {
@@ -174,7 +175,7 @@ pub fn python(bucket: &mut BucketMut<'_>, info: &mut PathInfo) -> Result<Respons
     for dep in deps.lines() {
         bucket.dependencies.insert(Dependency {
             kind: dependency::Kind::Python,
-            name: format!("{}({})", &dep, &python_version.to_string().trim_end()),
+            name: format!("{}({})", &dep.to_lowercase(), &python_version.to_string().trim_end()),
         });
     }
 
