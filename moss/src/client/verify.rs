@@ -16,7 +16,7 @@ use vfs::tree::BlitFile;
 
 use crate::{
     client::{self, cache},
-    package, runtime, signal, state, Client, Signal,
+    package, runtime, signal, state, Client, Package, Signal,
 };
 
 pub fn verify(client: &Client, yes: bool, verbose: bool) -> Result<(), client::Error> {
@@ -187,13 +187,20 @@ pub fn verify(client: &Client, yes: bool, verbose: bool) -> Result<(), client::E
     }
 
     // Calculate and resolve the unique set of packages with asset issues
-    let issue_packages = client.resolve_packages(
-        issues
-            .iter()
-            .filter_map(Issue::packages)
-            .flatten()
-            .collect::<BTreeSet<_>>(),
-    )?;
+    let issue_packages = issues
+        .iter()
+        .filter_map(Issue::packages)
+        .flatten()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .map(|id| {
+            client.install_db.get(id).map(|meta| Package {
+                id: id.clone(),
+                meta,
+                flags: package::Flags::default(),
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
 
     // We had some corrupt or missing assets, let's resolve that!
     if !issue_packages.is_empty() {
