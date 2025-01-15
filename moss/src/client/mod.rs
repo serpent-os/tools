@@ -13,7 +13,7 @@ use std::{
     fmt, io,
     os::{fd::RawFd, unix::fs::symlink},
     path::{Path, PathBuf},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use fs_err as fs;
@@ -624,6 +624,9 @@ impl Client {
         progress.enable_steady_tick(Duration::from_millis(150));
         progress.tick();
 
+        let now = Instant::now();
+        let mut stats = BlitStats::default();
+
         let tree = self.vfs(packages)?;
 
         progress.set_length(tree.len());
@@ -646,12 +649,24 @@ impl Client {
 
             if let Element::Directory(_, _, children) = root {
                 for child in children {
-                    self.blit_element(root_dir, cache_fd, child, &progress)?;
+                    self.blit_element(root_dir, cache_fd, child, &progress, &mut stats)?;
                 }
             }
 
             close(root_dir)?;
         }
+
+        progress.finish_and_clear();
+
+        let elapsed = now.elapsed();
+        let num_entries = stats.num_entries();
+
+        println!(
+            "\n{} entries blitted in {} {}",
+            num_entries.to_string().bold(),
+            format!("{:.2}s", elapsed.as_secs_f32()).bold(),
+            format!("({:.1}k / s)", num_entries as f32 / elapsed.as_secs_f32() / 1_000.0).dim()
+        );
 
         Ok(tree)
     }
@@ -665,23 +680,24 @@ impl Client {
         cache: RawFd,
         element: Element<'_, PendingFile>,
         progress: &ProgressBar,
+        stats: &mut BlitStats,
     ) -> Result<(), Error> {
         progress.inc(1);
         match element {
             Element::Directory(name, item, children) => {
                 // Construct within the parent
-                self.blit_element_item(parent, cache, name, item)?;
+                self.blit_element_item(parent, cache, name, item, stats)?;
 
                 // open the new dir
                 let newdir = fcntl::openat(parent, name, OFlag::O_RDONLY | OFlag::O_DIRECTORY, Mode::empty())?;
                 for child in children.into_iter() {
-                    self.blit_element(newdir, cache, child, progress)?;
+                    self.blit_element(newdir, cache, child, progress, stats)?;
                 }
                 close(newdir)?;
                 Ok(())
             }
             Element::Child(name, item) => {
-                self.blit_element_item(parent, cache, name, item)?;
+                self.blit_element_item(parent, cache, name, item, stats)?;
                 Ok(())
             }
         }
@@ -695,7 +711,14 @@ impl Client {
     /// * `cache`   - raw file descriptor for the system asset pool tree
     /// * `subpath` - the base name of the new inode
     /// * `item`    - New inode being recorded
-    fn blit_element_item(&self, parent: RawFd, cache: RawFd, subpath: &str, item: &PendingFile) -> Result<(), Error> {
+    fn blit_element_item(
+        &self,
+        parent: RawFd,
+        cache: RawFd,
+        subpath: &str,
+        item: &PendingFile,
+        stats: &mut BlitStats,
+    ) -> Result<(), Error> {
         match &item.layout.entry {
             layout::Entry::Regular(id, _) => {
                 let hash = format!("{id:02x}");
@@ -739,12 +762,16 @@ impl Client {
                         )?;
                     }
                 }
+
+                stats.num_files += 1;
             }
             layout::Entry::Symlink(source, _) => {
                 symlinkat(source.as_str(), Some(parent), subpath)?;
+                stats.num_symlinks += 1;
             }
             layout::Entry::Directory(_) => {
                 mkdirat(parent, subpath, Mode::from_bits_truncate(item.layout.mode))?;
+                stats.num_dirs += 1;
             }
 
             // unimplemented
@@ -939,6 +966,19 @@ fn build_registry(
     }
 
     Ok(registry)
+}
+
+#[derive(Debug, Default)]
+struct BlitStats {
+    num_files: u64,
+    num_symlinks: u64,
+    num_dirs: u64,
+}
+
+impl BlitStats {
+    fn num_entries(&self) -> u64 {
+        self.num_files + self.num_symlinks + self.num_dirs
+    }
 }
 
 /// Client-relevant error mapping type
