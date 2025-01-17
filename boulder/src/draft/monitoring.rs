@@ -57,6 +57,10 @@ impl<'a> Monitoring<'a> {
     }
 
     pub fn run(&self) -> Result<String, Error> {
+        if self.name.is_empty() {
+            return self.format_monitoring(None, vec![], None);
+        }
+
         let client = reqwest::blocking::Client::new();
 
         let id = self.find_monitoring_id(self.name, &client)?;
