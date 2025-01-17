@@ -145,7 +145,6 @@ tuning              :
                 enabled: compress-debug-zlib
             - zstd:
                 enabled: compress-debug-zstd
-        disabled: compress-debug-none
         default: zstd
 
     # Toggle frame-pointer
@@ -156,7 +155,6 @@ tuning              :
     # Toggle build-id
     - build-id:
         enabled: build-id
-        disabled: build-id-none
 
     # Enable bindnow functionality
     - bindnow:
@@ -478,11 +476,6 @@ flags               :
     - build-id:
         ld        : "-Wl,--build-id=sha1"
         rust      : "-C link-args=-Wl,--build-id=sha1"
-
-    # Disable build-id (OFF)
-    - build-id-none:
-        ld        : "-Wl,--build-id=none"
-        rust      : "-C link-args=-Wl,--build-id=none"
 
     # Compress debug symbols with Zstd (ON)
     - compress-debug-zstd:
