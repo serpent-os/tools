@@ -65,7 +65,7 @@ impl<'a> Monitoring<'a> {
 
         let id = self.find_monitoring_id(self.name, &client)?;
         let cpes = self.find_security_cpe(self.name, &client)?;
-        let rss = self.guess_rss(self.homepage);
+        let rss = self.guess_rss(self.homepage, self.name);
 
         let output = self.format_monitoring(id, cpes, rss)?;
 
@@ -168,9 +168,16 @@ impl<'a> Monitoring<'a> {
         Ok(cpes)
     }
 
-    fn guess_rss(&self, homepage: &String) -> Option<String> {
+    fn guess_rss(&self, homepage: &String, name: &String) -> Option<String> {
         match homepage {
             _ if homepage.starts_with("https://github.com") => Some(format!("{homepage}/releases.atom")),
+            _ if homepage.starts_with("https://files.pythonhosted.org")
+                || homepage.starts_with("https://pypi.org")
+                || homepage.starts_with("https://pypi.python.org")
+                || homepage.starts_with("https://pypi.io") =>
+            {
+                Some(format!("https://pypi.org/rss/project/{name}/releases.xml"))
+            }
             _ => None,
         }
     }
