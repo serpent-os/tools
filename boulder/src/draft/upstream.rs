@@ -81,18 +81,36 @@ async fn fetch(url: &Url, output: &Path) -> Result<String, Error> {
 }
 
 async fn extract(archive: &Path, destination: &Path) -> Result<(), Error> {
-    // Attempt extraction. For now, we assume everything is a tarball
-    let result = Command::new("tar")
-        .arg("xf")
-        .arg(archive)
-        .arg("-C")
-        .arg(destination)
-        .output()
-        .await?;
+    let extension = archive
+        .extension()
+        .map(|e| e.to_string_lossy().to_string())
+        .unwrap_or_else(|| "tar".to_owned());
+
+    // If we can't specialise (.zip, etc) assume its a tar
+    let result = match extension.as_str() {
+        "zip" => {
+            Command::new("unzip")
+                .arg(archive)
+                .arg("-d")
+                .arg(destination)
+                .output()
+                .await?
+        }
+        _ => {
+            Command::new("tar")
+                .arg("xf")
+                .arg(archive)
+                .arg("-C")
+                .arg(destination)
+                .output()
+                .await?
+        }
+    };
 
     if result.status.success() {
         Ok(())
     } else {
+        eprintln!("Command exited with: {}", String::from_utf8_lossy(&result.stderr));
         Err(Error::Extract(result.status))
     }
 }
