@@ -14,14 +14,14 @@ actions:
         command: |
             cargo fetch -v --locked
         dependencies:
-            - rust
+            - binary(cargo)
 
     - cargo_build:
         description: Build the rust project
         command: |
             cargo build %(options_cargo_release)
         dependencies:
-            - rust
+            - binary(cargo)
 
     - cargo_install:
         description: Install the built binary
@@ -37,14 +37,14 @@ actions:
             }
             cargo_install
         dependencies:
-            - rust
+            - binary(cargo)
 
     - cargo_test:
         description: Run tests
         command: |
             cargo test %(options_cargo_release) --workspace
         dependencies:
-            - rust
+            - binary(cargo)
 
 definitions:
     # The default cargo build profile

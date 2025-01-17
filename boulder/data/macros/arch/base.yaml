@@ -101,11 +101,16 @@ defaultTuningGroups :
     - avxwidth
     - base
     - bindnow
+    - build-id
+    - compress-debug
     - debug
+    - fat-lto
     - fortify
     - frame-pointer
     - harden
     - icf
+    - lto
+    - lto-errors
     - optimize
     - relr
     - symbolic
@@ -131,10 +136,27 @@ tuning              :
                 enabled: debug-std
         default: std
 
+    # Debug symbol compression
+    - compress-debug:
+        options:
+            - none:
+                enabled: compress-debug-none
+            - zlib:
+                enabled: compress-debug-zlib
+            - zstd:
+                enabled: compress-debug-zstd
+        disabled: compress-debug-none
+        default: zstd
+
     # Toggle frame-pointer
     - frame-pointer:
         enabled: no-omit-frame-pointer
         disabled: omit-frame-pointer
+
+    # Toggle build-id
+    - build-id:
+        enabled: build-id
+        disabled: build-id-none
 
     # Enable bindnow functionality
     - bindnow:
@@ -189,7 +211,7 @@ tuning              :
                 enabled: lto-full
             - thin:
                 enabled: lto-thin
-        default: full
+        default: thin
 
     # Enable LTOextra. Requires the equivalent lto option
     - ltoextra:
@@ -198,7 +220,16 @@ tuning              :
                 enabled: ltoextra-full
             - thin:
                 enabled: ltoextra-thin
-        default: full
+        default: thin
+
+    # Enable LTO errors
+    - lto-errors:
+        enabled: lto-errors
+
+    # Toggle fat LTO objects
+    - fat-lto:
+        enabled: fat-lto
+        disabled: fat-lto-none
 
     # Enable ICF
     - icf:
@@ -387,18 +418,22 @@ flags               :
     - lto-full:
         rust      : "-C lto=fat -C linker-plugin-lto -C embed-bitcode=yes"
         gnu:
+            c         : "-flto=%(jobs) -flto-partition=one"
+            cxx       : "-flto=%(jobs) -flto-partition=one"
+            ld        : "-flto=%(jobs) -flto-partition=one"
+        llvm:
+            c         : "-flto=full"
+            cxx       : "-flto=full"
+            d         : "-flto=full"
+            ld        : "-flto=full"
+
+    # Enable Thin-LTO optimisations (ON)
+    - lto-thin:
+        rust      : "-C lto=thin -C linker-plugin-lto -C embed-bitcode=yes"
+        gnu:
             c         : "-flto=%(jobs)"
             cxx       : "-flto=%(jobs)"
             ld        : "-flto=%(jobs)"
-        llvm:
-            c         : "-flto"
-            cxx       : "-flto"
-            d         : "-flto=full"
-            ld        : "-flto"
-
-    # Enable Thin-LTO optimisations (OFF)
-    - lto-thin:
-        rust      : "-C lto=thin -C linker-plugin-lto -C embed-bitcode=yes"
         llvm:
             c         : "-flto=thin"
             cxx       : "-flto=thin"
@@ -419,6 +454,56 @@ flags               :
         llvm:
             c         : "-fwhole-program-vtables"
             cxx       : "-fwhole-program-vtables"
+
+    # Enable Fat LTO Objects. Note that this is only necessary when building static objects with LLVM that are used in a GCC build (ON)
+    - fat-lto:
+        c         : "-ffat-lto-objects"
+        cxx       : "-ffat-lto-objects"
+
+    # Disable Fat LTO Objects (OFF)
+    - fat-lto-none:
+        c         : "-fno-fat-lto-objects"
+        cxx       : "-fno-fat-lto-objects"
+
+    # Toggle LTO warning errors. If these throw an error it is likely that there will be runtime problems with LTO (ON)
+    - lto-errors:
+        gnu:
+            c         : "-Werror=odr -Werror=lto-type-mismatch -Werror=strict-aliasing"
+            cxx       : "-Werror=odr -Werror=lto-type-mismatch -Werror=strict-aliasing"
+        llvm:
+            c         : "-Werror=odr -Werror=strict-aliasing"
+            cxx       : "-Werror=odr -Werror=strict-aliasing"
+
+    # Enable build-id (ON)
+    - build-id:
+        ld        : "-Wl,--build-id=sha1"
+        rust      : "-C link-args=-Wl,--build-id=sha1"
+
+    # Disable build-id (OFF)
+    - build-id-none:
+        ld        : "-Wl,--build-id=none"
+        rust      : "-C link-args=-Wl,--build-id=none"
+
+    # Compress debug symbols with Zstd (ON)
+    - compress-debug-zstd:
+        c         : "-Wa,--compress-debug-sections=zstd"
+        cxx       : "-Wa,--compress-debug-sections=zstd"
+        ld        : "-Wl,--compress-debug-sections=zstd"
+        rust      : "-C link-args=-Wl,--compress-debug-sections=zstd"
+
+    # Compress debug symbols with zlib (OFF)
+    - compress-debug-zlib:
+        c         : "-Wa,--compress-debug-sections=zlib"
+        cxx       : "-Wa,--compress-debug-sections=zlib"
+        ld        : "-Wl,--compress-debug-sections=zlib"
+        rust      : "-C link-args=-Wl,--compress-debug-sections=zlib"
+
+    # Don't compress debug symbols (OFF)
+    - compress-debug-none:
+        c         : "-Wa,--compress-debug-sections=none"
+        cxx       : "-Wa,--compress-debug-sections=none"
+        ld        : "-Wl,--compress-debug-sections=none"
+        rust      : "-C link-args=-Wl,--compress-debug-sections=none"
 
     # Enable ALL LLVM ICF optimisations (OFF)
     - icf-all:
@@ -445,8 +530,8 @@ flags               :
     # Toggle options you want to use with llvm-bolt (OFF)
     - bolt:
         gnu:
-            c         : "-fno-reorder-blocks-and-partition​"
-            cxx       : "-fno-reorder-blocks-and-partition​"
+            c         : "-fno-reorder-blocks-and-partition"
+            cxx       : "-fno-reorder-blocks-and-partition"
             ld        : "-Wl,-q"
         llvm:
             c         : "-fno-split-machine-functions"
