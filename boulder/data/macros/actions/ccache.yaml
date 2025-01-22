@@ -1,0 +1,22 @@
+actions:
+    - ccache_zero:
+        description: Zeroes out the ccache stats
+        example: |
+            %ccache_zero
+            %make
+            %ccache_stats
+        command: |
+          if [[ " ${PATH[*]} " =~ "ccache" ]]; then
+              ccache --zero-stats
+          fi
+
+    - ccache_stats:
+        description: Reports the ccache stats since the last time it was zeroed
+        example: |
+            %ccache_zero
+            %make
+            %ccache_stats
+        command: |
+          if [[ " ${PATH[*]} " =~ "ccache" ]]; then
+              ccache --show-stats
+          fi
