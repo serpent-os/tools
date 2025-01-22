@@ -659,6 +659,13 @@ packages          :
             - /usr/share/man/man3
             - /usr/share/man/man9
             - /usr/share/pkgconfig
+            # Qt5/Qt6
+            - /usr/lib/*.prl
+            - /usr/lib/metatypes
+            - /usr/lib/qt*/metatypes/qt*.json
+            - /usr/lib/qt*/mkspecs
+            - /usr/lib/qt*/modules/*.json
+            - /usr/lib/qt*/sbom
         rundeps:
             - "%(name)"
 
@@ -712,3 +719,11 @@ packages          :
             for the %(name)-32bit package.
         paths:
             - /usr/lib32/debug
+
+    # Qt5/Qt6 currently
+    - "%(name)-demos":
+        summary: "Example files for %(name)"
+        description: |
+            Example files for the %(name) package
+        paths:
+            - /usr/lib/qt*/examples
