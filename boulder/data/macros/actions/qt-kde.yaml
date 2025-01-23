@@ -1,0 +1,103 @@
+actions:
+    - qmake_qt5:
+        description: Invokes Qt5 with the correct default values
+        example: |
+            %qmake_qt5 -other-qmake-flag
+        command: |
+            _ccache_arg=""
+            if [[ " ${PATH[*]} " =~ "ccache" ]]; then
+                _ccache_arg="CONFIG+=ccache"
+            fi
+            qmake %(options_qmake_qt5) ${_ccache_arg}
+        dependencies:
+            - binary(qmake)
+
+    - cmake_qt6:
+        description: Perform cmake with the default options for Qt6 builds
+        example: |
+            %cmake_qt6 -DQt_Feature_So_and_So=ON
+        command: |
+            _ccache_arg="-DQT_USE_CCACHE=OFF"
+            if [[ " ${PATH[*]} " =~ "ccache" ]]; then
+                _ccache_arg="-DQT_USE_CCACHE=ON"
+            fi
+            cmake %(options_cmake_qt6) ${_ccache_arg}
+        dependencies:
+            - binary(cmake)
+
+    - qt_user_facing_links:
+        description: Setup user-facing binaries
+        example: |
+            %qt_user_facing_links
+        command: |
+            function qt_user_facing_links() {
+                %install_dir %(installroot)/%(bindir)
+                pushd %(installroot)
+                while read _line; do
+                    read -r _source _dest <<< ${_line}
+                    ln -srv %(installroot)/${_source} %(installroot)/${_dest}
+                done < %(workdir)/%(builddir)/user_facing_tool_links.txt
+                popd
+            }
+            qt_user_facing_links
+
+    - qml_cache_qt5:
+        description: Pre-compile .qml files for Qt5 applications
+        example: |
+            %qml_cache_qt5
+        command: |
+            function generate_cache() {
+                pushd %(installroot)
+                find . -type f -name "*.qml" -print0 | while IFS= read -r -d '' i; do
+                    if ! [ -a "${i}"c ]; then
+                        qmlcachegen -o "${i}"c "${i}" $*
+                    fi
+                done
+                popd
+            }
+            generate_cache
+        dependencies:
+            - binary(qmlcachegen)
+
+    - qml_cache_qt6:
+        description: Pre-compile .qml files for Qt6 applications
+        example: |
+            %qml_cache_qt6
+        command: |
+            function generate_qt6_cache() {
+                pushd %(installroot)
+                find . -type f -name "*.qml" -print0 | while IFS= read -r -d '' i; do
+                    if ! [ -a "${i}"c ]; then
+                        qmlcachegen6 -o "${i}"c "${i}" $*
+                    fi
+                done
+                popd
+            }
+            generate_qt6_cache
+        dependencies:
+            - binary(qmlcachegen6)
+
+definitions:
+    - options_qmake_qt5: |
+        CONFIG+=release \
+        QMAKE_CFLAGS_RELEASE="${CFLAGS}" \
+        QMAKE_CXXFLAGS_RELEASE="${CXXFLAGS}" \
+        QMAKE_LFLAGS="${LDFLAGS}"
+
+    # Default options for Qt6 builds
+    - options_cmake_qt6: |
+        %(options_cmake) \
+        -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
+        -DCMAKE_MESSAGE_LOG_LEVEL=STATUS \
+        -DINSTALL_ARCHDATADIR=%(libdir)/qt6 \
+        -DINSTALL_BINDIR=%(libdir)/qt6/bin \
+        -DINSTALL_DATADIR=share/qt6 \
+        -DINSTALL_DOCDIR=share/doc/qt6 \
+        -DINSTALL_EXAMPLESDIR=%(libdir)/qt6/examples \
+        -DINSTALL_INCLUDEDIR=include/qt6 \
+        -DINSTALL_LIBDIR=%(libdir) \
+        -DINSTALL_LIBEXECDIR=%(libdir)/qt6 \
+        -DINSTALL_MKSPECSDIR=%(libdir)/qt6/mkspecs \
+        -DINSTALL_PUBLICBINDIR=usr/bin \
+        -DQT_BUILD_EXAMPLES=ON \
+        -DQT_FEATURE_rpath=OFF
