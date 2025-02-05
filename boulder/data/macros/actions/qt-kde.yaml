@@ -25,6 +25,16 @@ actions:
         dependencies:
             - binary(cmake)
 
+    - cmake_kf6:
+        description: Perform cmake with the default options for KF6/Qt6 builds. This includes KDE Frameworks, Plasma, and KDE Gear
+        example: |
+            %cmake_kf6 -DSO_AND_SO=ON
+        command: |
+            cmake %(options_cmake_kf6)
+        dependencies:
+            - binary(cmake)
+            - cmake(ECM)
+
     - qt_user_facing_links:
         description: Setup user-facing binaries
         example: |
@@ -101,3 +111,12 @@ definitions:
         -DINSTALL_PUBLICBINDIR=usr/bin \
         -DQT_BUILD_EXAMPLES=ON \
         -DQT_FEATURE_rpath=OFF
+
+    # Default options for KF6/Qt6 builds
+    - options_cmake_kf6: |
+        %(options_cmake) \
+        -DCMAKE_INSTALL_LIBEXECDIR_kf6:PATH=%(libdir)/kf6 \
+        -DKDE_INSTALL_LIBEXECDIR:PATH=%(libdir)/kf6 \
+        -DKDE_INSTALL_USE_QT_SYS_PATHS:BOOL=ON \
+        -DBUILD_QCH=ON \
+        -DBUILD_TESTING=OFF

@@ -666,6 +666,11 @@ packages          :
             - /usr/lib/qt*/mkspecs
             - /usr/lib/qt*/modules/*.json
             - /usr/lib/qt*/sbom
+            # KF5/KF6
+            - /usr/share/doc/qt5/*.qch
+            - /usr/share/doc/qt5/*.tags
+            - /usr/share/doc/qt6/*.qch
+            - /usr/share/doc/qt6/*.tags
         rundeps:
             - "%(name)"
 
