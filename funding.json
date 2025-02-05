@@ -1,0 +1,68 @@
+{
+  "version": "v1.0.0",
+  "entity": {
+    "type": "organisation",
+    "role": "owner",
+    "name": "Serpent OS",
+    "email": "ikey@serpentos.com",
+    "phone": "",
+    "description": "The Serpent OS Linux distribution - a bold, independent project creating a new set of tooling to solve the problem of creating and managing distributions, effectively.",
+    "webpageUrl": {
+      "url": "https://github.com/serpent-os"
+    }
+  },
+  "projects": [
+    {
+      "guid": "moss-and-boulder",
+      "name": "tools",
+      "description": "Serpent OS package management tooling: moss and boulder",
+      "webpageUrl": {
+        "url": "https://github.com/serpent-os/tools"
+      },
+      "repositoryUrl": {
+        "url": "https://github.com/serpent-os/tools"
+      },
+      "licenses": [
+        "spdx:MPL-2.0"
+      ],
+      "tags": [
+        "package-management",
+        "atomic-update",
+        "linux",
+        "rust"
+      ]
+    }
+  ],
+  "funding": {
+    "channels": [
+      {
+        "guid": "github-sponsors",
+        "type": "payment-provider",
+        "address": "https://github.com/sponsors/ikeycode",
+        "description": "GitHub sponsors"
+      },
+      {
+        "guid": "kofi",
+        "type": "payment-provider",
+        "address": "https://ko-fi.com/serpentos",
+        "description": "Ko-fi subscriptions/one-time-payments/etc"
+      }
+    ],
+    "plans": [
+      {
+        "guid": "monthly-funding",
+        "status": "active",
+        "name": "Monthly developer funding",
+        "description": "Fund full time development and hosting costs monthly",
+        "amount": 3000,
+        "currency": "GBP",
+        "frequency": "monthly",
+        "channels": [
+          "github-sponsors",
+          "kofi"
+        ]
+      }
+    ],
+    "history": []
+  }
+}
