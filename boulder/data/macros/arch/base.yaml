@@ -666,6 +666,7 @@ packages          :
             - /usr/lib/qt*/mkspecs
             - /usr/lib/qt*/modules/*.json
             - /usr/lib/qt*/sbom
+            - /usr/lib/qt*/plugins/designer/*.so
             # KF5/KF6
             - /usr/share/doc/qt5/*.qch
             - /usr/share/doc/qt5/*.tags
