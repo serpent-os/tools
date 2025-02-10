@@ -1,4 +1,6 @@
-# `moss` and `boulder`
+# OS `tools` repository
+
+![image](.github/tools_logo.png)
 
 This repository provides the `moss` and `boulder` tools for managing `.stone` packages, the native package format for Serpent OS.
 In a nutshell, a `.stone` is a structured binary package format with well defined payloads and headers, including explicit versioning
