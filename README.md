@@ -1,36 +1,48 @@
-# OS `tools` repository
+# 🛠️ Modern Package Management for Serpent OS
 
 ![image](.github/tools_logo.png)
 
-This repository provides the `moss` and `boulder` tools for managing `.stone` packages, the native package format for Serpent OS.
-In a nutshell, a `.stone` is a structured binary package format with well defined payloads and headers, including explicit versioning
-information to ensure breaking format changes will succeed and be trivially managed for rolling release
-operating systems (i.e Serpent OS).
+## 📦 Core Tools
 
-The `v1` format in use defaults to `zstd` compression (per payload) and relies on a split payload model to enable the
-deduplication features:
+This repository provides two powerful Rust-based tools for managing `.stone` packages, the native package format for Serpent OS:
 
- - Metadata payload: Package metadata, license, with strongly defined types and keys.
- - Layout payload: Describes the filesystem layout of the package when installed.
- - Index payload: Contains the offsets to access the content payload by hash
- - Content payload: Compressed concatanation of all *unique* files in a package, accessible when decompressed via the Index Payload.
+- **moss**: Advanced package manager with atomic transactions and content deduplication
+- **boulder**: Modern package building tool with containerized builds and intelligent package splitting
 
-Internally `xxhash` is used for empowering content addressable storage as well as integrity checks within the `.stone` format
-on a per-payload basis. This deduplication is carried across the entire OS, which is required to be a `usr-merge` system.
-This allows for `/usr` as CAS, with `/.moss` containing the private store and roots. For every transaction in `moss`, a new root
-is generated in a staging area. Once fully prepared (such as running transaction triggers in containers), the staging tree is swapped with
-the `/usr` tree using `renameat2` with `RENAME_EXCHANGE` to ensure atomicity.
+## 🔧 Technical Overview
 
-`boulder` is the accompanying tool for *generating* `.stone` files, featuring an approach recipe format (`stone.yaml`), whilst also
-housing powerful utilities such as automatic subpackage splitting by patterns, emission of package providers (ie `soname()`), and first-class
-support for building packages in rootless containers for a clean build environment.
+### .stone Package Format
+The `.stone` format is a structured binary package format designed for modern, rolling-release systems. It features:
 
-Note that a repository index, a binary build manifest, and a binary package, are *all* stone-format files and can be
-correctly identified by a recent version of the `file` utility.
+- Explicit versioning for seamless format changes
+- `zstd` compression for optimal storage
+- Content-addressable storage via `xxhash`
+- Smart payload separation:
+  - 📋 Metadata: Package info and licensing with strong typing
+  - 🗂️ Layout: Filesystem structure definitions
+  - 📑 Index: Content payload access mapping
+  - 📦 Content: Deduplicated file storage
 
-It is recommended to use an up to date version of Rust via `rustup`.
+### System Architecture
+- Content-addressable `/usr` with atomic updates via `renameat2`
+- Private store and roots in `/.moss`
+- Container-based transaction triggers
+- Full USR merge compliance
+- Stateless system design with clear separation of OS and local system configuration
+- Quick system rollbacks through atomic operations
 
-## Status
+### Boulder Features
+- YAML-based recipe format (`stone.yaml`, [`KDL`](https://kdl.dev) coming soon ❤️)
+- Automatic subpackage splitting
+- Automatic provider emission (e.g. `soname()`) and dependency use
+- Uniform format for repos, manifests and packages
+- Integrated build sandboxing (also supports rootless builds)
+- Advanced compiler optimization profiles
+- Support for architecture-specific tuning
+
+**Note**: Using latest Rust via `rustup` is recommended.
+
+## 📊 Status
 
  - [x] Read support for `.stone`
  - [x] Repository manipulation
@@ -46,7 +58,7 @@ It is recommended to use an up to date version of Rust via `rustup`.
  - [ ] Subscriptions (named dependency paths and providers to augment the model)
 
 
-## Onboarding
+## 🚀 Onboarding
 
 ```bash
 # clone the serpent-os moss repo somewhere reasonable
@@ -81,12 +93,12 @@ alias boulder="${HOME}/.local/bin/boulder --data-dir=${HOME}/.local/share/boulde
 ```
 
 
-## Documentation
+## 📚 Documentation
 
 See [docs.serpentos.com](https://docs.serpentos.com/).
 
 
-## Experiment
+## 🧪 Experiment
 
 **NB:** Remember to use the `-D sosroot/` argument to specify a root directory, otherwise moss will happily
 eat your current operating system.
@@ -111,7 +123,7 @@ moss -D sosroot/ install systemd bash libx11-32bit
 If you want to create systemd-nspawn roots or bootable VMs, please check out the [img-tests](https://github.com/serpent-os/img-tests) repository.
 
 
-## Contributing changes
+## 🤝 Contributing changes
 
 Please ensure all tests are running locally without issue:
 
@@ -127,6 +139,6 @@ $ just fix
 
 Then create a Pull Request with your changes.
 
-## License
+## ⚖️ License
 
 `moss-rs` is available under the terms of the [MPL-2.0](https://spdx.org/licenses/MPL-2.0.html)
