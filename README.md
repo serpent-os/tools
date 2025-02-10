@@ -1,4 +1,6 @@
-# 🛠️ Modern Package Management for Serpent OS
+# 🛠️ OS Tools - Modern System State Management
+
+[![Build Status](
 
 ![image](.github/tools_logo.png)
 
@@ -6,7 +8,7 @@
 
 This repository provides two powerful Rust-based tools for managing `.stone` packages, the native package format for Serpent OS:
 
-- **moss**: Advanced package manager with atomic transactions and content deduplication
+- **moss**: Advanced package & system state manager with atomic transactions and content deduplication
 - **boulder**: Modern package building tool with containerized builds and intelligent package splitting
 
 ## 🔧 Technical Overview
